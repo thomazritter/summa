@@ -1,0 +1,20 @@
+{
+  "name": "scientific-summarizer",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm run dev -w @summarizer/api",
+    "dev:web": "npm run dev -w @summarizer/web",
+    "build": "npm run build -w @summarizer/shared && npm run build -w @summarizer/api && npm run build -w @summarizer/web",
+    "db:migrate": "npm run db:migrate -w @summarizer/api",
+    "db:seed": "npm run db:seed -w @summarizer/api"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "typescript": "^5.3.3"
+  }
+}

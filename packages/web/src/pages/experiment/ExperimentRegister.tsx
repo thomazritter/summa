@@ -1,0 +1,174 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useMutation } from '@tanstack/react-query';
+import { experimentApi } from '../../api/client';
+
+interface FormData {
+  name: string;
+  experienceLevel: string;
+  yearsExperience: number;
+  readingFrequency: string;
+  topicFamiliarity: string;
+}
+
+export function ExperimentRegister() {
+  const navigate = useNavigate();
+  const [form, setForm] = useState<FormData>({
+    name: '',
+    experienceLevel: '',
+    yearsExperience: 0,
+    readingFrequency: '',
+    topicFamiliarity: '',
+  });
+
+  const registerMutation = useMutation({
+    mutationFn: (data: FormData) => experimentApi.registerParticipant(data),
+    onSuccess: (participant) => {
+      sessionStorage.setItem('experimentParticipantId', String(participant.id));
+      sessionStorage.setItem('experimentParticipantName', participant.name);
+      navigate('/experiment/select-article');
+    },
+  });
+
+  const isValid =
+    form.name.trim().length > 0 &&
+    form.experienceLevel !== '' &&
+    form.yearsExperience >= 0 &&
+    form.readingFrequency !== '' &&
+    form.topicFamiliarity !== '';
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-8">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Pre-teste: Dados do Participante</h1>
+        <p className="text-gray-600 mt-2">
+          Preencha as informacoes abaixo para que possamos adequar o experimento ao seu perfil.
+        </p>
+      </div>
+
+      <div className="bg-white p-6 rounded-lg border space-y-6">
+        {/* Name */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+          <input
+            type="text"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Seu nome (pode ser anonimo)"
+            className="w-full border rounded-lg p-2"
+          />
+        </div>
+
+        {/* Experience Level */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Nivel de experiencia como desenvolvedor
+          </label>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { value: 'junior', label: 'Junior', desc: 'Ate 2 anos de experiencia' },
+              { value: 'pleno', label: 'Pleno', desc: '2-5 anos de experiencia' },
+              { value: 'senior', label: 'Senior', desc: '5+ anos de experiencia' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setForm({ ...form, experienceLevel: opt.value })}
+                className={`p-3 border rounded-lg text-left transition-colors ${
+                  form.experienceLevel === opt.value
+                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                <div className="font-medium">{opt.label}</div>
+                <div className="text-xs text-gray-500 mt-1">{opt.desc}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Years of Experience */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Anos de experiencia
+          </label>
+          <input
+            type="number"
+            min="0"
+            max="50"
+            value={form.yearsExperience}
+            onChange={(e) => setForm({ ...form, yearsExperience: parseInt(e.target.value) || 0 })}
+            className="w-32 border rounded-lg p-2"
+          />
+        </div>
+
+        {/* Reading Frequency */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Frequencia de leitura de artigos cientificos
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: 'never', label: 'Nunca' },
+              { value: 'rarely', label: 'Raramente' },
+              { value: 'sometimes', label: 'As vezes' },
+              { value: 'frequently', label: 'Frequentemente' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setForm({ ...form, readingFrequency: opt.value })}
+                className={`p-3 border rounded-lg text-center transition-colors ${
+                  form.readingFrequency === opt.value
+                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Topic Familiarity */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Familiaridade com os temas dos artigos do teste
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: 'none', label: 'Nenhuma' },
+              { value: 'little', label: 'Pouca' },
+              { value: 'moderate', label: 'Moderada' },
+              { value: 'high', label: 'Alta' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setForm({ ...form, topicFamiliarity: opt.value })}
+                className={`p-3 border rounded-lg text-center transition-colors ${
+                  form.topicFamiliarity === opt.value
+                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {registerMutation.error && (
+        <div className="bg-red-50 text-red-700 p-4 rounded-lg">
+          Erro: {(registerMutation.error as Error).message}
+        </div>
+      )}
+
+      <button
+        onClick={() => isValid && registerMutation.mutate(form)}
+        disabled={!isValid || registerMutation.isPending}
+        className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {registerMutation.isPending ? 'Registrando...' : 'Continuar'}
+      </button>
+    </div>
+  );
+}
