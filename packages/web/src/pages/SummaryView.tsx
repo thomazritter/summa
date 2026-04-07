@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
 import { summaryApi, feedbackApi } from '../api/client';
 
 interface Summary { id: number; content: string; factualityScore: number | null; }
@@ -34,7 +35,7 @@ export function SummaryView() {
 
       <div className="bg-white p-6 rounded-lg border">
         <div className="prose max-w-none">
-          {summary.content.split('\n').map((para, i) => <p key={i} className="mb-4">{para}</p>)}
+          <ReactMarkdown>{summary.content}</ReactMarkdown>
         </div>
         {summary.factualityScore !== null && (
           <div className="mt-4 pt-4 border-t">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
 import { experimentApi } from '../../api/client';
 import { LikertScale } from '../../components/LikertScale';
 import { ExperimentProgress } from '../../components/ExperimentProgress';
@@ -142,9 +143,7 @@ export function ExperimentTrial() {
         <div className="bg-white p-6 rounded-lg border-2 border-gray-200">
           <h2 className="text-lg font-bold mb-4 text-center">Resumo {label}</h2>
           <div className="prose prose-sm max-w-none text-gray-700">
-            {summaryContent?.split('\n').map((para, i) => (
-              <p key={i} className="mb-3">{para}</p>
-            ))}
+            <ReactMarkdown>{summaryContent || ''}</ReactMarkdown>
           </div>
         </div>
 

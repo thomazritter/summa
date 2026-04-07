@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
 import { experimentApi } from '../../api/client';
 import { ExperimentProgress } from '../../components/ExperimentProgress';
 
@@ -85,9 +86,7 @@ export function ExperimentFeedback() {
           className={`px-6 pb-6 ${summaryExpanded ? '' : 'hidden'}`}
         >
           <div className="prose max-w-none text-gray-700">
-            {personalizedSummary?.content.split('\n').map((para, i) => (
-              <p key={i} className="mb-3">{para}</p>
-            ))}
+            <ReactMarkdown>{personalizedSummary?.content || ''}</ReactMarkdown>
           </div>
         </div>
         {!summaryExpanded && (

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
 import { experimentApi } from '../../api/client';
 import { LikertScale } from '../../components/LikertScale';
 import { ExperimentProgress } from '../../components/ExperimentProgress';
@@ -126,9 +127,7 @@ export function ExperimentRegenerated() {
           {originalExpanded && (
             <div id="original-summary-content" className="px-6 pb-6 border-t border-gray-200 pt-4">
               <div className="prose max-w-none text-gray-600">
-                {originalPersonalizedSummary.content.split('\n').map((para, i) => (
-                  <p key={i} className="mb-3">{para}</p>
-                ))}
+                <ReactMarkdown>{originalPersonalizedSummary.content}</ReactMarkdown>
               </div>
             </div>
           )}
@@ -139,9 +138,7 @@ export function ExperimentRegenerated() {
       <div className="bg-white p-6 rounded-lg border-2 border-blue-300">
         <h2 className="text-lg font-semibold mb-4 text-blue-900">Versão Regenerada</h2>
         <div className="prose max-w-none text-gray-700">
-          {regenerated.summary?.content.split('\n').map((para, i) => (
-            <p key={i} className="mb-3">{para}</p>
-          ))}
+          <ReactMarkdown>{regenerated.summary?.content || ''}</ReactMarkdown>
         </div>
       </div>
 
