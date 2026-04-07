@@ -5,12 +5,12 @@ interface ExperimentProgressProps {
 
 const STEP_NAMES: Record<number, string> = {
   1: 'Cadastro',
-  2: 'Artigo 1 — Comparação',
-  3: 'Artigo 1 — Feedback',
-  4: 'Artigo 1 — Regenerado',
-  5: 'Artigo 2 — Comparação',
-  6: 'Artigo 2 — Feedback',
-  7: 'Artigo 2 — Regenerado',
+  2: 'Artigo 1 — Avaliar resumos A e B',
+  3: 'Artigo 1 — Sugerir melhorias',
+  4: 'Artigo 1 — Avaliar versão melhorada',
+  5: 'Artigo 2 — Avaliar resumos A e B',
+  6: 'Artigo 2 — Sugerir melhorias',
+  7: 'Artigo 2 — Avaliar versão melhorada',
   8: 'Avaliação Final',
 };
 

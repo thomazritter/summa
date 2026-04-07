@@ -5,7 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { experimentApi } from '../../api/client';
 import { ExperimentProgress } from '../../components/ExperimentProgress';
 
-const MIN_FEEDBACK_LENGTH = 50;
+const MIN_FEEDBACK_LENGTH = 10;
 
 export function ExperimentFeedback() {
   const { sessionId } = useParams<{ sessionId: string }>();
