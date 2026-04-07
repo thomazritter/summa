@@ -47,20 +47,6 @@ authRoutes.post('/invite', requireManager, async (req: Request, res: Response, n
   }
 });
 
-// Manager: execute SQL (for seeding production DB)
-authRoutes.post('/exec-sql', requireManager, (req: Request, res: Response) => {
-  const { sql } = req.body;
-  if (!sql || typeof sql !== 'string') return res.status(400).json({ error: 'SQL required' });
-
-  try {
-    const db = getDb();
-    db.exec(sql);
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // Manager: list all codes
 authRoutes.get('/codes', requireManager, (req: Request, res: Response) => {
   const db = getDb();
