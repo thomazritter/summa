@@ -3,12 +3,13 @@ node_modules/
 
 # Build output
 dist/
-*.js
-*.js.map
-*.d.ts
-!vite-env.d.ts
+
+# Config files are JS — only ignore compiled output
+packages/*/src/**/*.js
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts
+!packages/web/src/vite-env.d.ts
 !packages/api/src/types.d.ts
-!tsconfig.json
 
 # Database
 packages/api/data/*.db
