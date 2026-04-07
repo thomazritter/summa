@@ -10,11 +10,11 @@ declare global {
   }
 }
 
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireAuth(req: Request, res: Response, next: NextFunction) {
   const code = req.headers['x-access-code'] as string;
   if (!code) return res.status(401).json({ error: 'Codigo de acesso necessario' });
 
-  const access = validateCode(code);
+  const access = await validateCode(code);
   if (!access) return res.status(401).json({ error: 'Codigo invalido' });
 
   req.accessCode = {
@@ -26,8 +26,8 @@ export function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
-export function requireManager(req: Request, res: Response, next: NextFunction) {
-  requireAuth(req, res, () => {
+export async function requireManager(req: Request, res: Response, next: NextFunction) {
+  await requireAuth(req, res, () => {
     if (req.accessCode?.role !== 'manager') {
       return res.status(403).json({ error: 'Acesso restrito' });
     }
