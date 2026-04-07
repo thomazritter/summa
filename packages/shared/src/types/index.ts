@@ -148,6 +148,7 @@ export interface ExperimentSession {
   personalizedSummaryId: number;
   abOrder: { A: 'generic' | 'personalized'; B: 'generic' | 'personalized' };
   preference: 'A' | 'B' | null;
+  preferenceReason: string | null;
   phase: 'comparison' | 'feedback' | 'regenerated' | 'complete';
   createdAt: string;
 }
@@ -159,6 +160,10 @@ export interface Regeneration {
   regeneratedSummaryId: number;
   improvementRating: 'improved' | 'same' | 'worse' | null;
   satisfactionRating: number | null;
+  utilityRating: number | null;
+  clarityRating: number | null;
+  adequacyRating: number | null;
+  changeDescription: string | null;
   createdAt: string;
 }
 
@@ -178,6 +183,7 @@ export interface CreateExperimentSessionRequest {
 
 export interface RecordPreferenceRequest {
   preference: 'A' | 'B';
+  reason?: string;
 }
 
 export interface SubmitExperimentFeedbackRequest {
@@ -186,7 +192,10 @@ export interface SubmitExperimentFeedbackRequest {
 
 export interface RateRegenerationRequest {
   improvementRating: 'improved' | 'same' | 'worse';
-  satisfactionRating: number;
+  utilityRating: number;
+  clarityRating: number;
+  adequacyRating: number;
+  changeDescription?: string;
 }
 
 export interface SummaryRating {
@@ -198,14 +207,17 @@ export interface SummaryRating {
   clareza: number;
   adequacaoPerfil: number;
   factualidadePercebida: number;
+  comment: string | null;
   createdAt: string;
 }
 
 export interface PostTestResponse {
   id: number;
   participantId: number;
-  overallSatisfaction: number;
-  wouldUseAgain: number;
+  noticedDifference: string | null;
+  differenceType: string | null;
+  wouldUseDaily: string | null;
+  improvements: string | null;
   comments: string | null;
   createdAt: string;
 }

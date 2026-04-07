@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS experiment_sessions (
   personalized_summary_id INTEGER NOT NULL,
   ab_order TEXT NOT NULL, -- JSON: {"A": "generic"|"personalized", "B": "generic"|"personalized"}
   preference TEXT CHECK (preference IN ('A', 'B')),
+  preference_reason TEXT,
   phase TEXT NOT NULL DEFAULT 'comparison' CHECK (phase IN ('comparison', 'feedback', 'regenerated', 'complete')),
   created_at TIMESTAMP DEFAULT NOW(),
   FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE,
@@ -131,6 +132,10 @@ CREATE TABLE IF NOT EXISTS regenerations (
   regenerated_summary_id INTEGER NOT NULL,
   improvement_rating TEXT CHECK (improvement_rating IN ('improved', 'same', 'worse')),
   satisfaction_rating INTEGER CHECK (satisfaction_rating BETWEEN 1 AND 5),
+  utility_rating INTEGER CHECK (utility_rating BETWEEN 1 AND 5),
+  clarity_rating INTEGER CHECK (clarity_rating BETWEEN 1 AND 5),
+  adequacy_rating INTEGER CHECK (adequacy_rating BETWEEN 1 AND 5),
+  change_description TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   FOREIGN KEY (session_id) REFERENCES experiment_sessions(id) ON DELETE CASCADE,
   FOREIGN KEY (regenerated_summary_id) REFERENCES summaries(id) ON DELETE CASCADE
@@ -153,6 +158,7 @@ CREATE TABLE IF NOT EXISTS summary_ratings (
   clareza INTEGER NOT NULL CHECK (clareza BETWEEN 1 AND 5),
   adequacao_perfil INTEGER NOT NULL CHECK (adequacao_perfil BETWEEN 1 AND 5),
   factualidade_percebida INTEGER NOT NULL CHECK (factualidade_percebida BETWEEN 1 AND 5),
+  comment TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   FOREIGN KEY (session_id) REFERENCES experiment_sessions(id) ON DELETE CASCADE,
   FOREIGN KEY (summary_id) REFERENCES summaries(id) ON DELETE CASCADE
@@ -163,8 +169,10 @@ CREATE INDEX IF NOT EXISTS idx_summary_ratings_session ON summary_ratings(sessio
 CREATE TABLE IF NOT EXISTS post_test_responses (
   id SERIAL PRIMARY KEY,
   participant_id INTEGER NOT NULL UNIQUE,
-  overall_satisfaction INTEGER NOT NULL CHECK (overall_satisfaction BETWEEN 1 AND 5),
-  would_use_again INTEGER NOT NULL CHECK (would_use_again BETWEEN 1 AND 5),
+  noticed_difference TEXT,
+  difference_type TEXT,
+  would_use_daily TEXT,
+  improvements TEXT,
   comments TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE

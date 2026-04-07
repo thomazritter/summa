@@ -19,7 +19,38 @@ export async function runMigrations(): Promise<void> {
     console.warn('[auto-migrate] schema.sql not found, skipping schema creation.');
   }
 
-  // 2. Seed manager access code if it doesn't exist
+  // 2. Add new columns to existing tables (idempotent)
+  const alterStatements = `
+    ALTER TABLE summary_ratings ADD COLUMN IF NOT EXISTS comment TEXT;
+
+    ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS preference_reason TEXT;
+
+    ALTER TABLE regenerations ADD COLUMN IF NOT EXISTS utility_rating INTEGER CHECK (utility_rating BETWEEN 1 AND 5);
+    ALTER TABLE regenerations ADD COLUMN IF NOT EXISTS clarity_rating INTEGER CHECK (clarity_rating BETWEEN 1 AND 5);
+    ALTER TABLE regenerations ADD COLUMN IF NOT EXISTS adequacy_rating INTEGER CHECK (adequacy_rating BETWEEN 1 AND 5);
+    ALTER TABLE regenerations ADD COLUMN IF NOT EXISTS change_description TEXT;
+
+    ALTER TABLE post_test_responses ADD COLUMN IF NOT EXISTS noticed_difference TEXT;
+    ALTER TABLE post_test_responses ADD COLUMN IF NOT EXISTS difference_type TEXT;
+    ALTER TABLE post_test_responses ADD COLUMN IF NOT EXISTS would_use_daily TEXT;
+    ALTER TABLE post_test_responses ADD COLUMN IF NOT EXISTS improvements TEXT;
+  `;
+  await query(alterStatements);
+  console.log('[auto-migrate] ALTER TABLE migrations applied.');
+
+  // 3. Drop legacy columns from post_test_responses if they still exist
+  // (overall_satisfaction and would_use_again replaced by new text fields)
+  try {
+    await query(`
+      ALTER TABLE post_test_responses DROP COLUMN IF EXISTS overall_satisfaction;
+      ALTER TABLE post_test_responses DROP COLUMN IF EXISTS would_use_again;
+    `);
+    console.log('[auto-migrate] Legacy post_test_responses columns dropped.');
+  } catch {
+    // Columns may already be gone on fresh databases; ignore errors
+  }
+
+  // 4. Seed manager access code if it doesn't exist
   const managerCode = process.env.MANAGER_CODE || 'SUMMA-ADMIN';
   const managerEmail = process.env.MANAGER_EMAIL || 'thomaz.ritter207@gmail.com';
 

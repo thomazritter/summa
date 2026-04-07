@@ -24,6 +24,9 @@ export function ExperimentTrial() {
   const [selected, setSelected] = useState<'A' | 'B' | null>(null);
   const [ratingsA, setRatingsA] = useState<SummaryRatings>(emptyRatings());
   const [ratingsB, setRatingsB] = useState<SummaryRatings>(emptyRatings());
+  const [commentA, setCommentA] = useState('');
+  const [commentB, setCommentB] = useState('');
+  const [preferenceReason, setPreferenceReason] = useState('');
 
   const { data: session, isLoading } = useQuery({
     queryKey: ['experiment-session', sessionId],
@@ -38,6 +41,7 @@ export function ExperimentTrial() {
 
       return experimentApi.submitRatingsAndPreference(Number(sessionId), {
         preference: selected!,
+        preferenceReason,
         ratings: [
           {
             summaryId: summaryAId,
@@ -46,6 +50,7 @@ export function ExperimentTrial() {
             clareza: ratingsA.clareza!,
             adequacaoPerfil: ratingsA.adequacaoPerfil!,
             factualidadePercebida: ratingsA.factualidadePercebida!,
+            comment: commentA,
           },
           {
             summaryId: summaryBId,
@@ -54,6 +59,7 @@ export function ExperimentTrial() {
             clareza: ratingsB.clareza!,
             adequacaoPerfil: ratingsB.adequacaoPerfil!,
             factualidadePercebida: ratingsB.factualidadePercebida!,
+            comment: commentB,
           },
         ],
       });
@@ -107,6 +113,18 @@ export function ExperimentTrial() {
             <LikertScale label="Clareza" value={ratingsA.clareza} onChange={(v) => setRatingsA((prev) => ({ ...prev, clareza: v }))} lowLabel="Confuso" highLabel="Muito claro" />
             <LikertScale label="Adequacao ao Perfil" value={ratingsA.adequacaoPerfil} onChange={(v) => setRatingsA((prev) => ({ ...prev, adequacaoPerfil: v }))} lowLabel="Inadequado" highLabel="Adequado" />
             <LikertScale label="Factualidade Percebida" value={ratingsA.factualidadePercebida} onChange={(v) => setRatingsA((prev) => ({ ...prev, factualidadePercebida: v }))} lowLabel="Duvidoso" highLabel="Confiavel" />
+            <div className="mt-3">
+              <label className="block mb-2 font-medium text-sm text-gray-700">
+                Comentarios sobre este resumo (opcional)
+              </label>
+              <textarea
+                value={commentA}
+                onChange={(e) => setCommentA(e.target.value)}
+                rows={3}
+                className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+                placeholder="Alguma observacao sobre o Resumo A..."
+              />
+            </div>
           </div>
         </div>
 
@@ -132,15 +150,39 @@ export function ExperimentTrial() {
             <LikertScale label="Clareza" value={ratingsB.clareza} onChange={(v) => setRatingsB((prev) => ({ ...prev, clareza: v }))} lowLabel="Confuso" highLabel="Muito claro" />
             <LikertScale label="Adequacao ao Perfil" value={ratingsB.adequacaoPerfil} onChange={(v) => setRatingsB((prev) => ({ ...prev, adequacaoPerfil: v }))} lowLabel="Inadequado" highLabel="Adequado" />
             <LikertScale label="Factualidade Percebida" value={ratingsB.factualidadePercebida} onChange={(v) => setRatingsB((prev) => ({ ...prev, factualidadePercebida: v }))} lowLabel="Duvidoso" highLabel="Confiavel" />
+            <div className="mt-3">
+              <label className="block mb-2 font-medium text-sm text-gray-700">
+                Comentarios sobre este resumo (opcional)
+              </label>
+              <textarea
+                value={commentB}
+                onChange={(e) => setCommentB(e.target.value)}
+                rows={3}
+                className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+                placeholder="Alguma observacao sobre o Resumo B..."
+              />
+            </div>
           </div>
         </div>
       </div>
 
       {selected && (
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 text-center">
-          <p className="text-blue-900 font-medium">
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
+          <p className="text-blue-900 font-medium text-center">
             Voce selecionou: <strong>Resumo {selected}</strong>
           </p>
+          <div>
+            <label className="block mb-2 font-medium text-sm text-gray-700">
+              Por que? (opcional)
+            </label>
+            <textarea
+              value={preferenceReason}
+              onChange={(e) => setPreferenceReason(e.target.value)}
+              rows={3}
+              className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+              placeholder="O que fez voce preferir este resumo..."
+            />
+          </div>
         </div>
       )}
 

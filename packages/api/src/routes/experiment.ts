@@ -28,6 +28,7 @@ const createSessionSchema = z.object({
 
 const preferenceSchema = z.object({
   preference: z.enum(['A', 'B']),
+  reason: z.string().max(5000).optional(),
 });
 
 const feedbackSchema = z.object({
@@ -36,7 +37,10 @@ const feedbackSchema = z.object({
 
 const rateRegenerationSchema = z.object({
   improvementRating: z.enum(['improved', 'same', 'worse']),
-  satisfactionRating: z.number().int().min(1).max(5),
+  utilityRating: z.number().int().min(1).max(5),
+  clarityRating: z.number().int().min(1).max(5),
+  adequacyRating: z.number().int().min(1).max(5),
+  changeDescription: z.string().max(5000).optional(),
 });
 
 const summaryRatingsSchema = z.object({
@@ -47,14 +51,17 @@ const summaryRatingsSchema = z.object({
     clareza: z.number().int().min(1).max(5),
     adequacaoPerfil: z.number().int().min(1).max(5),
     factualidadePercebida: z.number().int().min(1).max(5),
+    comment: z.string().max(5000).optional(),
   })).length(2),
   preference: z.enum(['A', 'B']),
 });
 
 const postTestSchema = z.object({
   participantId: z.number().int().positive(),
-  overallSatisfaction: z.number().int().min(1).max(5),
-  wouldUseAgain: z.number().int().min(1).max(5),
+  noticedDifference: z.string().max(5000),
+  differenceType: z.string().max(5000).optional(),
+  wouldUseDaily: z.string().max(5000),
+  improvements: z.string().max(5000).optional(),
   comments: z.string().max(5000).optional(),
 });
 
@@ -223,8 +230,8 @@ experimentRoutes.post('/sessions/:id/preference', async (req: Request, res: Resp
 
   try {
     const result = await execute(
-      `UPDATE experiment_sessions SET preference = $1, phase = 'feedback' WHERE id = $2`,
-      [validation.data.preference, id]
+      `UPDATE experiment_sessions SET preference = $1, preference_reason = $2, phase = 'feedback' WHERE id = $3`,
+      [validation.data.preference, validation.data.reason || null, id]
     );
 
     if (result.changes === 0) {
@@ -309,11 +316,20 @@ experimentRoutes.post('/sessions/:id/rate-regeneration', async (req: Request, re
   try {
     // Update the latest regeneration for this session
     const result = await execute(`
-      UPDATE regenerations SET improvement_rating = $1, satisfaction_rating = $2
-      WHERE session_id = $3 AND id = (
-        SELECT id FROM regenerations WHERE session_id = $4 ORDER BY created_at DESC LIMIT 1
+      UPDATE regenerations
+      SET improvement_rating = $1, utility_rating = $2, clarity_rating = $3, adequacy_rating = $4, change_description = $5
+      WHERE session_id = $6 AND id = (
+        SELECT id FROM regenerations WHERE session_id = $7 ORDER BY created_at DESC LIMIT 1
       )
-    `, [validation.data.improvementRating, validation.data.satisfactionRating, id, id]);
+    `, [
+      validation.data.improvementRating,
+      validation.data.utilityRating,
+      validation.data.clarityRating,
+      validation.data.adequacyRating,
+      validation.data.changeDescription || null,
+      id,
+      id,
+    ]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'No regeneration found for this session' });
@@ -345,9 +361,9 @@ experimentRoutes.post('/sessions/:id/ratings', async (req: Request, res: Respons
 
     for (const r of ratings) {
       await client.query(
-        `INSERT INTO summary_ratings (session_id, summary_id, ab_label, utilidade, clareza, adequacao_perfil, factualidade_percebida)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, r.summaryId, r.abLabel, r.utilidade, r.clareza, r.adequacaoPerfil, r.factualidadePercebida]
+        `INSERT INTO summary_ratings (session_id, summary_id, ab_label, utilidade, clareza, adequacao_perfil, factualidade_percebida, comment)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [id, r.summaryId, r.abLabel, r.utilidade, r.clareza, r.adequacaoPerfil, r.factualidadePercebida, r.comment || null]
       );
     }
 
@@ -372,12 +388,12 @@ experimentRoutes.post('/post-test', async (req: Request, res: Response, next: Ne
   if (!validation.success) return res.status(400).json({ error: validation.error.errors });
 
   try {
-    const { participantId, overallSatisfaction, wouldUseAgain, comments } = validation.data;
+    const { participantId, noticedDifference, differenceType, wouldUseDaily, improvements, comments } = validation.data;
 
     await execute(
-      `INSERT INTO post_test_responses (participant_id, overall_satisfaction, would_use_again, comments)
-       VALUES ($1, $2, $3, $4)`,
-      [participantId, overallSatisfaction, wouldUseAgain, comments || null]
+      `INSERT INTO post_test_responses (participant_id, noticed_difference, difference_type, would_use_daily, improvements, comments)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [participantId, noticedDifference, differenceType || null, wouldUseDaily, improvements || null, comments || null]
     );
 
     // Mark all participant sessions as complete
@@ -419,6 +435,7 @@ interface SessionRow {
   personalized_summary_id: number;
   ab_order: string;
   preference: string | null;
+  preference_reason: string | null;
   phase: string;
   created_at: string;
 }
@@ -430,6 +447,10 @@ interface RegenerationRow {
   regenerated_summary_id: number;
   improvement_rating: string | null;
   satisfaction_rating: number | null;
+  utility_rating: number | null;
+  clarity_rating: number | null;
+  adequacy_rating: number | null;
+  change_description: string | null;
   created_at: string;
 }
 
@@ -452,6 +473,7 @@ const mapSessionRow = (row: SessionRow): ExperimentSession => ({
   personalizedSummaryId: row.personalized_summary_id,
   abOrder: JSON.parse(row.ab_order),
   preference: row.preference as ExperimentSession['preference'],
+  preferenceReason: row.preference_reason,
   phase: row.phase as ExperimentSession['phase'],
   createdAt: row.created_at,
 });
@@ -463,5 +485,9 @@ const mapRegenerationRow = (row: RegenerationRow): Regeneration => ({
   regeneratedSummaryId: row.regenerated_summary_id,
   improvementRating: row.improvement_rating as Regeneration['improvementRating'],
   satisfactionRating: row.satisfaction_rating,
+  utilityRating: row.utility_rating,
+  clarityRating: row.clarity_rating,
+  adequacyRating: row.adequacy_rating,
+  changeDescription: row.change_description,
   createdAt: row.created_at,
 });

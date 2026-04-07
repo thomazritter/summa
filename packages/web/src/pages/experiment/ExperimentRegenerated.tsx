@@ -8,7 +8,10 @@ export function ExperimentRegenerated() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [rating, setRating] = useState<'improved' | 'same' | 'worse' | null>(null);
-  const [satisfaction, setSatisfaction] = useState<number | null>(null);
+  const [utilityRating, setUtilityRating] = useState<number | null>(null);
+  const [clarityRating, setClarityRating] = useState<number | null>(null);
+  const [adequacyRating, setAdequacyRating] = useState<number | null>(null);
+  const [changeDescription, setChangeDescription] = useState('');
 
   const { data: regenerated, isLoading } = useQuery({
     queryKey: ['experiment-regenerated', sessionId],
@@ -17,8 +20,14 @@ export function ExperimentRegenerated() {
   });
 
   const rateMutation = useMutation({
-    mutationFn: (improvementRating: 'improved' | 'same' | 'worse') =>
-      experimentApi.rateRegeneration(Number(sessionId), improvementRating, satisfaction!),
+    mutationFn: () =>
+      experimentApi.rateRegeneration(Number(sessionId), {
+        improvementRating: rating!,
+        utilityRating: utilityRating!,
+        clarityRating: clarityRating!,
+        adequacyRating: adequacyRating!,
+        changeDescription,
+      }),
     onSuccess: () => {
       navigate('/experiment/select-article');
     },
@@ -85,12 +94,39 @@ export function ExperimentRegenerated() {
         </div>
 
         <LikertScale
-          label="Satisfacao geral com o resumo regenerado"
-          value={satisfaction}
-          onChange={setSatisfaction}
-          lowLabel="Insatisfeito"
-          highLabel="Muito satisfeito"
+          label="Utilidade — O resumo me ajudou a entender o artigo?"
+          value={utilityRating}
+          onChange={setUtilityRating}
+          lowLabel="Pouco util"
+          highLabel="Muito util"
         />
+        <LikertScale
+          label="Clareza — O texto esta claro e bem organizado?"
+          value={clarityRating}
+          onChange={setClarityRating}
+          lowLabel="Confuso"
+          highLabel="Muito claro"
+        />
+        <LikertScale
+          label="Adequacao — O nivel de detalhe e linguagem sao adequados pra mim?"
+          value={adequacyRating}
+          onChange={setAdequacyRating}
+          lowLabel="Inadequado"
+          highLabel="Adequado"
+        />
+
+        <div>
+          <label className="block mb-2 font-medium text-sm text-gray-700">
+            O que mudou em relacao ao resumo anterior? (opcional)
+          </label>
+          <textarea
+            value={changeDescription}
+            onChange={(e) => setChangeDescription(e.target.value)}
+            rows={3}
+            className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+            placeholder="Descreva as diferencas que voce percebeu..."
+          />
+        </div>
       </div>
 
       {rateMutation.error && (
@@ -100,8 +136,8 @@ export function ExperimentRegenerated() {
       )}
 
       <button
-        onClick={() => rating && satisfaction !== null && rateMutation.mutate(rating)}
-        disabled={!rating || satisfaction === null || rateMutation.isPending}
+        onClick={() => rateMutation.mutate()}
+        disabled={!rating || utilityRating === null || clarityRating === null || adequacyRating === null || rateMutation.isPending}
         className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {rateMutation.isPending ? 'Salvando...' : 'Continuar'}

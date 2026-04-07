@@ -139,10 +139,16 @@ export const experimentApi = {
       summary: { id: number; content: string } | null;
     }>(`/experiment/sessions/${sessionId}/regenerated`),
 
-  rateRegeneration: (sessionId: number, improvementRating: 'improved' | 'same' | 'worse', satisfactionRating: number) =>
+  rateRegeneration: (sessionId: number, data: {
+    improvementRating: 'improved' | 'same' | 'worse';
+    utilityRating: number;
+    clarityRating: number;
+    adequacyRating: number;
+    changeDescription?: string;
+  }) =>
     apiRequest<unknown>(`/experiment/sessions/${sessionId}/rate-regeneration`, {
       method: 'POST',
-      body: JSON.stringify({ improvementRating, satisfactionRating }),
+      body: JSON.stringify(data),
     }),
 
   submitRatingsAndPreference: (sessionId: number, data: {
@@ -153,8 +159,10 @@ export const experimentApi = {
       clareza: number;
       adequacaoPerfil: number;
       factualidadePercebida: number;
+      comment?: string;
     }>;
     preference: 'A' | 'B';
+    preferenceReason?: string;
   }) =>
     apiRequest<{ success: boolean }>(`/experiment/sessions/${sessionId}/ratings`, {
       method: 'POST',
@@ -163,8 +171,10 @@ export const experimentApi = {
 
   submitPostTest: (data: {
     participantId: number;
-    overallSatisfaction: number;
-    wouldUseAgain: number;
+    noticedDifference: string;
+    differenceType?: string;
+    wouldUseDaily: string;
+    improvements?: string;
     comments?: string;
   }) =>
     apiRequest<{ success: boolean }>('/experiment/post-test', {

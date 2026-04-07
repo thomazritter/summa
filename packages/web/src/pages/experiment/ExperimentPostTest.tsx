@@ -2,22 +2,25 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
-import { LikertScale } from '../../components/LikertScale';
 
 export function ExperimentPostTest() {
   const navigate = useNavigate();
   const participantId = sessionStorage.getItem('experimentParticipantId');
 
-  const [overallSatisfaction, setOverallSatisfaction] = useState<number | null>(null);
-  const [wouldUseAgain, setWouldUseAgain] = useState<number | null>(null);
+  const [noticedDifference, setNoticedDifference] = useState('');
+  const [differenceType, setDifferenceType] = useState('');
+  const [wouldUseDaily, setWouldUseDaily] = useState('');
+  const [improvements, setImprovements] = useState('');
   const [comments, setComments] = useState('');
 
   const submitMutation = useMutation({
     mutationFn: () =>
       experimentApi.submitPostTest({
         participantId: Number(participantId),
-        overallSatisfaction: overallSatisfaction!,
-        wouldUseAgain: wouldUseAgain!,
+        noticedDifference,
+        differenceType,
+        wouldUseDaily,
+        improvements,
         comments,
       }),
     onSuccess: () => {
@@ -30,33 +33,69 @@ export function ExperimentPostTest() {
     return null;
   }
 
-  const canSubmit = overallSatisfaction !== null && wouldUseAgain !== null;
+  const canSubmit = noticedDifference.trim().length > 0 && wouldUseDaily.trim().length > 0;
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Avaliacao Final</h1>
         <p className="text-gray-600 mt-2">
-          Por favor, avalie sua experiencia geral com o sistema.
+          Por favor, responda as perguntas abaixo sobre sua experiencia com o sistema.
         </p>
       </div>
 
-      <div className="bg-white p-6 rounded-lg border space-y-4">
-        <LikertScale
-          label="Satisfacao geral com os resumos"
-          value={overallSatisfaction}
-          onChange={setOverallSatisfaction}
-          lowLabel="Insatisfeito"
-          highLabel="Muito satisfeito"
-        />
+      <div className="bg-white p-6 rounded-lg border space-y-6">
+        <div>
+          <label className="block mb-2 font-medium text-sm text-gray-700">
+            Voce percebeu diferenca entre os resumos A e B? <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={noticedDifference}
+            onChange={(e) => setNoticedDifference(e.target.value)}
+            rows={3}
+            className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+            placeholder="Descreva se percebeu diferencas entre os resumos..."
+          />
+        </div>
 
-        <LikertScale
-          label="Usaria novamente este sistema?"
-          value={wouldUseAgain}
-          onChange={setWouldUseAgain}
-          lowLabel="Nao usaria"
-          highLabel="Com certeza"
-        />
+        <div>
+          <label className="block mb-2 font-medium text-sm text-gray-700">
+            Se sim, qual tipo de diferenca? (opcional)
+          </label>
+          <textarea
+            value={differenceType}
+            onChange={(e) => setDifferenceType(e.target.value)}
+            rows={3}
+            className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+            placeholder="Ex: nivel de detalhe, linguagem, organizacao..."
+          />
+        </div>
+
+        <div>
+          <label className="block mb-2 font-medium text-sm text-gray-700">
+            Voce usaria um sistema assim no dia a dia? <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={wouldUseDaily}
+            onChange={(e) => setWouldUseDaily(e.target.value)}
+            rows={3}
+            className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+            placeholder="Explique se e como voce usaria o sistema..."
+          />
+        </div>
+
+        <div>
+          <label className="block mb-2 font-medium text-sm text-gray-700">
+            O que melhoraria no sistema? (opcional)
+          </label>
+          <textarea
+            value={improvements}
+            onChange={(e) => setImprovements(e.target.value)}
+            rows={3}
+            className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+            placeholder="Sugestoes de melhoria para o sistema..."
+          />
+        </div>
 
         <div>
           <label className="block mb-2 font-medium text-sm text-gray-700">
@@ -65,9 +104,9 @@ export function ExperimentPostTest() {
           <textarea
             value={comments}
             onChange={(e) => setComments(e.target.value)}
-            rows={4}
+            rows={3}
             className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-            placeholder="Compartilhe suas impressoes sobre os resumos, a interface ou sugestoes de melhoria..."
+            placeholder="Compartilhe suas impressoes sobre os resumos, a interface ou qualquer outro aspecto..."
           />
         </div>
       </div>
