@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { getDb } from '../db/connection.js';
+import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
 import { parseId } from '../utils/validation.js';
 import { regenerateSummaryWithFeedback, getSummaryById } from '../services/summarizationService.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -71,7 +71,7 @@ const EXPERIENCE_TO_PROFILE: Record<string, number> = {
 // ─── Routes ─────────────────────────────────────────────────────────
 
 // POST /api/experiment/participants — register participant with pre-test data
-experimentRoutes.post('/participants', (req: Request, res: Response, next: NextFunction) => {
+experimentRoutes.post('/participants', async (req: Request, res: Response, next: NextFunction) => {
   const validation = registerParticipantSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ error: validation.error.errors });
@@ -80,50 +80,46 @@ experimentRoutes.post('/participants', (req: Request, res: Response, next: NextF
   const { name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity } = validation.data;
 
   try {
-    const db = getDb();
-    const result = db.prepare(`
+    const row = await queryOne<ParticipantRow>(`
       INSERT INTO participants (name, experience_level, years_experience, reading_frequency, topic_familiarity)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity);
-
-    const row = db.prepare('SELECT * FROM participants WHERE id = ?').get(result.lastInsertRowid) as ParticipantRow;
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING *
+    `, [name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity]);
 
     // Link participant to access code
     const accessCode = req.headers['x-access-code'] as string;
-    if (accessCode) {
-      db.prepare('UPDATE access_codes SET participant_id = ? WHERE code = ?').run(result.lastInsertRowid, accessCode);
+    if (accessCode && row) {
+      await execute('UPDATE access_codes SET participant_id = $1 WHERE code = $2', [row.id, accessCode]);
     }
 
-    res.status(201).json(mapParticipantRow(row));
+    res.status(201).json(mapParticipantRow(row!));
   } catch (error) {
     next(error);
   }
 });
 
 // GET /api/experiment/participants/:id — get participant
-experimentRoutes.get('/participants/:id', (req: Request, res: Response) => {
+experimentRoutes.get('/participants/:id', async (req: Request, res: Response) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid participant ID' });
 
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM participants WHERE id = ?').get(id) as ParticipantRow | undefined;
+  const row = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [id]);
   if (!row) return res.status(404).json({ error: 'Participant not found' });
 
   res.json(mapParticipantRow(row));
 });
 
 // GET /api/experiment/participants/:id/sessions — get all sessions for a participant
-experimentRoutes.get('/participants/:id/sessions', (req: Request, res: Response) => {
+experimentRoutes.get('/participants/:id/sessions', async (req: Request, res: Response) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid participant ID' });
 
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM experiment_sessions WHERE participant_id = ? ORDER BY created_at ASC').all(id) as SessionRow[];
+  const rows = await queryAll<SessionRow>('SELECT * FROM experiment_sessions WHERE participant_id = $1 ORDER BY created_at ASC', [id]);
   res.json(rows.map(mapSessionRow));
 });
 
 // POST /api/experiment/sessions — create session using pre-generated summaries
-experimentRoutes.post('/sessions', (req: Request, res: Response, next: NextFunction) => {
+experimentRoutes.post('/sessions', async (req: Request, res: Response, next: NextFunction) => {
   const validation = createSessionSchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ error: validation.error.errors });
@@ -132,10 +128,8 @@ experimentRoutes.post('/sessions', (req: Request, res: Response, next: NextFunct
   const { participantId, articleId } = validation.data;
 
   try {
-    const db = getDb();
-
     // Look up participant to determine profile
-    const participant = db.prepare('SELECT * FROM participants WHERE id = ?').get(participantId) as ParticipantRow | undefined;
+    const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
     if (!participant) {
       return res.status(404).json({ error: 'Participant not found' });
     }
@@ -146,19 +140,21 @@ experimentRoutes.post('/sessions', (req: Request, res: Response, next: NextFunct
     }
 
     // Verify article exists
-    const article = db.prepare('SELECT id FROM articles WHERE id = ?').get(articleId);
+    const article = await queryOne<{ id: number }>('SELECT id FROM articles WHERE id = $1', [articleId]);
     if (!article) {
       return res.status(404).json({ error: 'Article not found' });
     }
 
     // Look up pre-generated summaries
-    const genericSummary = db.prepare(
-      'SELECT id FROM summaries WHERE article_id = ? AND profile_id = ?'
-    ).get(articleId, GENERIC_PROFILE_ID) as { id: number } | undefined;
+    const genericSummary = await queryOne<{ id: number }>(
+      'SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2',
+      [articleId, GENERIC_PROFILE_ID]
+    );
 
-    const personalizedSummary = db.prepare(
-      'SELECT id FROM summaries WHERE article_id = ? AND profile_id = ?'
-    ).get(articleId, profileId) as { id: number } | undefined;
+    const personalizedSummary = await queryOne<{ id: number }>(
+      'SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2',
+      [articleId, profileId]
+    );
 
     if (!genericSummary || !personalizedSummary) {
       return res.status(400).json({
@@ -178,25 +174,24 @@ experimentRoutes.post('/sessions', (req: Request, res: Response, next: NextFunct
       : { A: 'personalized' as const, B: 'generic' as const };
 
     // Create session
-    const result = db.prepare(`
+    const sessionRow = await queryOne<SessionRow>(`
       INSERT INTO experiment_sessions (participant_id, article_id, profile_id, generic_summary_id, personalized_summary_id, ab_order, phase)
-      VALUES (?, ?, ?, ?, ?, ?, 'comparison')
-    `).run(participantId, articleId, profileId, genericSummary.id, personalizedSummary.id, JSON.stringify(abOrder));
+      VALUES ($1, $2, $3, $4, $5, $6, 'comparison')
+      RETURNING *
+    `, [participantId, articleId, profileId, genericSummary.id, personalizedSummary.id, JSON.stringify(abOrder)]);
 
-    const sessionRow = db.prepare('SELECT * FROM experiment_sessions WHERE id = ?').get(result.lastInsertRowid) as SessionRow;
-    res.status(201).json(mapSessionRow(sessionRow));
+    res.status(201).json(mapSessionRow(sessionRow!));
   } catch (error) {
     next(error);
   }
 });
 
 // GET /api/experiment/sessions/:id — get session with both summaries in A/B order
-experimentRoutes.get('/sessions/:id', (req: Request, res: Response) => {
+experimentRoutes.get('/sessions/:id', async (req: Request, res: Response) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
 
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM experiment_sessions WHERE id = ?').get(id) as SessionRow | undefined;
+  const row = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
   if (!row) return res.status(404).json({ error: 'Session not found' });
 
   const session = mapSessionRow(row);
@@ -206,8 +201,8 @@ experimentRoutes.get('/sessions/:id', (req: Request, res: Response) => {
   const summaryAId = abOrder.A === 'generic' ? session.genericSummaryId : session.personalizedSummaryId;
   const summaryBId = abOrder.B === 'generic' ? session.genericSummaryId : session.personalizedSummaryId;
 
-  const summaryA = getSummaryById(summaryAId);
-  const summaryB = getSummaryById(summaryBId);
+  const summaryA = await getSummaryById(summaryAId);
+  const summaryB = await getSummaryById(summaryBId);
 
   res.json({
     ...session,
@@ -217,7 +212,7 @@ experimentRoutes.get('/sessions/:id', (req: Request, res: Response) => {
 });
 
 // POST /api/experiment/sessions/:id/preference — record A/B preference
-experimentRoutes.post('/sessions/:id/preference', (req: Request, res: Response, next: NextFunction) => {
+experimentRoutes.post('/sessions/:id/preference', async (req: Request, res: Response, next: NextFunction) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
 
@@ -227,17 +222,17 @@ experimentRoutes.post('/sessions/:id/preference', (req: Request, res: Response, 
   }
 
   try {
-    const db = getDb();
-    const result = db.prepare(`
-      UPDATE experiment_sessions SET preference = ?, phase = 'feedback' WHERE id = ?
-    `).run(validation.data.preference, id);
+    const result = await execute(
+      `UPDATE experiment_sessions SET preference = $1, phase = 'feedback' WHERE id = $2`,
+      [validation.data.preference, id]
+    );
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Session not found' });
     }
 
-    const row = db.prepare('SELECT * FROM experiment_sessions WHERE id = ?').get(id) as SessionRow;
-    res.json(mapSessionRow(row));
+    const row = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
+    res.json(mapSessionRow(row!));
   } catch (error) {
     next(error);
   }
@@ -254,8 +249,7 @@ experimentRoutes.post('/sessions/:id/feedback', async (req: Request, res: Respon
   }
 
   try {
-    const db = getDb();
-    const sessionRow = db.prepare('SELECT * FROM experiment_sessions WHERE id = ?').get(id) as SessionRow | undefined;
+    const sessionRow = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
     if (!sessionRow) {
       return res.status(404).json({ error: 'Session not found' });
     }
@@ -267,33 +261,35 @@ experimentRoutes.post('/sessions/:id/feedback', async (req: Request, res: Respon
     );
 
     // Store regeneration record
-    const result = db.prepare(`
+    const regenRow = await queryOne<RegenerationRow>(`
       INSERT INTO regenerations (session_id, feedback_text, regenerated_summary_id)
-      VALUES (?, ?, ?)
-    `).run(id, validation.data.feedbackText, regeneratedSummary.id);
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `, [id, validation.data.feedbackText, regeneratedSummary.id]);
 
     // Update session phase
-    db.prepare(`UPDATE experiment_sessions SET phase = 'regenerated' WHERE id = ?`).run(id);
+    await execute(`UPDATE experiment_sessions SET phase = 'regenerated' WHERE id = $1`, [id]);
 
-    const regenRow = db.prepare('SELECT * FROM regenerations WHERE id = ?').get(result.lastInsertRowid) as RegenerationRow;
-    res.status(201).json(mapRegenerationRow(regenRow));
+    res.status(201).json(mapRegenerationRow(regenRow!));
   } catch (error) {
     next(error);
   }
 });
 
 // GET /api/experiment/sessions/:id/regenerated — get regenerated summary
-experimentRoutes.get('/sessions/:id/regenerated', (req: Request, res: Response) => {
+experimentRoutes.get('/sessions/:id/regenerated', async (req: Request, res: Response) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
 
-  const db = getDb();
-  const regenRow = db.prepare('SELECT * FROM regenerations WHERE session_id = ? ORDER BY created_at DESC LIMIT 1').get(id) as RegenerationRow | undefined;
+  const regenRow = await queryOne<RegenerationRow>(
+    'SELECT * FROM regenerations WHERE session_id = $1 ORDER BY created_at DESC LIMIT 1',
+    [id]
+  );
   if (!regenRow) {
     return res.status(404).json({ error: 'No regeneration found for this session' });
   }
 
-  const summary = getSummaryById(regenRow.regenerated_summary_id);
+  const summary = await getSummaryById(regenRow.regenerated_summary_id);
   res.json({
     ...mapRegenerationRow(regenRow),
     summary: summary ? { id: summary.id, content: summary.content } : null,
@@ -301,7 +297,7 @@ experimentRoutes.get('/sessions/:id/regenerated', (req: Request, res: Response) 
 });
 
 // POST /api/experiment/sessions/:id/rate-regeneration — rate the regenerated summary
-experimentRoutes.post('/sessions/:id/rate-regeneration', (req: Request, res: Response, next: NextFunction) => {
+experimentRoutes.post('/sessions/:id/rate-regeneration', async (req: Request, res: Response, next: NextFunction) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
 
@@ -311,79 +307,84 @@ experimentRoutes.post('/sessions/:id/rate-regeneration', (req: Request, res: Res
   }
 
   try {
-    const db = getDb();
-
     // Update the latest regeneration for this session
-    const result = db.prepare(`
-      UPDATE regenerations SET improvement_rating = ?, satisfaction_rating = ?
-      WHERE session_id = ? AND id = (
-        SELECT id FROM regenerations WHERE session_id = ? ORDER BY created_at DESC LIMIT 1
+    const result = await execute(`
+      UPDATE regenerations SET improvement_rating = $1, satisfaction_rating = $2
+      WHERE session_id = $3 AND id = (
+        SELECT id FROM regenerations WHERE session_id = $4 ORDER BY created_at DESC LIMIT 1
       )
-    `).run(validation.data.improvementRating, validation.data.satisfactionRating, id, id);
+    `, [validation.data.improvementRating, validation.data.satisfactionRating, id, id]);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'No regeneration found for this session' });
     }
 
     // Update session phase to complete
-    db.prepare(`UPDATE experiment_sessions SET phase = 'complete' WHERE id = ?`).run(id);
+    await execute(`UPDATE experiment_sessions SET phase = 'complete' WHERE id = $1`, [id]);
 
-    const sessionRow = db.prepare('SELECT * FROM experiment_sessions WHERE id = ?').get(id) as SessionRow;
-    res.json(mapSessionRow(sessionRow));
+    const sessionRow = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
+    res.json(mapSessionRow(sessionRow!));
   } catch (error) {
     next(error);
   }
 });
 
 // POST /api/experiment/sessions/:id/ratings — save Likert ratings + preference in a transaction
-experimentRoutes.post('/sessions/:id/ratings', (req: Request, res: Response, next: NextFunction) => {
+experimentRoutes.post('/sessions/:id/ratings', async (req: Request, res: Response, next: NextFunction) => {
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
 
   const validation = summaryRatingsSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.errors });
 
+  const client = await getClient();
   try {
-    const db = getDb();
     const { ratings, preference } = validation.data;
 
-    const insertRating = db.prepare(
-      `INSERT INTO summary_ratings (session_id, summary_id, ab_label, utilidade, clareza, adequacao_perfil, factualidade_percebida)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    await client.query('BEGIN');
+
+    for (const r of ratings) {
+      await client.query(
+        `INSERT INTO summary_ratings (session_id, summary_id, ab_label, utilidade, clareza, adequacao_perfil, factualidade_percebida)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [id, r.summaryId, r.abLabel, r.utilidade, r.clareza, r.adequacaoPerfil, r.factualidadePercebida]
+      );
+    }
+
+    await client.query(
+      `UPDATE experiment_sessions SET preference = $1, phase = 'feedback' WHERE id = $2`,
+      [preference, id]
     );
 
-    const transaction = db.transaction(() => {
-      for (const r of ratings) {
-        insertRating.run(id, r.summaryId, r.abLabel, r.utilidade, r.clareza, r.adequacaoPerfil, r.factualidadePercebida);
-      }
-      db.prepare(`UPDATE experiment_sessions SET preference = ?, phase = 'feedback' WHERE id = ?`).run(preference, id);
-    });
-
-    transaction();
+    await client.query('COMMIT');
     res.json({ success: true });
   } catch (error) {
+    await client.query('ROLLBACK');
     next(error);
+  } finally {
+    client.release();
   }
 });
 
 // POST /api/experiment/post-test — submit post-test responses
-experimentRoutes.post('/post-test', (req: Request, res: Response, next: NextFunction) => {
+experimentRoutes.post('/post-test', async (req: Request, res: Response, next: NextFunction) => {
   const validation = postTestSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.errors });
 
   try {
-    const db = getDb();
     const { participantId, overallSatisfaction, wouldUseAgain, comments } = validation.data;
 
-    db.prepare(
+    await execute(
       `INSERT INTO post_test_responses (participant_id, overall_satisfaction, would_use_again, comments)
-       VALUES (?, ?, ?, ?)`
-    ).run(participantId, overallSatisfaction, wouldUseAgain, comments || null);
+       VALUES ($1, $2, $3, $4)`,
+      [participantId, overallSatisfaction, wouldUseAgain, comments || null]
+    );
 
     // Mark all participant sessions as complete
-    db.prepare(
-      `UPDATE experiment_sessions SET phase = 'complete' WHERE participant_id = ?`
-    ).run(participantId);
+    await execute(
+      `UPDATE experiment_sessions SET phase = 'complete' WHERE participant_id = $1`,
+      [participantId]
+    );
 
     res.json({ success: true });
   } catch (error) {
@@ -392,9 +393,8 @@ experimentRoutes.post('/post-test', (req: Request, res: Response, next: NextFunc
 });
 
 // GET /api/experiment/articles — list available articles for the experiment
-experimentRoutes.get('/articles', (req: Request, res: Response) => {
-  const db = getDb();
-  const rows = db.prepare('SELECT id, title, authors, year FROM articles ORDER BY id ASC').all();
+experimentRoutes.get('/articles', async (_req: Request, res: Response) => {
+  const rows = await queryAll('SELECT id, title, authors, year FROM articles ORDER BY id ASC');
   res.json(rows);
 });
 

@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 3001;
 const isDev = process.env.NODE_ENV !== 'production';
 
 // Run database migrations on startup
-runMigrations();
+await runMigrations();
 
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'];
@@ -80,8 +80,8 @@ const server = app.listen(PORT, () => {
 // Graceful shutdown
 const shutdown = () => {
   console.log('Shutting down gracefully...');
-  server.close(() => {
-    closeDb();
+  server.close(async () => {
+    await closeDb();
     console.log('Server closed');
     process.exit(0);
   });

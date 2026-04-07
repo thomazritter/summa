@@ -1,6 +1,6 @@
 import { Router, NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
-import { getDb } from '../db/connection.js';
+import { queryOne, queryAll } from '../db/connection.js';
 import { parseId } from '../utils/validation.js';
 
 export const userRoutes = Router();
@@ -12,21 +12,19 @@ const createUserSchema = z.object({
 });
 
 // Get all users
-userRoutes.get('/', (req: Request, res: Response) => {
-  const db = getDb();
-  const users = db.prepare('SELECT * FROM users').all();
+userRoutes.get('/', async (req: Request, res: Response) => {
+  const users = await queryAll('SELECT * FROM users');
   res.json(users);
 });
 
 // Get user by ID
-userRoutes.get('/:id', (req: Request, res: Response) => {
+userRoutes.get('/:id', async (req: Request, res: Response) => {
   const id = parseId(req.params.id);
   if (id === null) {
     return res.status(400).json({ error: 'Invalid user ID' });
   }
 
-  const db = getDb();
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  const user = await queryOne('SELECT * FROM users WHERE id = $1', [id]);
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
@@ -34,7 +32,7 @@ userRoutes.get('/:id', (req: Request, res: Response) => {
 });
 
 // Create user
-userRoutes.post('/', (req: Request, res: Response, next: NextFunction) => {
+userRoutes.post('/', async (req: Request, res: Response, next: NextFunction) => {
   const validation = createUserSchema.safeParse(req.body);
 
   if (!validation.success) {
@@ -42,14 +40,15 @@ userRoutes.post('/', (req: Request, res: Response, next: NextFunction) => {
   }
 
   const { name, email } = validation.data;
-  const db = getDb();
 
   try {
-    const result = db.prepare('INSERT INTO users (name, email) VALUES (?, ?)').run(name, email);
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(result.lastInsertRowid);
+    const user = await queryOne(
+      'INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *',
+      [name, email]
+    );
     res.status(201).json(user);
   } catch (error: unknown) {
-    if (error instanceof Error && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    if (error instanceof Error && 'code' in error && (error as Record<string, unknown>).code === '23505') {
       return res.status(409).json({ error: 'Email already exists' });
     }
     next(error);

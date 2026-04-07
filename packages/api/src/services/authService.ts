@@ -1,8 +1,7 @@
-import { getDb } from '../db/connection.js';
+import { queryOne, execute } from '../db/connection.js';
 
-export function validateCode(code: string) {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM access_codes WHERE code = ?').get(code);
+export async function validateCode(code: string) {
+  const row = await queryOne('SELECT * FROM access_codes WHERE code = $1', [code]);
   return row || null;
 }
 
@@ -13,9 +12,8 @@ export function generateCode(): string {
   return code;
 }
 
-export function createAccessCode(email: string, role: 'participant' | 'manager' = 'participant') {
-  const db = getDb();
+export async function createAccessCode(email: string, role: 'participant' | 'manager' = 'participant') {
   const code = generateCode();
-  db.prepare('INSERT INTO access_codes (code, email, role) VALUES (?, ?, ?)').run(code, email, role);
+  await execute('INSERT INTO access_codes (code, email, role) VALUES ($1, $2, $3)', [code, email, role]);
   return code;
 }

@@ -1,4 +1,4 @@
-import { getDb } from '../db/connection.js';
+import { queryOne, queryAll, execute } from '../db/connection.js';
 import { safeJsonParse } from '../utils/validation.js';
 import type { Profile, CreateProfileRequest, ProfileQuestion } from '@summarizer/shared';
 
@@ -55,60 +55,56 @@ export const getProfileQuestions = (): ProfileQuestion[] => {
   return profileQuestions;
 };
 
-export const createProfile = (userId: number, data: CreateProfileRequest): Profile => {
-  const db = getDb();
-  const stmt = db.prepare(`
-    INSERT INTO profiles (user_id, name, expertise, focus, depth, context)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `);
+export const createProfile = async (userId: number, data: CreateProfileRequest): Promise<Profile> => {
+  const row = await queryOne<ProfileRow>(
+    `INSERT INTO profiles (user_id, name, expertise, focus, depth, context)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING *`,
+    [userId, data.name, data.expertise, data.focus, data.depth, data.context],
+  );
 
-  const result = stmt.run(userId, data.name, data.expertise, data.focus, data.depth, data.context);
-  const profile = getProfileById(result.lastInsertRowid as number);
-  if (!profile) {
+  if (!row) {
     throw new Error('Failed to create profile');
   }
-  return profile;
-};
-
-export const getProfileById = (id: number): Profile | null => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM profiles WHERE id = ?').get(id) as ProfileRow | undefined;
-  if (!row) {
-    return null;
-  }
-
   return mapRowToProfile(row);
 };
 
-export const getProfilesByUserId = (userId: number): Profile[] => {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM profiles WHERE user_id = ?').all(userId) as ProfileRow[];
+export const getProfileById = async (id: number): Promise<Profile | null> => {
+  const row = await queryOne<ProfileRow>('SELECT * FROM profiles WHERE id = $1', [id]);
+  if (!row) {
+    return null;
+  }
+  return mapRowToProfile(row);
+};
+
+export const getProfilesByUserId = async (userId: number): Promise<Profile[]> => {
+  const rows = await queryAll<ProfileRow>('SELECT * FROM profiles WHERE user_id = $1', [userId]);
   return rows.map(mapRowToProfile);
 };
 
-export const updateProfile = (id: number, data: Partial<CreateProfileRequest>): Profile | null => {
-  const db = getDb();
+export const updateProfile = async (id: number, data: Partial<CreateProfileRequest>): Promise<Profile | null> => {
   const fields: string[] = [];
   const values: (string | number)[] = [];
+  let paramIndex = 1;
 
   if (data.name !== undefined) {
-    fields.push('name = ?');
+    fields.push(`name = $${paramIndex++}`);
     values.push(data.name);
   }
   if (data.expertise !== undefined) {
-    fields.push('expertise = ?');
+    fields.push(`expertise = $${paramIndex++}`);
     values.push(data.expertise);
   }
   if (data.focus !== undefined) {
-    fields.push('focus = ?');
+    fields.push(`focus = $${paramIndex++}`);
     values.push(data.focus);
   }
   if (data.depth !== undefined) {
-    fields.push('depth = ?');
+    fields.push(`depth = $${paramIndex++}`);
     values.push(data.depth);
   }
   if (data.context !== undefined) {
-    fields.push('context = ?');
+    fields.push(`context = $${paramIndex++}`);
     values.push(data.context);
   }
 
@@ -118,13 +114,15 @@ export const updateProfile = (id: number, data: Partial<CreateProfileRequest>): 
 
   values.push(id);
 
-  db.prepare(`UPDATE profiles SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  await execute(
+    `UPDATE profiles SET ${fields.join(', ')} WHERE id = $${paramIndex}`,
+    values,
+  );
   return getProfileById(id);
 };
 
-export const deleteProfile = (id: number): boolean => {
-  const db = getDb();
-  const result = db.prepare('DELETE FROM profiles WHERE id = ?').run(id);
+export const deleteProfile = async (id: number): Promise<boolean> => {
+  const result = await execute('DELETE FROM profiles WHERE id = $1', [id]);
   return result.changes > 0;
 };
 

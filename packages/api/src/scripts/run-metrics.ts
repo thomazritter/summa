@@ -9,7 +9,7 @@
  *   npx tsx packages/api/src/scripts/run-metrics.ts
  */
 
-import { getDb } from '../db/connection.js';
+import { queryAll, closeDb } from '../db/connection.js';
 
 const METRICS_SERVICE_URL = process.env.METRICS_SERVICE_URL || 'http://127.0.0.1:5052';
 
@@ -34,8 +34,6 @@ interface ArticleRow {
 }
 
 async function runMetrics() {
-  const db = getDb();
-
   // Check metrics service
   try {
     const health = await fetch(`${METRICS_SERVICE_URL}/health`);
@@ -47,10 +45,10 @@ async function runMetrics() {
     process.exit(1);
   }
 
-  const articles = db.prepare('SELECT id, title, structured_content FROM articles').all() as ArticleRow[];
-  const summaries = db.prepare(
+  const articles = await queryAll<ArticleRow>('SELECT id, title, structured_content FROM articles');
+  const summaries = await queryAll<SummaryRow>(
     'SELECT id, article_id, profile_id, content FROM summaries WHERE profile_id IN (99, 100, 101, 102) ORDER BY article_id, profile_id'
-  ).all() as SummaryRow[];
+  );
 
   if (summaries.length === 0) {
     console.error('Nenhum resumo encontrado. Execute pregenerate.ts primeiro.');
@@ -175,10 +173,12 @@ async function runMetrics() {
   }
 
   console.log('Metricas concluidas!');
+  await closeDb();
   process.exit(0);
 }
 
-runMetrics().catch((err) => {
+runMetrics().catch(async (err) => {
   console.error('Erro:', err);
+  await closeDb();
   process.exit(1);
 });

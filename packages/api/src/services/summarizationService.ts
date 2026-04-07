@@ -1,4 +1,4 @@
-import { getDb } from '../db/connection.js';
+import { queryOne, queryAll, execute } from '../db/connection.js';
 import { generateCompletion, OllamaError } from './ollamaClient.js';
 import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxTokensForDepth } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
@@ -23,16 +23,14 @@ export class NotFoundError extends Error {
 }
 
 export const generateSummary = async (articleId: number, profileId: number): Promise<Summary> => {
-  const db = getDb();
-
   // Get article
-  const article = db.prepare('SELECT * FROM articles WHERE id = ?').get(articleId) as ArticleRow | undefined;
+  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
   if (!article) {
     throw new NotFoundError('Article not found');
   }
 
   // Get profile
-  const profile = getProfileById(profileId);
+  const profile = await getProfileById(profileId);
   if (!profile) {
     throw new NotFoundError('Profile not found');
   }
@@ -60,25 +58,24 @@ export const generateSummary = async (articleId: number, profileId: number): Pro
   }
 
   // Save summary
-  const stmt = db.prepare(`
-    INSERT INTO summaries (article_id, profile_id, content)
-    VALUES (?, ?, ?)
-  `);
+  const row = await queryOne<SummaryRow>(
+    `INSERT INTO summaries (article_id, profile_id, content)
+     VALUES ($1, $2, $3)
+     RETURNING *`,
+    [articleId, profileId, summaryContent],
+  );
 
-  const result = stmt.run(articleId, profileId, summaryContent);
-  const summary = getSummaryById(result.lastInsertRowid as number);
-  if (!summary) {
+  if (!row) {
     throw new SummarizationError('Failed to save summary');
   }
-  return summary;
+  return mapRowToSummary(row);
 };
 
 export const generateSummaryWithFactuality = async (articleId: number, profileId: number): Promise<Summary> => {
-  const db = getDb();
-  const article = db.prepare('SELECT * FROM articles WHERE id = ?').get(articleId) as ArticleRow | undefined;
+  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
   if (!article) throw new NotFoundError('Article not found');
 
-  const profile = getProfileById(profileId);
+  const profile = await getProfileById(profileId);
   if (!profile) throw new NotFoundError('Profile not found');
 
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
@@ -97,39 +94,37 @@ export const generateSummaryWithFactuality = async (articleId: number, profileId
 
   const { score, results } = await checkFactuality(summaryContent, structuredContent, article.raw_text);
 
-  const stmt = db.prepare(`
-    INSERT INTO summaries (article_id, profile_id, content, factuality_score, factuality_details)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-  const result = stmt.run(articleId, profileId, summaryContent, score, JSON.stringify(results));
-  const summary = getSummaryById(result.lastInsertRowid as number);
-  if (!summary) throw new SummarizationError('Failed to save summary');
-  return summary;
+  const row = await queryOne<SummaryRow>(
+    `INSERT INTO summaries (article_id, profile_id, content, factuality_score, factuality_details)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [articleId, profileId, summaryContent, score, JSON.stringify(results)],
+  );
+
+  if (!row) throw new SummarizationError('Failed to save summary');
+  return mapRowToSummary(row);
 };
 
-export const getSummaryById = (id: number): Summary | null => {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM summaries WHERE id = ?').get(id) as SummaryRow | undefined;
+export const getSummaryById = async (id: number): Promise<Summary | null> => {
+  const row = await queryOne<SummaryRow>('SELECT * FROM summaries WHERE id = $1', [id]);
   if (!row) {
     return null;
   }
   return mapRowToSummary(row);
 };
 
-export const getSummariesByArticle = (articleId: number): Summary[] => {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM summaries WHERE article_id = ?').all(articleId) as SummaryRow[];
+export const getSummariesByArticle = async (articleId: number): Promise<Summary[]> => {
+  const rows = await queryAll<SummaryRow>('SELECT * FROM summaries WHERE article_id = $1', [articleId]);
   return rows.map(mapRowToSummary);
 };
 
-export const getSummariesByProfile = (profileId: number): Summary[] => {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM summaries WHERE profile_id = ?').all(profileId) as SummaryRow[];
+export const getSummariesByProfile = async (profileId: number): Promise<Summary[]> => {
+  const rows = await queryAll<SummaryRow>('SELECT * FROM summaries WHERE profile_id = $1', [profileId]);
   return rows.map(mapRowToSummary);
 };
 
 export const regenerateSummary = async (summaryId: number): Promise<Summary> => {
-  const existing = getSummaryById(summaryId);
+  const existing = await getSummaryById(summaryId);
   if (!existing) {
     throw new NotFoundError('Summary not found');
   }
@@ -138,24 +133,22 @@ export const regenerateSummary = async (summaryId: number): Promise<Summary> => 
   const newSummary = await generateSummary(existing.articleId, existing.profileId);
 
   // Only delete old summary after new one is successfully created
-  const db = getDb();
-  db.prepare('DELETE FROM summaries WHERE id = ?').run(summaryId);
+  await execute('DELETE FROM summaries WHERE id = $1', [summaryId]);
 
   return newSummary;
 };
 
-export const updateSummaryFactuality = (
+export const updateSummaryFactuality = async (
   summaryId: number,
   factualityScore: number,
   factualityDetails: unknown[]
-): Summary | null => {
-  const db = getDb();
-
-  db.prepare(`
-    UPDATE summaries
-    SET factuality_score = ?, factuality_details = ?
-    WHERE id = ?
-  `).run(factualityScore, JSON.stringify(factualityDetails), summaryId);
+): Promise<Summary | null> => {
+  await execute(
+    `UPDATE summaries
+     SET factuality_score = $1, factuality_details = $2
+     WHERE id = $3`,
+    [factualityScore, JSON.stringify(factualityDetails), summaryId],
+  );
 
   return getSummaryById(summaryId);
 };
@@ -165,9 +158,7 @@ export const updateSummaryFactuality = (
  * Used as the control condition in the experiment.
  */
 export const generateGenericSummary = async (articleId: number): Promise<Summary> => {
-  const db = getDb();
-
-  const article = db.prepare('SELECT * FROM articles WHERE id = ?').get(articleId) as ArticleRow | undefined;
+  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
   if (!article) {
     throw new NotFoundError('Article not found');
   }
@@ -194,17 +185,17 @@ export const generateGenericSummary = async (articleId: number): Promise<Summary
 
   const GENERIC_PROFILE_ID = 99;
 
-  const stmt = db.prepare(`
-    INSERT INTO summaries (article_id, profile_id, content)
-    VALUES (?, ?, ?)
-  `);
+  const row = await queryOne<SummaryRow>(
+    `INSERT INTO summaries (article_id, profile_id, content)
+     VALUES ($1, $2, $3)
+     RETURNING *`,
+    [articleId, GENERIC_PROFILE_ID, summaryContent],
+  );
 
-  const result = stmt.run(articleId, GENERIC_PROFILE_ID, summaryContent);
-  const summary = getSummaryById(result.lastInsertRowid as number);
-  if (!summary) {
+  if (!row) {
     throw new SummarizationError('Failed to save generic summary');
   }
-  return summary;
+  return mapRowToSummary(row);
 };
 
 /**
@@ -215,18 +206,17 @@ export const regenerateSummaryWithFeedback = async (
   summaryId: number,
   feedbackText: string
 ): Promise<Summary> => {
-  const db = getDb();
-  const existing = getSummaryById(summaryId);
+  const existing = await getSummaryById(summaryId);
   if (!existing) {
     throw new NotFoundError('Summary not found');
   }
 
-  const article = db.prepare('SELECT * FROM articles WHERE id = ?').get(existing.articleId) as ArticleRow | undefined;
+  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [existing.articleId]);
   if (!article) {
     throw new NotFoundError('Article not found');
   }
 
-  const profile = getProfileById(existing.profileId);
+  const profile = await getProfileById(existing.profileId);
   if (!profile) {
     throw new NotFoundError('Profile not found');
   }
@@ -259,17 +249,17 @@ Gere o resumo melhorado agora:`;
     throw error;
   }
 
-  const stmt = db.prepare(`
-    INSERT INTO summaries (article_id, profile_id, content)
-    VALUES (?, ?, ?)
-  `);
+  const row = await queryOne<SummaryRow>(
+    `INSERT INTO summaries (article_id, profile_id, content)
+     VALUES ($1, $2, $3)
+     RETURNING *`,
+    [existing.articleId, existing.profileId, summaryContent],
+  );
 
-  const result = stmt.run(existing.articleId, existing.profileId, summaryContent);
-  const summary = getSummaryById(result.lastInsertRowid as number);
-  if (!summary) {
+  if (!row) {
     throw new SummarizationError('Failed to save regenerated summary');
   }
-  return summary;
+  return mapRowToSummary(row);
 };
 
 // Internal types

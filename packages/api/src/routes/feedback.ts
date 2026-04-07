@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { getDb } from '../db/connection.js';
+import { queryOne, queryAll } from '../db/connection.js';
 import { parseId } from '../utils/validation.js';
 
 export const feedbackRoutes = Router();
@@ -13,7 +13,7 @@ const feedbackSchema = z.object({
   comments: z.string().max(2000).optional(),
 });
 
-feedbackRoutes.post('/', (req: Request, res: Response, next: NextFunction) => {
+feedbackRoutes.post('/', async (req: Request, res: Response, next: NextFunction) => {
   const validation = feedbackSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.errors });
 
@@ -21,24 +21,22 @@ feedbackRoutes.post('/', (req: Request, res: Response, next: NextFunction) => {
   const userId = 1; // MVP: hardcoded user
 
   try {
-    const db = getDb();
-    const result = db.prepare(`
-      INSERT INTO feedback (summary_id, user_id, utility_rating, technical_level_rating, depth_rating, comments)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(summaryId, userId, utilityRating, technicalLevelRating, depthRating, comments || null);
-
-    const feedback = db.prepare('SELECT * FROM feedback WHERE id = ?').get(result.lastInsertRowid);
+    const feedback = await queryOne(
+      `INSERT INTO feedback (summary_id, user_id, utility_rating, technical_level_rating, depth_rating, comments)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [summaryId, userId, utilityRating, technicalLevelRating, depthRating, comments || null]
+    );
     res.status(201).json(feedback);
   } catch (error) {
     next(error);
   }
 });
 
-feedbackRoutes.get('/summary/:summaryId', (req: Request, res: Response) => {
+feedbackRoutes.get('/summary/:summaryId', async (req: Request, res: Response) => {
   const summaryId = parseId(req.params.summaryId);
   if (summaryId === null) return res.status(400).json({ error: 'Invalid summary ID' });
 
-  const db = getDb();
-  const feedback = db.prepare('SELECT * FROM feedback WHERE summary_id = ?').all(summaryId);
+  const feedback = await queryAll('SELECT * FROM feedback WHERE summary_id = $1', [summaryId]);
   res.json(feedback);
 });

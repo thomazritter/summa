@@ -15,17 +15,15 @@
  * - Articles uploaded to the database
  */
 
-import { getDb } from '../db/connection.js';
+import { queryOne, queryAll, closeDb } from '../db/connection.js';
 import { generateSummary, generateGenericSummary } from '../services/summarizationService.js';
 
 const EXPERIMENT_PROFILE_IDS = [100, 101, 102]; // junior, pleno, senior
 const GENERIC_PROFILE_ID = 99;
 
 async function pregenerate() {
-  const db = getDb();
-
   // Get all articles
-  const articles = db.prepare('SELECT id, title FROM articles').all() as { id: number; title: string }[];
+  const articles = await queryAll<{ id: number; title: string }>('SELECT id, title FROM articles');
 
   if (articles.length === 0) {
     console.error('Nenhum artigo encontrado no banco. Faca upload dos artigos antes de rodar este script.');
@@ -38,9 +36,10 @@ async function pregenerate() {
     console.log(`=== Artigo ${article.id}: ${article.title} ===\n`);
 
     // Check if generic summary already exists
-    const existingGeneric = db.prepare(
-      'SELECT id FROM summaries WHERE article_id = ? AND profile_id = ?'
-    ).get(article.id, GENERIC_PROFILE_ID) as { id: number } | undefined;
+    const existingGeneric = await queryOne<{ id: number }>(
+      'SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2',
+      [article.id, GENERIC_PROFILE_ID],
+    );
 
     if (existingGeneric) {
       console.log(`  [SKIP] Resumo generico ja existe (id=${existingGeneric.id})`);
@@ -54,9 +53,10 @@ async function pregenerate() {
 
     // Generate personalized summaries for each profile
     for (const profileId of EXPERIMENT_PROFILE_IDS) {
-      const existingPersonalized = db.prepare(
-        'SELECT id FROM summaries WHERE article_id = ? AND profile_id = ?'
-      ).get(article.id, profileId) as { id: number } | undefined;
+      const existingPersonalized = await queryOne<{ id: number }>(
+        'SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2',
+        [article.id, profileId],
+      );
 
       if (existingPersonalized) {
         console.log(`  [SKIP] Resumo perfil ${profileId} ja existe (id=${existingPersonalized.id})`);
@@ -78,13 +78,15 @@ async function pregenerate() {
   console.log(`Total de resumos: ${articles.length * 4} (1 generico + 3 personalizados por artigo)`);
 
   // Summary of what was generated
-  const totalSummaries = db.prepare('SELECT COUNT(*) as count FROM summaries').get() as { count: number };
-  console.log(`Resumos no banco: ${totalSummaries.count}`);
+  const totalSummaries = await queryOne<{ count: number }>('SELECT COUNT(*) as count FROM summaries');
+  console.log(`Resumos no banco: ${totalSummaries?.count ?? 0}`);
 
+  await closeDb();
   process.exit(0);
 }
 
-pregenerate().catch((err) => {
+pregenerate().catch(async (err) => {
   console.error('Erro na pre-geracao:', err);
+  await closeDb();
   process.exit(1);
 });
