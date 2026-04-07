@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
 import { LikertScale } from '../../components/LikertScale';
+import { ExperimentProgress } from '../../components/ExperimentProgress';
 
 type SummaryRatings = {
   utilidade: number | null;
@@ -18,6 +19,33 @@ const emptyRatings = (): SummaryRatings => ({
   factualidadePercebida: null,
 });
 
+const ratingLabels: Record<keyof SummaryRatings, string> = {
+  utilidade: 'Utilidade',
+  clareza: 'Clareza',
+  adequacaoPerfil: 'Adequação ao Perfil',
+  factualidadePercebida: 'Factualidade Percebida',
+};
+
+function getMissingItems(ratingsA: SummaryRatings, ratingsB: SummaryRatings, selected: 'A' | 'B' | null): string[] {
+  const missing: string[] = [];
+
+  for (const [key, label] of Object.entries(ratingLabels)) {
+    if (ratingsA[key as keyof SummaryRatings] === null) {
+      missing.push(`${label} (Resumo A)`);
+    }
+  }
+  for (const [key, label] of Object.entries(ratingLabels)) {
+    if (ratingsB[key as keyof SummaryRatings] === null) {
+      missing.push(`${label} (Resumo B)`);
+    }
+  }
+  if (selected === null) {
+    missing.push('Preferência');
+  }
+
+  return missing;
+}
+
 export function ExperimentTrial() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -27,11 +55,25 @@ export function ExperimentTrial() {
   const [commentA, setCommentA] = useState('');
   const [commentB, setCommentB] = useState('');
   const [preferenceReason, setPreferenceReason] = useState('');
+  const [activeTab, setActiveTab] = useState<'A' | 'B'>('A');
+
+  const participantId = sessionStorage.getItem('experimentParticipantId');
 
   const { data: session, isLoading } = useQuery({
     queryKey: ['experiment-session', sessionId],
     queryFn: () => experimentApi.getSession(Number(sessionId)),
     enabled: !!sessionId,
+  });
+
+  const { data: sessions } = useQuery({
+    queryKey: ['experiment-sessions', participantId],
+    queryFn: () => experimentApi.getParticipantSessions(Number(participantId)),
+    enabled: !!participantId,
+  });
+
+  const { data: articles } = useQuery({
+    queryKey: ['experiment-articles'],
+    queryFn: () => experimentApi.getArticles(),
   });
 
   const submitMutation = useMutation({
@@ -74,117 +116,175 @@ export function ExperimentTrial() {
   }
 
   if (!session) {
-    return <div className="text-center py-8 text-red-600">Sessao nao encontrada</div>;
+    return <div className="text-center py-8 text-red-600">Sessão não encontrada</div>;
   }
+
+  // Determine if this is article 1 or 2 based on other sessions
+  const completedCount = (sessions ?? []).filter((s) => s.id !== Number(sessionId)).length;
+  const progressStep = completedCount === 0 ? 2 : 5;
 
   const allRated = (r: SummaryRatings) => Object.values(r).every((v) => v !== null);
   const canSubmit = selected !== null && allRated(ratingsA) && allRated(ratingsB);
+  const missingItems = getMissingItems(ratingsA, ratingsB, selected);
+
+  const articleTitle = articles?.find((a) => a.id === session.articleId)?.title;
+
+  // Reusable summary + ratings block
+  const renderSummaryContent = (label: 'A' | 'B') => {
+    const summaryContent = label === 'A' ? session.summaryA?.content : session.summaryB?.content;
+    const ratings = label === 'A' ? ratingsA : ratingsB;
+    const setRatings = label === 'A' ? setRatingsA : setRatingsB;
+    const comment = label === 'A' ? commentA : commentB;
+    const setComment = label === 'A' ? setCommentA : setCommentB;
+
+    return (
+      <div>
+        <div className="bg-white p-6 rounded-lg border-2 border-gray-200">
+          <h2 className="text-lg font-bold mb-4 text-center">Resumo {label}</h2>
+          <div className="prose prose-sm max-w-none text-gray-700">
+            {summaryContent?.split('\n').map((para, i) => (
+              <p key={i} className="mb-3">{para}</p>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-lg border mt-4 space-y-2">
+          <h4 className="font-semibold text-gray-800 mb-3">Avalie o Resumo {label}:</h4>
+          <LikertScale label="Utilidade" value={ratings.utilidade} onChange={(v) => setRatings((prev) => ({ ...prev, utilidade: v }))} lowLabel="Pouco útil" highLabel="Muito útil" />
+          <LikertScale label="Clareza" value={ratings.clareza} onChange={(v) => setRatings((prev) => ({ ...prev, clareza: v }))} lowLabel="Confuso" highLabel="Muito claro" />
+          <LikertScale label="Adequação ao Perfil" value={ratings.adequacaoPerfil} onChange={(v) => setRatings((prev) => ({ ...prev, adequacaoPerfil: v }))} lowLabel="Inadequado" highLabel="Adequado" />
+          <LikertScale label="Factualidade Percebida" value={ratings.factualidadePercebida} onChange={(v) => setRatings((prev) => ({ ...prev, factualidadePercebida: v }))} lowLabel="Duvidoso" highLabel="Confiável" />
+          <div className="mt-3">
+            <label className="block mb-2 font-medium text-sm text-gray-700">
+              Comentários sobre este resumo (opcional)
+            </label>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={3}
+              className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
+              placeholder={`Alguma observação sobre o Resumo ${label}...`}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
+      <ExperimentProgress currentStep={progressStep} />
+
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Fase 1: Comparacao de Resumos</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Fase 1: Comparação de Resumos</h1>
+        {articleTitle && (
+          <p className="text-sm text-gray-500 mt-1">
+            Artigo: <span className="font-medium text-gray-700">{articleTitle}</span>
+          </p>
+        )}
         <p className="text-gray-600 mt-2">
-          Leia os dois resumos abaixo com atencao, avalie cada um individualmente e indique qual voce prefere.
+          Leia os dois resumos abaixo com atenção, avalie cada um individualmente e indique qual você prefere.
           Ambos foram gerados automaticamente a partir do mesmo artigo.
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Summary A */}
-        <div>
-          <div
-            className={`bg-white p-6 rounded-lg border-2 transition-colors cursor-pointer ${
-              selected === 'A' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'
+      {/* Mobile: tab switcher */}
+      <div className="md:hidden">
+        <div className="flex border-b mb-4" role="tablist" aria-label="Selecionar resumo">
+          <button
+            role="tab"
+            aria-selected={activeTab === 'A'}
+            aria-controls="panel-a"
+            className={`flex-1 py-2 text-center transition-colors ${
+              activeTab === 'A' ? 'border-b-2 border-blue-500 font-semibold text-blue-700' : 'text-gray-500'
             }`}
-            onClick={() => setSelected('A')}
+            onClick={() => setActiveTab('A')}
           >
-            <h2 className="text-lg font-bold mb-4 text-center">Resumo A</h2>
-            <div className="prose prose-sm max-w-none text-gray-700">
-              {session.summaryA?.content.split('\n').map((para, i) => (
-                <p key={i} className="mb-3">{para}</p>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-lg border mt-4 space-y-2">
-            <h4 className="font-semibold text-gray-800 mb-3">Avalie o Resumo A:</h4>
-            <LikertScale label="Utilidade" value={ratingsA.utilidade} onChange={(v) => setRatingsA((prev) => ({ ...prev, utilidade: v }))} lowLabel="Pouco util" highLabel="Muito util" />
-            <LikertScale label="Clareza" value={ratingsA.clareza} onChange={(v) => setRatingsA((prev) => ({ ...prev, clareza: v }))} lowLabel="Confuso" highLabel="Muito claro" />
-            <LikertScale label="Adequacao ao Perfil" value={ratingsA.adequacaoPerfil} onChange={(v) => setRatingsA((prev) => ({ ...prev, adequacaoPerfil: v }))} lowLabel="Inadequado" highLabel="Adequado" />
-            <LikertScale label="Factualidade Percebida" value={ratingsA.factualidadePercebida} onChange={(v) => setRatingsA((prev) => ({ ...prev, factualidadePercebida: v }))} lowLabel="Duvidoso" highLabel="Confiavel" />
-            <div className="mt-3">
-              <label className="block mb-2 font-medium text-sm text-gray-700">
-                Comentarios sobre este resumo (opcional)
-              </label>
-              <textarea
-                value={commentA}
-                onChange={(e) => setCommentA(e.target.value)}
-                rows={3}
-                className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-                placeholder="Alguma observacao sobre o Resumo A..."
-              />
-            </div>
-          </div>
+            Resumo A
+          </button>
+          <button
+            role="tab"
+            aria-selected={activeTab === 'B'}
+            aria-controls="panel-b"
+            className={`flex-1 py-2 text-center transition-colors ${
+              activeTab === 'B' ? 'border-b-2 border-blue-500 font-semibold text-blue-700' : 'text-gray-500'
+            }`}
+            onClick={() => setActiveTab('B')}
+          >
+            Resumo B
+          </button>
         </div>
-
-        {/* Summary B */}
-        <div>
-          <div
-            className={`bg-white p-6 rounded-lg border-2 transition-colors cursor-pointer ${
-              selected === 'B' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-200 hover:border-blue-300'
-            }`}
-            onClick={() => setSelected('B')}
-          >
-            <h2 className="text-lg font-bold mb-4 text-center">Resumo B</h2>
-            <div className="prose prose-sm max-w-none text-gray-700">
-              {session.summaryB?.content.split('\n').map((para, i) => (
-                <p key={i} className="mb-3">{para}</p>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white p-4 rounded-lg border mt-4 space-y-2">
-            <h4 className="font-semibold text-gray-800 mb-3">Avalie o Resumo B:</h4>
-            <LikertScale label="Utilidade" value={ratingsB.utilidade} onChange={(v) => setRatingsB((prev) => ({ ...prev, utilidade: v }))} lowLabel="Pouco util" highLabel="Muito util" />
-            <LikertScale label="Clareza" value={ratingsB.clareza} onChange={(v) => setRatingsB((prev) => ({ ...prev, clareza: v }))} lowLabel="Confuso" highLabel="Muito claro" />
-            <LikertScale label="Adequacao ao Perfil" value={ratingsB.adequacaoPerfil} onChange={(v) => setRatingsB((prev) => ({ ...prev, adequacaoPerfil: v }))} lowLabel="Inadequado" highLabel="Adequado" />
-            <LikertScale label="Factualidade Percebida" value={ratingsB.factualidadePercebida} onChange={(v) => setRatingsB((prev) => ({ ...prev, factualidadePercebida: v }))} lowLabel="Duvidoso" highLabel="Confiavel" />
-            <div className="mt-3">
-              <label className="block mb-2 font-medium text-sm text-gray-700">
-                Comentarios sobre este resumo (opcional)
-              </label>
-              <textarea
-                value={commentB}
-                onChange={(e) => setCommentB(e.target.value)}
-                rows={3}
-                className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-                placeholder="Alguma observacao sobre o Resumo B..."
-              />
-            </div>
-          </div>
+        <div id="panel-a" role="tabpanel" className={activeTab === 'A' ? '' : 'hidden'}>
+          {renderSummaryContent('A')}
+        </div>
+        <div id="panel-b" role="tabpanel" className={activeTab === 'B' ? '' : 'hidden'}>
+          {renderSummaryContent('B')}
         </div>
       </div>
 
-      {selected && (
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
-          <p className="text-blue-900 font-medium text-center">
-            Voce selecionou: <strong>Resumo {selected}</strong>
-          </p>
-          <div>
+      {/* Desktop: side-by-side grid */}
+      <div className="hidden md:grid md:grid-cols-2 gap-6">
+        {renderSummaryContent('A')}
+        {renderSummaryContent('B')}
+      </div>
+
+      {/* Explicit preference selection */}
+      <div className="bg-white p-6 rounded-lg border space-y-4">
+        <h3 className="text-lg font-semibold text-gray-900 text-center">Qual resumo você prefere?</h3>
+        <div className="flex justify-center gap-4" role="radiogroup" aria-label="Preferência de resumo">
+          <button
+            type="button"
+            role="radio"
+            aria-checked={selected === 'A'}
+            onClick={() => setSelected('A')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg border-2 font-medium transition-colors ${
+              selected === 'A'
+                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+            }`}
+          >
+            <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+              selected === 'A' ? 'border-blue-500' : 'border-gray-300'
+            }`}>
+              {selected === 'A' && <span className="w-2 h-2 rounded-full bg-blue-500" />}
+            </span>
+            Resumo A
+          </button>
+          <button
+            type="button"
+            role="radio"
+            aria-checked={selected === 'B'}
+            onClick={() => setSelected('B')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-lg border-2 font-medium transition-colors ${
+              selected === 'B'
+                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+            }`}
+          >
+            <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+              selected === 'B' ? 'border-blue-500' : 'border-gray-300'
+            }`}>
+              {selected === 'B' && <span className="w-2 h-2 rounded-full bg-blue-500" />}
+            </span>
+            Resumo B
+          </button>
+        </div>
+
+        {selected && (
+          <div className="mt-4">
             <label className="block mb-2 font-medium text-sm text-gray-700">
-              Por que? (opcional)
+              Por que você prefere o Resumo {selected}? (opcional)
             </label>
             <textarea
               value={preferenceReason}
               onChange={(e) => setPreferenceReason(e.target.value)}
               rows={3}
               className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-              placeholder="O que fez voce preferir este resumo..."
+              placeholder="O que fez você preferir este resumo..."
             />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {submitMutation.error && (
         <div className="bg-red-50 text-red-700 p-4 rounded-lg">
@@ -192,13 +292,20 @@ export function ExperimentTrial() {
         </div>
       )}
 
-      <button
-        onClick={() => canSubmit && submitMutation.mutate()}
-        disabled={!canSubmit || submitMutation.isPending}
-        className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {submitMutation.isPending ? 'Salvando...' : 'Confirmar Preferencia e Continuar'}
-      </button>
+      <div className="space-y-2">
+        <button
+          onClick={() => canSubmit && submitMutation.mutate()}
+          disabled={!canSubmit || submitMutation.isPending}
+          className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {submitMutation.isPending ? 'Salvando...' : 'Confirmar Preferência e Continuar'}
+        </button>
+        {!canSubmit && missingItems.length > 0 && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Para continuar, complete: {missingItems.join(', ')}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

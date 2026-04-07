@@ -2,16 +2,28 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
+import { ExperimentProgress } from '../../components/ExperimentProgress';
+
+const MIN_FEEDBACK_LENGTH = 50;
 
 export function ExperimentFeedback() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [feedbackText, setFeedbackText] = useState('');
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
+
+  const participantId = sessionStorage.getItem('experimentParticipantId');
 
   const { data: session, isLoading } = useQuery({
     queryKey: ['experiment-session', sessionId],
     queryFn: () => experimentApi.getSession(Number(sessionId)),
     enabled: !!sessionId,
+  });
+
+  const { data: sessions } = useQuery({
+    queryKey: ['experiment-sessions', participantId],
+    queryFn: () => experimentApi.getParticipantSessions(Number(participantId)),
+    enabled: !!participantId,
   });
 
   const feedbackMutation = useMutation({
@@ -27,48 +39,92 @@ export function ExperimentFeedback() {
   }
 
   if (!session) {
-    return <div className="text-center py-8 text-red-600">Sessao nao encontrada</div>;
+    return <div className="text-center py-8 text-red-600">Sessão não encontrada</div>;
   }
+
+  // Determine if this is article 1 or 2
+  const completedCount = (sessions ?? []).filter((s) => s.id !== Number(sessionId)).length;
+  const progressStep = completedCount === 0 ? 3 : 6;
 
   // Show the personalized summary (regardless of A/B order)
   const personalizedSummary =
     session.abOrder.A === 'personalized' ? session.summaryA : session.summaryB;
 
+  const trimmedLength = feedbackText.trim().length;
+  const meetsMinimum = trimmedLength >= MIN_FEEDBACK_LENGTH;
+
   return (
     <div className="max-w-3xl mx-auto space-y-8">
+      <ExperimentProgress currentStep={progressStep} />
+
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Fase 2: Feedback</h1>
         <p className="text-gray-600 mt-2">
-          Abaixo esta o resumo personalizado gerado para voce.
-          Por favor, de seu feedback sobre o que poderia ser melhorado.
-          O sistema ira gerar uma nova versao com base nos seus comentarios.
+          Abaixo está o resumo personalizado gerado para você.
+          Por favor, dê seu feedback sobre o que poderia ser melhorado.
+          O sistema irá gerar uma nova versão com base nos seus comentários.
         </p>
       </div>
 
-      <div className="bg-white p-6 rounded-lg border">
-        <h2 className="text-lg font-semibold mb-4">Resumo Personalizado</h2>
-        <div className="prose max-w-none text-gray-700">
-          {personalizedSummary?.content.split('\n').map((para, i) => (
-            <p key={i} className="mb-3">{para}</p>
-          ))}
+      {/* Collapsible personalized summary for context */}
+      <div className="bg-white rounded-lg border">
+        <button
+          type="button"
+          onClick={() => setSummaryExpanded(!summaryExpanded)}
+          className="w-full flex items-center justify-between p-6 text-left"
+          aria-expanded={summaryExpanded}
+          aria-controls="personalized-summary-content"
+        >
+          <h2 className="text-lg font-semibold">Resumo Personalizado</h2>
+          <span className="text-gray-400 text-xl" aria-hidden="true">
+            {summaryExpanded ? '−' : '+'}
+          </span>
+        </button>
+        <div
+          id="personalized-summary-content"
+          className={`px-6 pb-6 ${summaryExpanded ? '' : 'hidden'}`}
+        >
+          <div className="prose max-w-none text-gray-700">
+            {personalizedSummary?.content.split('\n').map((para, i) => (
+              <p key={i} className="mb-3">{para}</p>
+            ))}
+          </div>
         </div>
+        {!summaryExpanded && (
+          <p className="px-6 pb-4 text-sm text-gray-400">
+            Clique para expandir e revisar o resumo antes de dar seu feedback.
+          </p>
+        )}
       </div>
 
       <div className="bg-white p-6 rounded-lg border space-y-4">
         <h2 className="text-lg font-semibold">Seu Feedback</h2>
         <p className="text-sm text-gray-600">
-          Escreva o que voce gostaria que fosse diferente neste resumo.
-          Exemplos: "queria mais foco em X", "ficou superficial na parte Y",
-          "a linguagem poderia ser mais acessivel".
+          Escreva o que você gostaria que fosse diferente neste resumo.
         </p>
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <p className="text-sm font-medium text-blue-800 mb-2">Exemplos de feedback útil:</p>
+          <ul className="text-sm text-blue-700 list-disc list-inside space-y-1">
+            <li>&ldquo;Gostaria de mais detalhes sobre a metodologia&rdquo;</li>
+            <li>&ldquo;O resumo ficou muito superficial nos resultados&rdquo;</li>
+            <li>&ldquo;Prefiro uma linguagem mais técnica&rdquo;</li>
+          </ul>
+        </div>
+
         <textarea
           value={feedbackText}
           onChange={(e) => setFeedbackText(e.target.value)}
           placeholder="Digite seu feedback aqui..."
-          className="w-full border rounded-lg p-3 h-32 resize-y"
+          className="w-full border rounded-lg p-3 h-32 resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           maxLength={5000}
+          aria-describedby="feedback-char-count"
         />
-        <p className="text-xs text-gray-400">{feedbackText.length}/5000</p>
+        <p id="feedback-char-count" className="text-xs text-gray-400">
+          {meetsMinimum
+            ? `${trimmedLength} caracteres`
+            : `${trimmedLength}/${MIN_FEEDBACK_LENGTH} caracteres mínimos`}
+        </p>
       </div>
 
       {feedbackMutation.isPending && (
@@ -85,8 +141,8 @@ export function ExperimentFeedback() {
       )}
 
       <button
-        onClick={() => feedbackText.trim() && feedbackMutation.mutate(feedbackText.trim())}
-        disabled={!feedbackText.trim() || feedbackMutation.isPending}
+        onClick={() => meetsMinimum && feedbackMutation.mutate(feedbackText.trim())}
+        disabled={!meetsMinimum || feedbackMutation.isPending}
         className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {feedbackMutation.isPending ? 'Processando...' : 'Enviar Feedback e Regenerar'}

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { ProfileSelector } from './pages/ProfileSelector';
 import { ArticleUpload } from './pages/ArticleUpload';
 import { SummaryView } from './pages/SummaryView';
@@ -18,16 +18,27 @@ import { ExperimentPostTest } from './pages/experiment/ExperimentPostTest';
 const queryClient = new QueryClient();
 const USER_ID = 1; // MVP: hardcoded user
 
+function AppHeader() {
+  const location = useLocation();
+  const isExperimentRoute = location.pathname.startsWith('/experiment');
+
+  if (isExperimentRoute) return null;
+
+  return (
+    <header className="bg-white shadow-sm">
+      <div className="max-w-4xl mx-auto px-4 py-4">
+        <h1 className="text-xl font-semibold text-gray-900">Resumidor de Artigos Científicos</h1>
+      </div>
+    </header>
+  );
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <div className="min-h-screen bg-gray-50">
-          <header className="bg-white shadow-sm">
-            <div className="max-w-4xl mx-auto px-4 py-4">
-              <h1 className="text-xl font-semibold text-gray-900">Scientific Article Summarizer</h1>
-            </div>
-          </header>
+          <AppHeader />
           <main className="max-w-4xl mx-auto px-4 py-8">
             <Routes>
               {/* Auth */}

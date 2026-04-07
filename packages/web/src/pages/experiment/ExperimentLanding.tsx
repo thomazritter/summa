@@ -7,26 +7,26 @@ export function ExperimentLanding() {
     <div className="max-w-2xl mx-auto space-y-8">
       <div className="text-center space-y-4">
         <h1 className="text-3xl font-bold text-gray-900">
-          Experimento: Resumos Personalizados de Artigos Cientificos
+          Experimento: Resumos Personalizados de Artigos Científicos
         </h1>
         <p className="text-lg text-gray-600">
-          Trabalho de Conclusao de Curso — UNISINOS
+          Trabalho de Conclusão de Curso — UNISINOS
         </p>
       </div>
 
       <div className="bg-white p-6 rounded-lg border space-y-4">
         <h2 className="text-xl font-semibold">Sobre o Experimento</h2>
         <p className="text-gray-700">
-          Voce participara de um estudo que avalia a qualidade de resumos automaticos de artigos cientificos.
+          Você participará de um estudo que avalia a qualidade de resumos automáticos de artigos científicos.
           O experimento tem duas fases para cada artigo:
         </p>
         <ol className="list-decimal list-inside space-y-2 text-gray-700">
           <li>
-            <strong>Fase 1 — Comparacao:</strong> Voce lera dois resumos (A e B) do mesmo artigo e indicara qual prefere.
+            <strong>Fase 1 — Comparação:</strong> Você lerá dois resumos (A e B) do mesmo artigo e indicará qual prefere.
           </li>
           <li>
-            <strong>Fase 2 — Feedback:</strong> Voce dara feedback sobre um dos resumos, o sistema gerara uma versao melhorada,
-            e voce avaliara se houve melhoria.
+            <strong>Fase 2 — Feedback:</strong> Você dará feedback sobre um dos resumos, o sistema gerará uma versão melhorada,
+            e você avaliará se houve melhoria.
           </li>
         </ol>
         <p className="text-gray-700">
@@ -35,12 +35,12 @@ export function ExperimentLanding() {
       </div>
 
       <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 space-y-3">
-        <h2 className="text-xl font-semibold text-blue-900">Antes de comecar</h2>
+        <h2 className="text-xl font-semibold text-blue-900">Antes de começar</h2>
         <ul className="list-disc list-inside text-blue-800 space-y-1">
-          <li>Voce preenchera um breve formulario sobre seu perfil profissional</li>
-          <li>Nao ha respostas certas ou erradas</li>
-          <li>Seus dados serao usados apenas para fins academicos</li>
-          <li>Voce pode interromper a qualquer momento</li>
+          <li>Você preencherá um breve formulário sobre seu perfil profissional</li>
+          <li>Não há respostas certas ou erradas</li>
+          <li>Seus dados serão usados apenas para fins acadêmicos</li>
+          <li>Você pode interromper a qualquer momento</li>
         </ul>
       </div>
 

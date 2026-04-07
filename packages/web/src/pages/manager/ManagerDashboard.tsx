@@ -78,7 +78,7 @@ export function ManagerDashboard() {
 
     try {
       const result = await authApi.invite(email.trim());
-      setInviteResult(`Codigo ${result.code} enviado para ${result.email}`);
+      setInviteResult(`Código ${result.code} enviado para ${result.email}`);
       setEmail('');
       loadCodes();
     } catch (err) {
@@ -118,7 +118,7 @@ export function ManagerDashboard() {
       <div className="grid grid-cols-3 gap-4">
         <div className="bg-white p-4 rounded-lg border text-center">
           <div className="text-2xl font-bold text-blue-600">{participantCodes.length}</div>
-          <div className="text-sm text-gray-600">Codigos gerados</div>
+          <div className="text-sm text-gray-600">Códigos gerados</div>
         </div>
         <div className="bg-white p-4 rounded-lg border text-center">
           <div className="text-2xl font-bold text-green-600">{usedCodes.length}</div>
@@ -126,7 +126,7 @@ export function ManagerDashboard() {
         </div>
         <div className="bg-white p-4 rounded-lg border text-center">
           <div className="text-2xl font-bold text-purple-600">{completedSessions}/{totalSessions}</div>
-          <div className="text-sm text-gray-600">Sessoes completas</div>
+          <div className="text-sm text-gray-600">Sessões completas</div>
         </div>
       </div>
 
@@ -160,17 +160,17 @@ export function ManagerDashboard() {
 
       {/* Codes table */}
       <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h2 className="text-lg font-semibold">Codigos gerados</h2>
+        <h2 className="text-lg font-semibold">Códigos gerados</h2>
         {loadingCodes ? (
           <p className="text-gray-500">Carregando...</p>
         ) : codes.length === 0 ? (
-          <p className="text-gray-500">Nenhum codigo gerado ainda.</p>
+          <p className="text-gray-500">Nenhum código gerado ainda.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-gray-600">
-                  <th className="pb-2 font-medium">Codigo</th>
+                  <th className="pb-2 font-medium">Código</th>
                   <th className="pb-2 font-medium">Email</th>
                   <th className="pb-2 font-medium">Papel</th>
                   <th className="pb-2 font-medium">Status</th>
@@ -214,7 +214,7 @@ export function ManagerDashboard() {
       {/* Sessions summary */}
       {sessions.length > 0 && (
         <div className="bg-white p-6 rounded-lg border space-y-4">
-          <h2 className="text-lg font-semibold">Sessoes do experimento</h2>
+          <h2 className="text-lg font-semibold">Sessões do experimento</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>

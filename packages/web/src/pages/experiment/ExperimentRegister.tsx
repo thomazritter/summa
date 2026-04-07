@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
+import { ExperimentProgress } from '../../components/ExperimentProgress';
 
 interface FormData {
   name: string;
@@ -39,10 +40,12 @@ export function ExperimentRegister() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
+      <ExperimentProgress currentStep={1} />
+
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Pre-teste: Dados do Participante</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Pré-teste: Dados do Participante</h1>
         <p className="text-gray-600 mt-2">
-          Preencha as informacoes abaixo para que possamos adequar o experimento ao seu perfil.
+          Preencha as informações abaixo para que possamos adequar o experimento ao seu perfil.
         </p>
       </div>
 
@@ -54,7 +57,7 @@ export function ExperimentRegister() {
             type="text"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="Seu nome (pode ser anonimo)"
+            placeholder="Seu nome (pode ser anônimo)"
             className="w-full border rounded-lg p-2"
           />
         </div>
@@ -62,13 +65,13 @@ export function ExperimentRegister() {
         {/* Experience Level */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Nivel de experiencia como desenvolvedor
+            Nível de experiência como desenvolvedor
           </label>
           <div className="grid grid-cols-3 gap-3">
             {[
-              { value: 'junior', label: 'Junior', desc: 'Ate 2 anos de experiencia' },
-              { value: 'pleno', label: 'Pleno', desc: '2-5 anos de experiencia' },
-              { value: 'senior', label: 'Senior', desc: '5+ anos de experiencia' },
+              { value: 'junior', label: 'Júnior', desc: 'Até 2 anos de experiência' },
+              { value: 'pleno', label: 'Pleno', desc: '2-5 anos de experiência' },
+              { value: 'senior', label: 'Sênior', desc: '5+ anos de experiência' },
             ].map((opt) => (
               <button
                 key={opt.value}
@@ -89,7 +92,7 @@ export function ExperimentRegister() {
         {/* Years of Experience */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Anos de experiencia
+            Anos de experiência
           </label>
           <input
             type="number"
@@ -104,13 +107,13 @@ export function ExperimentRegister() {
         {/* Reading Frequency */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Frequencia de leitura de artigos cientificos
+            Frequência de leitura de artigos científicos
           </label>
           <div className="grid grid-cols-2 gap-3">
             {[
               { value: 'never', label: 'Nunca' },
               { value: 'rarely', label: 'Raramente' },
-              { value: 'sometimes', label: 'As vezes' },
+              { value: 'sometimes', label: 'Às vezes' },
               { value: 'frequently', label: 'Frequentemente' },
             ].map((opt) => (
               <button

@@ -31,7 +31,7 @@ export function Login() {
         }
       }
     } catch {
-      setError('Codigo nao encontrado');
+      setError('Código não encontrado');
     } finally {
       setLoading(false);
     }
@@ -42,20 +42,20 @@ export function Login() {
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold text-gray-900">Acesse o Summa</h1>
         <p className="text-gray-600">
-          Digite o codigo de acesso que voce recebeu por email.
+          Digite o código de acesso que você recebeu por email.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="bg-white p-6 rounded-lg border space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
-            Codigo de acesso
+            Código de acesso
           </label>
           <input
             type="text"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="Digite seu codigo (ex: SUMMA-XXXX)"
+            placeholder="Digite seu código (ex: SUMMA-XXXX)"
             className="w-full border rounded-lg p-3 text-center text-lg font-mono tracking-wider uppercase"
             autoFocus
           />
