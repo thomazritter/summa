@@ -7,6 +7,7 @@ dist/
 *.js.map
 *.d.ts
 !vite-env.d.ts
+!packages/api/src/types.d.ts
 !tsconfig.json
 
 # Database
