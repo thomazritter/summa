@@ -32,6 +32,26 @@ const feedbackSchema = z.object({
 
 const rateRegenerationSchema = z.object({
   improvementRating: z.enum(['improved', 'same', 'worse']),
+  satisfactionRating: z.number().int().min(1).max(5),
+});
+
+const summaryRatingsSchema = z.object({
+  ratings: z.array(z.object({
+    summaryId: z.number().int().positive(),
+    abLabel: z.enum(['A', 'B']),
+    utilidade: z.number().int().min(1).max(5),
+    clareza: z.number().int().min(1).max(5),
+    adequacaoPerfil: z.number().int().min(1).max(5),
+    factualidadePercebida: z.number().int().min(1).max(5),
+  })).length(2),
+  preference: z.enum(['A', 'B']),
+});
+
+const postTestSchema = z.object({
+  participantId: z.number().int().positive(),
+  overallSatisfaction: z.number().int().min(1).max(5),
+  wouldUseAgain: z.number().int().min(1).max(5),
+  comments: z.string().max(5000).optional(),
 });
 
 // ─── Profile Mapping ────────────────────────────────────────────────
@@ -284,11 +304,11 @@ experimentRoutes.post('/sessions/:id/rate-regeneration', (req: Request, res: Res
 
     // Update the latest regeneration for this session
     const result = db.prepare(`
-      UPDATE regenerations SET improvement_rating = ?
+      UPDATE regenerations SET improvement_rating = ?, satisfaction_rating = ?
       WHERE session_id = ? AND id = (
         SELECT id FROM regenerations WHERE session_id = ? ORDER BY created_at DESC LIMIT 1
       )
-    `).run(validation.data.improvementRating, id, id);
+    `).run(validation.data.improvementRating, validation.data.satisfactionRating, id, id);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'No regeneration found for this session' });
@@ -299,6 +319,62 @@ experimentRoutes.post('/sessions/:id/rate-regeneration', (req: Request, res: Res
 
     const sessionRow = db.prepare('SELECT * FROM experiment_sessions WHERE id = ?').get(id) as SessionRow;
     res.json(mapSessionRow(sessionRow));
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/experiment/sessions/:id/ratings — save Likert ratings + preference in a transaction
+experimentRoutes.post('/sessions/:id/ratings', (req: Request, res: Response, next: NextFunction) => {
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
+
+  const validation = summaryRatingsSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error.errors });
+
+  try {
+    const db = getDb();
+    const { ratings, preference } = validation.data;
+
+    const insertRating = db.prepare(
+      `INSERT INTO summary_ratings (session_id, summary_id, ab_label, utilidade, clareza, adequacao_perfil, factualidade_percebida)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+
+    const transaction = db.transaction(() => {
+      for (const r of ratings) {
+        insertRating.run(id, r.summaryId, r.abLabel, r.utilidade, r.clareza, r.adequacaoPerfil, r.factualidadePercebida);
+      }
+      db.prepare(`UPDATE experiment_sessions SET preference = ?, phase = 'feedback' WHERE id = ?`).run(preference, id);
+    });
+
+    transaction();
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// POST /api/experiment/post-test — submit post-test responses
+experimentRoutes.post('/post-test', (req: Request, res: Response, next: NextFunction) => {
+  const validation = postTestSchema.safeParse(req.body);
+  if (!validation.success) return res.status(400).json({ error: validation.error.errors });
+
+  try {
+    const db = getDb();
+    const { participantId, overallSatisfaction, wouldUseAgain, comments } = validation.data;
+
+    db.prepare(
+      `INSERT INTO post_test_responses (participant_id, overall_satisfaction, would_use_again, comments)
+       VALUES (?, ?, ?, ?)`
+    ).run(participantId, overallSatisfaction, wouldUseAgain, comments || null);
+
+    // Mark all participant sessions as complete
+    db.prepare(
+      `UPDATE experiment_sessions SET phase = 'complete' WHERE participant_id = ?`
+    ).run(participantId);
+
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }
@@ -342,6 +418,7 @@ interface RegenerationRow {
   feedback_text: string;
   regenerated_summary_id: number;
   improvement_rating: string | null;
+  satisfaction_rating: number | null;
   created_at: string;
 }
 
@@ -374,5 +451,6 @@ const mapRegenerationRow = (row: RegenerationRow): Regeneration => ({
   feedbackText: row.feedback_text,
   regeneratedSummaryId: row.regenerated_summary_id,
   improvementRating: row.improvement_rating as Regeneration['improvementRating'],
+  satisfactionRating: row.satisfaction_rating,
   createdAt: row.created_at,
 });

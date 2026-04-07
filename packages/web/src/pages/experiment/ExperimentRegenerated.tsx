@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
+import { LikertScale } from '../../components/LikertScale';
 
 export function ExperimentRegenerated() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [rating, setRating] = useState<'improved' | 'same' | 'worse' | null>(null);
+  const [satisfaction, setSatisfaction] = useState<number | null>(null);
 
   const { data: regenerated, isLoading } = useQuery({
     queryKey: ['experiment-regenerated', sessionId],
@@ -16,7 +18,7 @@ export function ExperimentRegenerated() {
 
   const rateMutation = useMutation({
     mutationFn: (improvementRating: 'improved' | 'same' | 'worse') =>
-      experimentApi.rateRegeneration(Number(sessionId), improvementRating),
+      experimentApi.rateRegeneration(Number(sessionId), improvementRating, satisfaction!),
     onSuccess: () => {
       navigate('/experiment/select-article');
     },
@@ -81,6 +83,14 @@ export function ExperimentRegenerated() {
             </button>
           ))}
         </div>
+
+        <LikertScale
+          label="Satisfacao geral com o resumo regenerado"
+          value={satisfaction}
+          onChange={setSatisfaction}
+          lowLabel="Insatisfeito"
+          highLabel="Muito satisfeito"
+        />
       </div>
 
       {rateMutation.error && (
@@ -90,8 +100,8 @@ export function ExperimentRegenerated() {
       )}
 
       <button
-        onClick={() => rating && rateMutation.mutate(rating)}
-        disabled={!rating || rateMutation.isPending}
+        onClick={() => rating && satisfaction !== null && rateMutation.mutate(rating)}
+        disabled={!rating || satisfaction === null || rateMutation.isPending}
         className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
       >
         {rateMutation.isPending ? 'Salvando...' : 'Continuar'}

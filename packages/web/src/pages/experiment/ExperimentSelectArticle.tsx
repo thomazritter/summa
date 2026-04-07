@@ -38,7 +38,7 @@ export function ExperimentSelectArticle() {
   const allDone = articles && articles.length > 0 && articles.every((a) => completedArticleIds.has(a.id));
 
   if (allDone) {
-    navigate('/experiment/complete');
+    navigate('/experiment/post-test');
     return null;
   }
 

@@ -111,9 +111,36 @@ export const experimentApi = {
       summary: { id: number; content: string } | null;
     }>(`/experiment/sessions/${sessionId}/regenerated`),
 
-  rateRegeneration: (sessionId: number, improvementRating: 'improved' | 'same' | 'worse') =>
+  rateRegeneration: (sessionId: number, improvementRating: 'improved' | 'same' | 'worse', satisfactionRating: number) =>
     apiRequest<unknown>(`/experiment/sessions/${sessionId}/rate-regeneration`, {
       method: 'POST',
-      body: JSON.stringify({ improvementRating }),
+      body: JSON.stringify({ improvementRating, satisfactionRating }),
+    }),
+
+  submitRatingsAndPreference: (sessionId: number, data: {
+    ratings: Array<{
+      summaryId: number;
+      abLabel: 'A' | 'B';
+      utilidade: number;
+      clareza: number;
+      adequacaoPerfil: number;
+      factualidadePercebida: number;
+    }>;
+    preference: 'A' | 'B';
+  }) =>
+    apiRequest<{ success: boolean }>(`/experiment/sessions/${sessionId}/ratings`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  submitPostTest: (data: {
+    participantId: number;
+    overallSatisfaction: number;
+    wouldUseAgain: number;
+    comments?: string;
+  }) =>
+    apiRequest<{ success: boolean }>('/experiment/post-test', {
+      method: 'POST',
+      body: JSON.stringify(data),
     }),
 };

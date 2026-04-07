@@ -11,19 +11,10 @@ export function ExperimentComplete() {
       </div>
 
       <div className="bg-green-50 p-6 rounded-lg border border-green-200 space-y-3">
-        <h2 className="text-xl font-semibold text-green-900">Ultimo passo</h2>
+        <h2 className="text-xl font-semibold text-green-900">Participacao concluida</h2>
         <p className="text-green-800">
-          Por favor, preencha o formulario de pos-teste com suas impressoes gerais sobre os resumos.
-          Isso levara apenas 2-3 minutos.
+          Todas as suas avaliacoes foram registradas com sucesso. Agradecemos muito pela sua contribuicao!
         </p>
-        <a
-          href="https://forms.gle/PLACEHOLDER"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block mt-4 px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition-colors"
-        >
-          Abrir Formulario de Pos-teste
-        </a>
       </div>
 
       <div className="bg-white p-6 rounded-lg border space-y-3">

@@ -158,6 +158,7 @@ export interface Regeneration {
   feedbackText: string;
   regeneratedSummaryId: number;
   improvementRating: 'improved' | 'same' | 'worse' | null;
+  satisfactionRating: number | null;
   createdAt: string;
 }
 
@@ -185,6 +186,28 @@ export interface SubmitExperimentFeedbackRequest {
 
 export interface RateRegenerationRequest {
   improvementRating: 'improved' | 'same' | 'worse';
+  satisfactionRating: number;
+}
+
+export interface SummaryRating {
+  id: number;
+  sessionId: number;
+  summaryId: number;
+  abLabel: 'A' | 'B';
+  utilidade: number;
+  clareza: number;
+  adequacaoPerfil: number;
+  factualidadePercebida: number;
+  createdAt: string;
+}
+
+export interface PostTestResponse {
+  id: number;
+  participantId: number;
+  overallSatisfaction: number;
+  wouldUseAgain: number;
+  comments: string | null;
+  createdAt: string;
 }
 
 // Generic summary — summary generated without profile parameterization

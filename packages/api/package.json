@@ -10,7 +10,8 @@
     "db:migrate": "tsx src/db/migrate.ts",
     "db:seed": "tsx src/db/seed.ts",
     "experiment:pregenerate": "tsx src/scripts/pregenerate.ts",
-    "experiment:metrics": "tsx src/scripts/run-metrics.ts"
+    "experiment:metrics": "tsx src/scripts/run-metrics.ts",
+    "db:migrate:feedback": "tsx src/db/migrate-embedded-feedback.ts"
   },
   "dependencies": {
     "@summarizer/shared": "1.0.0",

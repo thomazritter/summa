@@ -130,3 +130,32 @@ CREATE TABLE IF NOT EXISTS regenerations (
 CREATE INDEX IF NOT EXISTS idx_experiment_sessions_participant ON experiment_sessions(participant_id);
 CREATE INDEX IF NOT EXISTS idx_experiment_sessions_article ON experiment_sessions(article_id);
 CREATE INDEX IF NOT EXISTS idx_regenerations_session ON regenerations(session_id);
+
+-- ─── Embedded Feedback Tables ──────────────────────────────────────
+
+-- Likert ratings per summary (Trial page, Phase 1)
+CREATE TABLE IF NOT EXISTS summary_ratings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id INTEGER NOT NULL,
+  summary_id INTEGER NOT NULL,
+  ab_label TEXT NOT NULL CHECK (ab_label IN ('A', 'B')),
+  utilidade INTEGER NOT NULL CHECK (utilidade BETWEEN 1 AND 5),
+  clareza INTEGER NOT NULL CHECK (clareza BETWEEN 1 AND 5),
+  adequacao_perfil INTEGER NOT NULL CHECK (adequacao_perfil BETWEEN 1 AND 5),
+  factualidade_percebida INTEGER NOT NULL CHECK (factualidade_percebida BETWEEN 1 AND 5),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (session_id) REFERENCES experiment_sessions(id) ON DELETE CASCADE,
+  FOREIGN KEY (summary_id) REFERENCES summaries(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_summary_ratings_session ON summary_ratings(session_id);
+
+-- Post-test responses (replaces Google Forms)
+CREATE TABLE IF NOT EXISTS post_test_responses (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  participant_id INTEGER NOT NULL UNIQUE,
+  overall_satisfaction INTEGER NOT NULL CHECK (overall_satisfaction BETWEEN 1 AND 5),
+  would_use_again INTEGER NOT NULL CHECK (would_use_again BETWEEN 1 AND 5),
+  comments TEXT,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE
+);

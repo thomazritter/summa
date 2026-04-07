@@ -10,6 +10,7 @@ import { ExperimentTrial } from './pages/experiment/ExperimentTrial';
 import { ExperimentFeedback } from './pages/experiment/ExperimentFeedback';
 import { ExperimentRegenerated } from './pages/experiment/ExperimentRegenerated';
 import { ExperimentComplete } from './pages/experiment/ExperimentComplete';
+import { ExperimentPostTest } from './pages/experiment/ExperimentPostTest';
 
 const queryClient = new QueryClient();
 const USER_ID = 1; // MVP: hardcoded user
@@ -37,6 +38,7 @@ export default function App() {
               <Route path="/experiment/trial/:sessionId" element={<ExperimentTrial />} />
               <Route path="/experiment/feedback/:sessionId" element={<ExperimentFeedback />} />
               <Route path="/experiment/regenerated/:sessionId" element={<ExperimentRegenerated />} />
+              <Route path="/experiment/post-test" element={<ExperimentPostTest />} />
               <Route path="/experiment/complete" element={<ExperimentComplete />} />
             </Routes>
           </main>
