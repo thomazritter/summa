@@ -11,11 +11,14 @@ COPY packages/web/package.json ./packages/web/
 # Install all dependencies
 RUN npm ci
 
-# Copy source code
+# Copy source code and config files
 COPY packages/shared/ ./packages/shared/
 COPY packages/api/ ./packages/api/
 COPY packages/web/ ./packages/web/
 COPY tsconfig.json ./
+
+# Bust cache: force fresh build
+RUN echo "build-v2"
 
 # Build shared types
 RUN npm run build -w @summarizer/shared
