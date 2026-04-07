@@ -1,9 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...(options.headers as Record<string, string>) };
+  const code = sessionStorage.getItem('accessCode');
+  if (code) {
+    headers['x-access-code'] = code;
+  }
   const response = await fetch(`${API_BASE}${endpoint}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers,
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Unknown error' }));
@@ -37,6 +42,29 @@ export const summaryApi = {
 
 export const feedbackApi = {
   submit: (data: unknown) => apiRequest<unknown>('/feedback', { method: 'POST', body: JSON.stringify(data) }),
+};
+
+export const authApi = {
+  login: (code: string) =>
+    apiRequest<{ code: string; email: string; role: string; participantId: number | null }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    }),
+  invite: (email: string) =>
+    apiRequest<{ code: string; email: string }>('/auth/invite', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+  listCodes: () =>
+    apiRequest<Array<{
+      id: number;
+      code: string;
+      email: string;
+      role: string;
+      participant_id: number | null;
+      used_at: string | null;
+      created_at: string;
+    }>>('/auth/codes'),
 };
 
 export const experimentApi = {

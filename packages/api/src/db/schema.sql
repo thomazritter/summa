@@ -159,3 +159,17 @@ CREATE TABLE IF NOT EXISTS post_test_responses (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE
 );
+
+-- ─── Access Codes (Auth) ─────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS access_codes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  code TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('participant', 'manager')) DEFAULT 'participant',
+  participant_id INTEGER,
+  used_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_access_codes_code ON access_codes(code);

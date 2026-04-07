@@ -6,6 +6,7 @@ import { articleRoutes } from './routes/articles.js';
 import { summaryRoutes } from './routes/summaries.js';
 import { feedbackRoutes } from './routes/feedback.js';
 import { experimentRoutes } from './routes/experiment.js';
+import { authRoutes } from './routes/auth.js';
 import { closeDb } from './db/connection.js';
 import { getOllamaStatus } from './services/ollamaClient.js';
 
@@ -41,6 +42,7 @@ app.use('/api/articles', articleRoutes);
 app.use('/api/summaries', summaryRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/experiment', experimentRoutes);
+app.use('/api/auth', authRoutes);
 
 // Error handler - don't leak details in production
 app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {

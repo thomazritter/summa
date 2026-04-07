@@ -214,3 +214,12 @@ export interface PostTestResponse {
 export interface GenericSummaryRequest {
   articleId: number;
 }
+
+// ─── Auth Types ──────────────────────────────────────────────────────
+
+export interface AccessCode {
+  code: string;
+  email: string;
+  role: 'participant' | 'manager';
+  participantId: number | null;
+}

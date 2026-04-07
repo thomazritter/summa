@@ -3,9 +3,13 @@ import { z } from 'zod';
 import { getDb } from '../db/connection.js';
 import { parseId } from '../utils/validation.js';
 import { regenerateSummaryWithFeedback, getSummaryById } from '../services/summarizationService.js';
+import { requireAuth } from '../middleware/auth.js';
 import type { ExperimentSession, Participant, Regeneration } from '@summarizer/shared';
 
 export const experimentRoutes = Router();
+
+// All experiment routes require authentication
+experimentRoutes.use(requireAuth);
 
 // ─── Validation Schemas ─────────────────────────────────────────────
 
@@ -83,6 +87,13 @@ experimentRoutes.post('/participants', (req: Request, res: Response, next: NextF
     `).run(name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity);
 
     const row = db.prepare('SELECT * FROM participants WHERE id = ?').get(result.lastInsertRowid) as ParticipantRow;
+
+    // Link participant to access code
+    const accessCode = req.headers['x-access-code'] as string;
+    if (accessCode) {
+      db.prepare('UPDATE access_codes SET participant_id = ? WHERE code = ?').run(result.lastInsertRowid, accessCode);
+    }
+
     res.status(201).json(mapParticipantRow(row));
   } catch (error) {
     next(error);
