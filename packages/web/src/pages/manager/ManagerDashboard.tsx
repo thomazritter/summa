@@ -19,7 +19,7 @@ interface CodeRow {
 type TabKey = 'overview' | 'results' | 'participants' | 'summaries' | 'export';
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: 'overview', label: 'Vis\u00e3o Geral' },
+  { key: 'overview', label: 'Visão Geral' },
   { key: 'results', label: 'Resultados' },
   { key: 'participants', label: 'Participantes' },
   { key: 'summaries', label: 'Resumos' },
@@ -50,7 +50,7 @@ export function ManagerDashboard() {
     setInviteError(null);
     try {
       const result = await authApi.invite(email.trim());
-      setInviteResult(`C\u00f3digo ${result.code} enviado para ${result.email}`);
+      setInviteResult(`Código ${result.code} enviado para ${result.email}`);
       setEmail('');
     } catch (err) {
       setInviteError((err as Error).message || 'Erro ao enviar convite');
@@ -125,7 +125,7 @@ export function ManagerDashboard() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Tab 1: Vis\u00e3o Geral
+   Tab 1: Visão Geral
    ═══════════════════════════════════════════════════════════ */
 
 interface OverviewTabProps {
@@ -163,19 +163,19 @@ function OverviewTab({ email, setEmail, inviting, inviteResult, inviteError, han
           </div>
           <div className="bg-white p-4 rounded-lg border text-center">
             <div className="text-3xl font-bold text-green-600">{overview.totalCompleted}</div>
-            <div className="text-sm text-gray-600 mt-1">Conclu\u00edram o Experimento</div>
+            <div className="text-sm text-gray-600 mt-1">Concluíram o Experimento</div>
           </div>
           <div className="bg-white p-4 rounded-lg border text-center">
             <div className="text-3xl font-bold text-blue-600">{overview.completionRate}%</div>
-            <div className="text-sm text-gray-600 mt-1">Taxa de Conclus\u00e3o</div>
+            <div className="text-sm text-gray-600 mt-1">Taxa de Conclusão</div>
           </div>
           <div className="bg-white p-4 rounded-lg border">
-            <div className="text-sm text-gray-600 mb-2 text-center">Sess\u00f5es por Fase</div>
+            <div className="text-sm text-gray-600 mb-2 text-center">Sessões por Fase</div>
             <SessionPhaseBar phases={overview.sessionsByPhase} />
             <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-gray-500 justify-center">
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Completas</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Feedback</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Compara\u00e7\u00e3o</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Comparação</span>
               <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" /> Regenerado</span>
             </div>
           </div>
@@ -214,17 +214,17 @@ function OverviewTab({ email, setEmail, inviting, inviteResult, inviteError, han
 
       {/* Codes table */}
       <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h2 className="text-lg font-semibold">C\u00f3digos gerados</h2>
+        <h2 className="text-lg font-semibold">Códigos gerados</h2>
         {loadingCodes ? (
           <p className="text-gray-500">Carregando...</p>
         ) : participantCodes.length === 0 ? (
-          <p className="text-gray-500">Nenhum c\u00f3digo gerado ainda.</p>
+          <p className="text-gray-500">Nenhum código gerado ainda.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-gray-600">
-                  <th className="pb-2 font-medium">C\u00f3digo</th>
+                  <th className="pb-2 font-medium">Código</th>
                   <th className="pb-2 font-medium">Email</th>
                   <th className="pb-2 font-medium">Status</th>
                   <th className="pb-2 font-medium">Criado em</th>
@@ -258,7 +258,7 @@ function OverviewTab({ email, setEmail, inviting, inviteResult, inviteError, han
 
 function SessionPhaseBar({ phases }: { phases: { complete: number; feedback: number; comparison: number; regenerated: number } }) {
   const total = phases.complete + phases.feedback + phases.comparison + phases.regenerated;
-  if (total === 0) return <div className="text-center text-xs text-gray-400">Sem sess\u00f5es</div>;
+  if (total === 0) return <div className="text-center text-xs text-gray-400">Sem sessões</div>;
 
   const pct = (v: number) => ((v / total) * 100).toFixed(0);
 
@@ -266,7 +266,7 @@ function SessionPhaseBar({ phases }: { phases: { complete: number; feedback: num
     <div className="flex h-5 rounded-full overflow-hidden">
       {phases.complete > 0 && <div className="bg-green-500" style={{ width: `${pct(phases.complete)}%` }} title={`Completas: ${phases.complete}`} />}
       {phases.feedback > 0 && <div className="bg-blue-500" style={{ width: `${pct(phases.feedback)}%` }} title={`Feedback: ${phases.feedback}`} />}
-      {phases.comparison > 0 && <div className="bg-amber-500" style={{ width: `${pct(phases.comparison)}%` }} title={`Compara\u00e7\u00e3o: ${phases.comparison}`} />}
+      {phases.comparison > 0 && <div className="bg-amber-500" style={{ width: `${pct(phases.comparison)}%` }} title={`Comparação: ${phases.comparison}`} />}
       {phases.regenerated > 0 && <div className="bg-indigo-500" style={{ width: `${pct(phases.regenerated)}%` }} title={`Regenerado: ${phases.regenerated}`} />}
     </div>
   );
@@ -286,31 +286,31 @@ function ResultsTab() {
 
   if (isLoading) return <p className="text-gray-500">Carregando...</p>;
   if (!results || !results.hasData) {
-    return <p className="text-gray-500">Dados insuficientes para an\u00e1lise.</p>;
+    return <p className="text-gray-500">Dados insuficientes para análise.</p>;
   }
 
   const profileKeys = Object.keys(results.likertByProfile);
-  const PROFILE_LABELS: Record<string, string> = { junior: 'J\u00fanior', pleno: 'Pleno', senior: 'S\u00eanior' };
+  const PROFILE_LABELS: Record<string, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sênior' };
 
   return (
     <div className="space-y-6">
-      {/* Card 1: Prefer\u00eancia */}
+      {/* Card 1: Preferência */}
       <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h3 className="text-lg font-semibold">Prefer\u00eancia: Personalizado vs. Gen\u00e9rico</h3>
+        <h3 className="text-lg font-semibold">Preferência: Personalizado vs. Genérico</h3>
         <PreferenceBar label="Personalizado" pct={results.preferencePersonalized.percentage} count={results.preferencePersonalized.count} total={results.preferencePersonalized.total} color="bg-blue-500" />
-        <PreferenceBar label="Gen\u00e9rico" pct={results.preferenceGeneric.percentage} count={results.preferenceGeneric.count} total={results.preferenceGeneric.total} color="bg-gray-400" />
+        <PreferenceBar label="Genérico" pct={results.preferenceGeneric.percentage} count={results.preferenceGeneric.count} total={results.preferenceGeneric.total} color="bg-gray-400" />
       </div>
 
-      {/* Card 2: M\u00e9dias Likert por Tipo */}
+      {/* Card 2: Médias Likert por Tipo */}
       <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h3 className="text-lg font-semibold">M\u00e9dias Likert por Tipo de Resumo</h3>
+        <h3 className="text-lg font-semibold">Médias Likert por Tipo de Resumo</h3>
         <LikertComparisonTable generic={results.likertByType.generic} personalized={results.likertByType.personalized} />
       </div>
 
-      {/* Card 3: M\u00e9dias Likert por Perfil */}
+      {/* Card 3: Médias Likert por Perfil */}
       {profileKeys.length > 0 && (
         <div className="bg-white p-6 rounded-lg border space-y-4">
-          <h3 className="text-lg font-semibold">M\u00e9dias Likert por Perfil</h3>
+          <h3 className="text-lg font-semibold">Médias Likert por Perfil</h3>
           <div className="flex gap-2">
             {profileKeys.map((key) => (
               <button
@@ -338,7 +338,7 @@ function ResultsTab() {
       <div className="bg-white p-6 rounded-lg border space-y-4">
         <h3 className="text-lg font-semibold">Ciclo de Feedback</h3>
         {results.feedbackCycle.total === 0 ? (
-          <p className="text-gray-500">Nenhum dado dispon\u00edvel.</p>
+          <p className="text-gray-500">Nenhum dado disponível.</p>
         ) : (
           <>
             <FeedbackCycleBar cycle={results.feedbackCycle} />
@@ -353,19 +353,19 @@ function ResultsTab() {
 
       {/* Card 5: Likert Regenerado */}
       <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h3 className="text-lg font-semibold">M\u00e9dias Likert: Resumo Regenerado</h3>
+        <h3 className="text-lg font-semibold">Médias Likert: Resumo Regenerado</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-gray-600">
-                <th className="pb-2 font-medium">M\u00e9trica</th>
-                <th className="pb-2 font-medium">M\u00e9dia</th>
+                <th className="pb-2 font-medium">Métrica</th>
+                <th className="pb-2 font-medium">Média</th>
               </tr>
             </thead>
             <tbody>
               <tr className="border-b"><td className="py-2">Utilidade</td><td className="py-2">{results.regeneratedLikert.utilidade.toFixed(1)}</td></tr>
               <tr className="border-b"><td className="py-2">Clareza</td><td className="py-2">{results.regeneratedLikert.clareza.toFixed(1)}</td></tr>
-              <tr><td className="py-2">Adequa\u00e7\u00e3o</td><td className="py-2">{results.regeneratedLikert.adequacao.toFixed(1)}</td></tr>
+              <tr><td className="py-2">Adequação</td><td className="py-2">{results.regeneratedLikert.adequacao.toFixed(1)}</td></tr>
             </tbody>
           </table>
         </div>
@@ -400,7 +400,7 @@ function LikertComparisonTable({ generic, personalized }: {
   const rows: { label: string; key: keyof typeof generic }[] = [
     { label: 'Utilidade', key: 'utilidade' },
     { label: 'Clareza', key: 'clareza' },
-    { label: 'Adequa\u00e7\u00e3o', key: 'adequacao' },
+    { label: 'Adequação', key: 'adequacao' },
     { label: 'Factualidade', key: 'factualidade' },
   ];
 
@@ -409,10 +409,10 @@ function LikertComparisonTable({ generic, personalized }: {
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-left text-gray-600">
-            <th className="pb-2 font-medium">M\u00e9trica</th>
-            <th className="pb-2 font-medium">Gen\u00e9rico</th>
+            <th className="pb-2 font-medium">Métrica</th>
+            <th className="pb-2 font-medium">Genérico</th>
             <th className="pb-2 font-medium">Personalizado</th>
-            <th className="pb-2 font-medium">Diferen\u00e7a</th>
+            <th className="pb-2 font-medium">Diferença</th>
           </tr>
         </thead>
         <tbody>
@@ -479,7 +479,7 @@ function ParticipantsTab() {
 
   if (isLoading) return <p className="text-gray-500">Carregando...</p>;
   if (!participants || participants.length === 0) {
-    return <p className="text-gray-500">Nenhum dado dispon\u00edvel.</p>;
+    return <p className="text-gray-500">Nenhum dado disponível.</p>;
   }
 
   const LEVEL_BADGE: Record<string, string> = {
@@ -487,7 +487,7 @@ function ParticipantsTab() {
     pleno: 'bg-blue-100 text-blue-700',
     senior: 'bg-purple-100 text-purple-700',
   };
-  const LEVEL_LABELS: Record<string, string> = { junior: 'J\u00fanior', pleno: 'Pleno', senior: 'S\u00eanior' };
+  const LEVEL_LABELS: Record<string, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sênior' };
 
   return (
     <div className="bg-white rounded-lg border overflow-hidden">
@@ -495,10 +495,10 @@ function ParticipantsTab() {
         <thead>
           <tr className="border-b text-left text-gray-600 bg-gray-50">
             <th className="p-3 font-medium">Nome</th>
-            <th className="p-3 font-medium">N\u00edvel</th>
+            <th className="p-3 font-medium">Nível</th>
             <th className="p-3 font-medium">Anos Exp.</th>
             <th className="p-3 font-medium">Status</th>
-            <th className="p-3 font-medium">Sess\u00f5es</th>
+            <th className="p-3 font-medium">Sessões</th>
             <th className="p-3 font-medium w-8" aria-label="Expandir" />
           </tr>
         </thead>
@@ -609,7 +609,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
                     </div>
                     {s.preferenceDecoded && (
                       <span className="text-sm text-gray-600">
-                        Prefer\u00eancia: <span className="font-medium">{s.preferenceDecoded}</span>
+                        Preferência: <span className="font-medium">{s.preferenceDecoded}</span>
                       </span>
                     )}
                   </div>
@@ -628,7 +628,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
                             <th className="pb-1 font-medium">Clar.</th>
                             <th className="pb-1 font-medium">Adeq.</th>
                             <th className="pb-1 font-medium">Fact.</th>
-                            <th className="pb-1 font-medium">Coment\u00e1rio</th>
+                            <th className="pb-1 font-medium">Comentário</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -639,7 +639,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
                               <td className="py-1">{r.clareza}</td>
                               <td className="py-1">{r.adequacao}</td>
                               <td className="py-1">{r.factualidade}</td>
-                              <td className="py-1 text-gray-500 max-w-xs truncate">{r.comment ?? '\u2014'}</td>
+                              <td className="py-1 text-gray-500 max-w-xs truncate">{r.comment ?? '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -651,7 +651,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
                   {s.regeneration && (
                     <div className="bg-amber-50 p-3 rounded-lg space-y-2">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-amber-700">Feedback de regenera\u00e7\u00e3o</span>
+                        <span className="text-xs font-medium text-amber-700">Feedback de regeneração</span>
                         {s.regeneration.improvementRating && IMPROVEMENT_BADGE[s.regeneration.improvementRating] && (
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${IMPROVEMENT_BADGE[s.regeneration.improvementRating].cls}`}>
                             {IMPROVEMENT_BADGE[s.regeneration.improvementRating].label}
@@ -674,7 +674,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
               {/* Post-test responses */}
               {p.postTestResponses && Object.keys(p.postTestResponses).length > 0 && (
                 <div className="bg-white p-4 rounded-lg border space-y-2">
-                  <h4 className="text-sm font-semibold text-gray-700">Respostas do p\u00f3s-teste</h4>
+                  <h4 className="text-sm font-semibold text-gray-700">Respostas do pós-teste</h4>
                   <dl className="grid grid-cols-1 gap-2 text-sm">
                     {Object.entries(p.postTestResponses).map(([key, value]) => (
                       <div key={key}>
@@ -710,7 +710,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Tab 4: Resumos e M\u00e9tricas
+   Tab 4: Resumos e Métricas
    ═══════════════════════════════════════════════════════════ */
 
 function SummariesTab() {
@@ -725,7 +725,7 @@ function SummariesTab() {
 
   if (isLoading) return <p className="text-gray-500">Carregando...</p>;
   if (!summaries || summaries.length === 0) {
-    return <p className="text-gray-500">Nenhum dado dispon\u00edvel.</p>;
+    return <p className="text-gray-500">Nenhum dado disponível.</p>;
   }
 
   const articles = [...new Set(summaries.map((s) => s.articleTitle))];
@@ -736,7 +736,7 @@ function SummariesTab() {
     pleno: 'bg-blue-100 text-blue-700',
     senior: 'bg-purple-100 text-purple-700',
   };
-  const LEVEL_LABELS: Record<string, string> = { junior: 'J\u00fanior', pleno: 'Pleno', senior: 'S\u00eanior' };
+  const LEVEL_LABELS: Record<string, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sênior' };
 
   const filtered = summaries.filter((s) => {
     if (articleFilter !== 'all' && s.articleTitle !== articleFilter) return false;
@@ -795,7 +795,7 @@ function SummariesTab() {
               <tr className="border-b text-left text-gray-600 bg-gray-50">
                 <th className="p-3 font-medium">Artigo</th>
                 <th className="p-3 font-medium">Perfil</th>
-                <th className="p-3 font-medium">Pr\u00e9via</th>
+                <th className="p-3 font-medium">Prévia</th>
                 <th className="p-3 font-medium">ROUGE-1</th>
                 <th className="p-3 font-medium">ROUGE-2</th>
                 <th className="p-3 font-medium">ROUGE-L</th>
@@ -871,10 +871,10 @@ function ExportTab() {
   };
 
   const EXPORTS = [
-    { type: 'participants', title: 'Participantes', description: 'Dados demogr\u00e1ficos e pr\u00e9-teste', label: 'Exportar Participantes' },
-    { type: 'ratings', title: 'Avalia\u00e7\u00f5es', description: 'Ratings Likert, prefer\u00eancias e coment\u00e1rios', label: 'Exportar Avalia\u00e7\u00f5es' },
-    { type: 'feedbacks', title: 'Feedbacks', description: 'Texto de feedback e avalia\u00e7\u00f5es do regenerado', label: 'Exportar Feedbacks' },
-    { type: 'post-test', title: 'P\u00f3s-teste', description: 'Respostas do question\u00e1rio p\u00f3s-teste', label: 'Exportar P\u00f3s-teste' },
+    { type: 'participants', title: 'Participantes', description: 'Dados demográficos e pré-teste', label: 'Exportar Participantes' },
+    { type: 'ratings', title: 'Avaliações', description: 'Ratings Likert, preferências e comentários', label: 'Exportar Avaliações' },
+    { type: 'feedbacks', title: 'Feedbacks', description: 'Texto de feedback e avaliações do regenerado', label: 'Exportar Feedbacks' },
+    { type: 'post-test', title: 'Pós-teste', description: 'Respostas do questionário pós-teste', label: 'Exportar Pós-teste' },
   ];
 
   return (
@@ -899,7 +899,7 @@ function ExportTab() {
       {/* Export all */}
       <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 space-y-3">
         <h3 className="text-lg font-semibold text-blue-900">Exportar Tudo</h3>
-        <p className="text-sm text-blue-700">Baixar todos os dados do experimento em um \u00fanico arquivo.</p>
+        <p className="text-sm text-blue-700">Baixar todos os dados do experimento em um único arquivo.</p>
         <button
           type="button"
           onClick={() => handleExport('all')}
