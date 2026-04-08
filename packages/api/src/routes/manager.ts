@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireManager } from '../middleware/auth.js';
-import { queryOne, queryAll } from '../db/connection.js';
+import { queryOne, queryAll, execute } from '../db/connection.js';
 import { safeJsonParse } from '../utils/validation.js';
 
 export const managerRoutes = Router();
@@ -649,4 +649,20 @@ managerRoutes.get('/export/:type', async (req: Request, res: Response) => {
   res.setHeader('Content-Disposition', `attachment; filename="${exportType}.csv"`);
   res.write('\uFEFF'); // BOM for Excel
   res.end(csv);
+});
+
+// ─── DELETE participant and all related data ─────────────────────────
+
+managerRoutes.delete('/participants/:id', async (req: Request, res: Response) => {
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+
+  const participant = await queryOne('SELECT id, name FROM participants WHERE id = $1', [id]);
+  if (!participant) return res.status(404).json({ error: 'Participante não encontrado' });
+
+  // Reset access_code (SET NULL via cascade), then delete participant (cascades everything)
+  await execute('UPDATE access_codes SET used_at = NULL WHERE participant_id = $1', [id]);
+  await execute('DELETE FROM participants WHERE id = $1', [id]);
+
+  res.json({ success: true, message: `Participante ${(participant as any).name || id} removido com sucesso` });
 });

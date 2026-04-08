@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { authApi, managerApi } from '../../api/client';
 
@@ -451,9 +451,19 @@ function FeedbackCycleBar({ cycle }: { cycle: { improved: number; same: number; 
    ═══════════════════════════════════════════════════════════ */
 
 function ParticipantsTab() {
+  const queryClient = useQueryClient();
   const { data: participants, isLoading } = useQuery({
     queryKey: ['manager-participants'],
     queryFn: () => managerApi.getParticipants(),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => managerApi.deleteParticipant(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['manager-participants'] });
+      queryClient.invalidateQueries({ queryKey: ['manager-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['manager-results'] });
+    },
   });
 
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
@@ -501,6 +511,7 @@ function ParticipantsTab() {
                 participant={p}
                 isOpen={isOpen}
                 onToggle={() => toggle(p.id)}
+                onDelete={(id) => deleteMutation.mutate(id)}
                 levelBadge={LEVEL_BADGE[p.experienceLevel] ?? 'bg-gray-100 text-gray-700'}
                 levelLabel={LEVEL_LABELS[p.experienceLevel] ?? p.experienceLevel}
               />
@@ -542,10 +553,11 @@ interface ParticipantData {
   }>;
 }
 
-function ParticipantRow({ participant: p, isOpen, onToggle, levelBadge, levelLabel }: {
+function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge, levelLabel }: {
   participant: ParticipantData;
   isOpen: boolean;
   onToggle: () => void;
+  onDelete: (id: number) => void;
   levelBadge: string;
   levelLabel: string;
 }) {
@@ -673,6 +685,22 @@ function ParticipantRow({ participant: p, isOpen, onToggle, levelBadge, levelLab
                   </dl>
                 </div>
               )}
+
+              {/* Delete participant */}
+              <div className="pt-2 border-t flex justify-end">
+                <button
+                  type="button"
+                  className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm(`Tem certeza que deseja remover ${p.name || 'este participante'} e todos os seus dados? Esta ação não pode ser desfeita.`)) {
+                      onDelete(p.id);
+                    }
+                  }}
+                >
+                  Remover participante e todos os dados
+                </button>
+              </div>
             </div>
           </td>
         </tr>

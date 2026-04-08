@@ -133,6 +133,11 @@ export const managerApi = {
     factuality: number | null;
   }>>('/manager/summaries'),
 
+  deleteParticipant: (id: number) =>
+    apiRequest<{ success: boolean; message: string }>(`/manager/participants/${id}`, {
+      method: 'DELETE',
+    }),
+
   exportCsv: (type: string) => {
     const headers: Record<string, string> = {};
     const code = sessionStorage.getItem('accessCode');
