@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
@@ -30,10 +30,13 @@ const TABS: { key: TabKey; label: string }[] = [
 
 export function ManagerDashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
 
-  /* Invite state */
+  /* Invite modal state */
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
   const [email, setEmail] = useState('');
+  const [emailValidationError, setEmailValidationError] = useState<string | null>(null);
   const [inviting, setInviting] = useState(false);
   const [inviteResult, setInviteResult] = useState<string | null>(null);
   const [inviteError, setInviteError] = useState<string | null>(null);
@@ -43,8 +46,17 @@ export function ManagerDashboard() {
     navigate('/');
   };
 
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
+    setEmailValidationError(null);
+
+    if (!EMAIL_REGEX.test(email.trim())) {
+      setEmailValidationError('Email inválido');
+      return;
+    }
+
     setInviting(true);
     setInviteResult(null);
     setInviteError(null);
@@ -52,12 +64,45 @@ export function ManagerDashboard() {
       const result = await authApi.invite(email.trim());
       setInviteResult(`Código ${result.code} enviado para ${result.email}`);
       setEmail('');
+      queryClient.invalidateQueries({ queryKey: ['manager-codes'] });
     } catch (err) {
       setInviteError((err as Error).message || 'Erro ao enviar convite');
     } finally {
       setInviting(false);
     }
   };
+
+  const openInviteModal = () => {
+    setEmail('');
+    setEmailValidationError(null);
+    setInviteResult(null);
+    setInviteError(null);
+    setInviteModalOpen(true);
+  };
+
+  const closeInviteModal = useCallback(() => {
+    setInviteModalOpen(false);
+  }, []);
+
+  /* Auto-dismiss invite messages */
+  useEffect(() => {
+    if (inviteResult) {
+      const timer = setTimeout(() => {
+        setInviteResult(null);
+        closeInviteModal();
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [inviteResult, closeInviteModal]);
+
+  useEffect(() => {
+    if (inviteError) {
+      const timer = setTimeout(() => {
+        setInviteError(null);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [inviteError]);
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -70,7 +115,8 @@ export function ManagerDashboard() {
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={() => setActiveTab('overview')}
+            onClick={openInviteModal}
+            aria-label="Convidar participante"
             className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
           >
             Convidar
@@ -78,12 +124,28 @@ export function ManagerDashboard() {
           <button
             type="button"
             onClick={handleLogout}
+            aria-label="Sair do painel"
             className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50 transition-colors"
           >
             Sair
           </button>
         </div>
       </div>
+
+      {/* Invite Modal */}
+      {inviteModalOpen && (
+        <InviteModal
+          email={email}
+          setEmail={setEmail}
+          emailValidationError={emailValidationError}
+          setEmailValidationError={setEmailValidationError}
+          inviting={inviting}
+          inviteResult={inviteResult}
+          inviteError={inviteError}
+          handleInvite={handleInvite}
+          onClose={closeInviteModal}
+        />
+      )}
 
       {/* Tab bar */}
       <div role="tablist" className="flex border-b">
@@ -106,16 +168,7 @@ export function ManagerDashboard() {
       </div>
 
       {/* Tab content */}
-      {activeTab === 'overview' && (
-        <OverviewTab
-          email={email}
-          setEmail={setEmail}
-          inviting={inviting}
-          inviteResult={inviteResult}
-          inviteError={inviteError}
-          handleInvite={handleInvite}
-        />
-      )}
+      {activeTab === 'overview' && <OverviewTab />}
       {activeTab === 'results' && <ResultsTab />}
       {activeTab === 'participants' && <ParticipantsTab />}
       {activeTab === 'summaries' && <SummariesTab />}
@@ -125,19 +178,129 @@ export function ManagerDashboard() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Tab 1: Visão Geral
+   Invite Modal
    ═══════════════════════════════════════════════════════════ */
 
-interface OverviewTabProps {
+interface InviteModalProps {
   email: string;
   setEmail: (v: string) => void;
+  emailValidationError: string | null;
+  setEmailValidationError: (v: string | null) => void;
   inviting: boolean;
   inviteResult: string | null;
   inviteError: string | null;
   handleInvite: (e: React.FormEvent) => void;
+  onClose: () => void;
 }
 
-function OverviewTab({ email, setEmail, inviting, inviteResult, inviteError, handleInvite }: OverviewTabProps) {
+function InviteModal({
+  email,
+  setEmail,
+  emailValidationError,
+  setEmailValidationError,
+  inviting,
+  inviteResult,
+  inviteError,
+  handleInvite,
+  onClose,
+}: InviteModalProps) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  /* Focus the close button on mount */
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+  }, []);
+
+  /* Close on Escape */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  /* Close on overlay click */
+  const handleOverlayClick = (e: React.MouseEvent) => {
+    if (e.target === overlayRef.current) {
+      onClose();
+    }
+  };
+
+  return (
+    <div
+      ref={overlayRef}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      onClick={handleOverlayClick}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="invite-modal-title"
+    >
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 id="invite-modal-title" className="text-lg font-semibold">Convidar participante</h2>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar modal de convite"
+            className="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <form onSubmit={handleInvite} className="space-y-3">
+          <div>
+            <label htmlFor="invite-email" className="sr-only">Email do participante</label>
+            <input
+              id="invite-email"
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (emailValidationError) setEmailValidationError(null);
+              }}
+              placeholder="Email do participante"
+              className={`w-full border rounded-lg p-2 ${emailValidationError ? 'border-red-400' : ''}`}
+              required
+              aria-describedby={emailValidationError ? 'email-validation-error' : undefined}
+              aria-invalid={emailValidationError ? 'true' : undefined}
+            />
+            {emailValidationError && (
+              <p id="email-validation-error" className="text-red-600 text-sm mt-1">{emailValidationError}</p>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={inviting || !email.trim()}
+            className="w-full px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+          >
+            {inviting ? 'Enviando...' : 'Enviar Convite'}
+          </button>
+        </form>
+
+        {inviteResult && (
+          <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm" role="status">{inviteResult}</div>
+        )}
+        {inviteError && (
+          <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm" role="alert">{inviteError}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Tab 1: Visão Geral
+   ═══════════════════════════════════════════════════════════ */
+
+function OverviewTab() {
   const { data: overview, isLoading: loadingOverview } = useQuery({
     queryKey: ['manager-overview'],
     queryFn: () => managerApi.getOverview(),
@@ -181,36 +344,6 @@ function OverviewTab({ email, setEmail, inviting, inviteResult, inviteError, han
           </div>
         </div>
       ) : null}
-
-      {/* Invite section */}
-      <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h2 className="text-lg font-semibold">Convidar participante</h2>
-        <form onSubmit={handleInvite} className="flex gap-3">
-          <label htmlFor="invite-email" className="sr-only">Email do participante</label>
-          <input
-            id="invite-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="Email do participante"
-            className="flex-1 border rounded-lg p-2"
-            required
-          />
-          <button
-            type="submit"
-            disabled={inviting || !email.trim()}
-            className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-          >
-            {inviting ? 'Enviando...' : 'Enviar Convite'}
-          </button>
-        </form>
-        {inviteResult && (
-          <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm">{inviteResult}</div>
-        )}
-        {inviteError && (
-          <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm">{inviteError}</div>
-        )}
-      </div>
 
       {/* Codes table */}
       <div className="bg-white p-6 rounded-lg border space-y-4">
@@ -452,6 +585,7 @@ function FeedbackCycleBar({ cycle }: { cycle: { improved: number; same: number; 
 
 function ParticipantsTab() {
   const queryClient = useQueryClient();
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const { data: participants, isLoading } = useQuery({
     queryKey: ['manager-participants'],
     queryFn: () => managerApi.getParticipants(),
@@ -460,9 +594,13 @@ function ParticipantsTab() {
   const deleteMutation = useMutation({
     mutationFn: (id: number) => managerApi.deleteParticipant(id),
     onSuccess: () => {
+      setDeleteError(null);
       queryClient.invalidateQueries({ queryKey: ['manager-participants'] });
       queryClient.invalidateQueries({ queryKey: ['manager-overview'] });
       queryClient.invalidateQueries({ queryKey: ['manager-results'] });
+    },
+    onError: (err: Error) => {
+      setDeleteError(err.message || 'Erro ao remover participante. Tente novamente.');
     },
   });
 
@@ -490,35 +628,52 @@ function ParticipantsTab() {
   const LEVEL_LABELS: Record<string, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sênior' };
 
   return (
-    <div className="bg-white rounded-lg border overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b text-left text-gray-600 bg-gray-50">
-            <th className="p-3 font-medium">Nome</th>
-            <th className="p-3 font-medium">Nível</th>
-            <th className="p-3 font-medium">Anos Exp.</th>
-            <th className="p-3 font-medium">Status</th>
-            <th className="p-3 font-medium">Sessões</th>
-            <th className="p-3 font-medium w-8" aria-label="Expandir" />
-          </tr>
-        </thead>
-        <tbody>
-          {participants.map((p) => {
-            const isOpen = expanded.has(p.id);
-            return (
-              <ParticipantRow
-                key={p.id}
-                participant={p}
-                isOpen={isOpen}
-                onToggle={() => toggle(p.id)}
-                onDelete={(id) => deleteMutation.mutate(id)}
-                levelBadge={LEVEL_BADGE[p.experienceLevel] ?? 'bg-gray-100 text-gray-700'}
-                levelLabel={LEVEL_LABELS[p.experienceLevel] ?? p.experienceLevel}
-              />
-            );
-          })}
-        </tbody>
-      </table>
+    <div className="space-y-4">
+      {deleteError && (
+        <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-center justify-between" role="alert">
+          <span>{deleteError}</span>
+          <button
+            type="button"
+            onClick={() => setDeleteError(null)}
+            aria-label="Fechar mensagem de erro"
+            className="text-red-500 hover:text-red-700 ml-2"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+      <div className="bg-white rounded-lg border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-gray-600 bg-gray-50">
+              <th className="p-3 font-medium">Nome</th>
+              <th className="p-3 font-medium">Nível</th>
+              <th className="p-3 font-medium">Anos Exp.</th>
+              <th className="p-3 font-medium">Status</th>
+              <th className="p-3 font-medium">Sessões</th>
+              <th className="p-3 font-medium w-8" aria-label="Expandir" />
+            </tr>
+          </thead>
+          <tbody>
+            {participants.map((p) => {
+              const isOpen = expanded.has(p.id);
+              return (
+                <ParticipantRow
+                  key={p.id}
+                  participant={p}
+                  isOpen={isOpen}
+                  onToggle={() => toggle(p.id)}
+                  onDelete={(id) => deleteMutation.mutate(id)}
+                  levelBadge={LEVEL_BADGE[p.experienceLevel] ?? 'bg-gray-100 text-gray-700'}
+                  levelLabel={LEVEL_LABELS[p.experienceLevel] ?? p.experienceLevel}
+                />
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -570,11 +725,13 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
   return (
     <>
       <tr
+        role="row"
         className="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
         onClick={onToggle}
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
         aria-expanded={isOpen}
+        aria-label={`Participante ${p.name}, clique para ${isOpen ? 'recolher' : 'expandir'} detalhes`}
       >
         <td className="p-3 font-medium">{p.name}</td>
         <td className="p-3">
@@ -802,6 +959,7 @@ function SummariesTab() {
               {filtered.map((s) => (
                 <Fragment key={s.id}>
                   <tr
+                    role="row"
                     className="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
                     onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
                     tabIndex={0}
@@ -873,9 +1031,11 @@ function SummariesTab() {
 
 function ExportTab() {
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const handleExport = async (type: string) => {
     setDownloading(type);
+    setExportError(null);
     try {
       const response = await managerApi.exportCsv(type);
       const blob = await response.blob();
@@ -885,8 +1045,8 @@ function ExportTab() {
       a.download = `${type}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-    } catch {
-      // Download failed silently
+    } catch (err) {
+      setExportError(`Falha ao exportar "${type}". ${(err as Error).message || 'Tente novamente.'}`);
     } finally {
       setDownloading(null);
     }
@@ -901,6 +1061,21 @@ function ExportTab() {
 
   return (
     <div className="space-y-4">
+      {exportError && (
+        <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-center justify-between" role="alert">
+          <span>{exportError}</span>
+          <button
+            type="button"
+            onClick={() => setExportError(null)}
+            aria-label="Fechar mensagem de erro"
+            className="text-red-500 hover:text-red-700 ml-2"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {EXPORTS.map((exp) => (
           <div key={exp.type} className="bg-white p-6 rounded-lg border space-y-3">
