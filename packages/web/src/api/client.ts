@@ -163,6 +163,8 @@ export const experimentApi = {
     yearsExperience: number;
     readingFrequency: string;
     topicFamiliarity: string;
+    structurePreference?: string;
+    readingGoal?: string;
   }) =>
     apiRequest<{ id: number; name: string; experienceLevel: string }>('/experiment/participants', {
       method: 'POST',

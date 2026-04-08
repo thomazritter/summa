@@ -39,6 +39,9 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS rouge_2 REAL;
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS rouge_l REAL;
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS bert_score REAL;
+
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS structure_preference TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS reading_goal TEXT;
   `;
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');

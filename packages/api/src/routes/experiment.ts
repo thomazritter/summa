@@ -19,6 +19,8 @@ const registerParticipantSchema = z.object({
   yearsExperience: z.number().int().min(0).max(50),
   readingFrequency: z.enum(['never', 'rarely', 'sometimes', 'frequently']),
   topicFamiliarity: z.enum(['none', 'little', 'moderate', 'high']),
+  structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
+  readingGoal: z.enum(['overview', 'methodology', 'results', 'practical']).optional(),
 });
 
 const createSessionSchema = z.object({
@@ -84,14 +86,14 @@ experimentRoutes.post('/participants', async (req: Request, res: Response, next:
     return res.status(400).json({ error: validation.error.errors });
   }
 
-  const { name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity } = validation.data;
+  const { name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference, readingGoal } = validation.data;
 
   try {
     const row = await queryOne<ParticipantRow>(`
-      INSERT INTO participants (name, experience_level, years_experience, reading_frequency, topic_familiarity)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO participants (name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
-    `, [name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity]);
+    `, [name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference || null, readingGoal || null]);
 
     // Link participant to access code
     const accessCode = req.headers['x-access-code'] as string;
@@ -423,6 +425,8 @@ interface ParticipantRow {
   years_experience: number;
   reading_frequency: string;
   topic_familiarity: string;
+  structure_preference: string | null;
+  reading_goal: string | null;
   created_at: string;
 }
 
@@ -461,6 +465,8 @@ const mapParticipantRow = (row: ParticipantRow): Participant => ({
   yearsExperience: row.years_experience,
   readingFrequency: row.reading_frequency as Participant['readingFrequency'],
   topicFamiliarity: row.topic_familiarity as Participant['topicFamiliarity'],
+  structurePreference: row.structure_preference as Participant['structurePreference'],
+  readingGoal: row.reading_goal as Participant['readingGoal'],
   createdAt: row.created_at,
 });
 

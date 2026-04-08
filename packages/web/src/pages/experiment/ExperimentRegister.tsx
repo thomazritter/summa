@@ -10,6 +10,8 @@ interface FormData {
   yearsExperience: number;
   readingFrequency: string;
   topicFamiliarity: string;
+  structurePreference: string;
+  readingGoal: string;
 }
 
 export function ExperimentRegister() {
@@ -20,6 +22,8 @@ export function ExperimentRegister() {
     yearsExperience: 0,
     readingFrequency: '',
     topicFamiliarity: '',
+    structurePreference: '',
+    readingGoal: '',
   });
 
   const registerMutation = useMutation({
@@ -35,7 +39,9 @@ export function ExperimentRegister() {
     form.name.trim().length > 0 &&
     form.experienceLevel !== '' &&
     form.readingFrequency !== '' &&
-    form.topicFamiliarity !== '';
+    form.topicFamiliarity !== '' &&
+    form.structurePreference !== '' &&
+    form.readingGoal !== '';
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -132,6 +138,59 @@ export function ExperimentRegister() {
                 onClick={() => setForm({ ...form, topicFamiliarity: opt.value })}
                 className={`p-3 border rounded-lg text-center transition-colors ${
                   form.topicFamiliarity === opt.value
+                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Structure Preference */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Como você prefere consumir resumos?
+          </label>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { value: 'prose', label: 'Prosa corrida' },
+              { value: 'bullets', label: 'Tópicos e bullet points' },
+              { value: 'mixed', label: 'Misto' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setForm({ ...form, structurePreference: opt.value })}
+                className={`p-3 border rounded-lg text-center transition-colors ${
+                  form.structurePreference === opt.value
+                    ? 'border-blue-500 bg-blue-50 text-blue-900'
+                    : 'border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Reading Goal */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Qual seu principal objetivo ao ler artigos científicos?
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { value: 'overview', label: 'Visão geral rápida' },
+              { value: 'methodology', label: 'Entender a metodologia' },
+              { value: 'results', label: 'Ver os resultados' },
+              { value: 'practical', label: 'Aplicar na prática' },
+            ].map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setForm({ ...form, readingGoal: opt.value })}
+                className={`p-3 border rounded-lg text-center transition-colors ${
+                  form.readingGoal === opt.value
                     ? 'border-blue-500 bg-blue-50 text-blue-900'
                     : 'border-gray-200 hover:border-blue-300'
                 }`}

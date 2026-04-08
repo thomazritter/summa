@@ -128,6 +128,8 @@ export interface ProfileQuestionOption {
 export type ExperienceLevel = 'junior' | 'pleno' | 'senior';
 export type ReadingFrequency = 'never' | 'rarely' | 'sometimes' | 'frequently';
 export type TopicFamiliarity = 'none' | 'little' | 'moderate' | 'high';
+export type StructurePreference = 'prose' | 'bullets' | 'mixed';
+export type ReadingGoal = 'overview' | 'methodology' | 'results' | 'practical';
 
 export interface Participant {
   id: number;
@@ -136,6 +138,8 @@ export interface Participant {
   yearsExperience: number;
   readingFrequency: ReadingFrequency;
   topicFamiliarity: TopicFamiliarity;
+  structurePreference: StructurePreference | null;
+  readingGoal: ReadingGoal | null;
   createdAt: string;
 }
 
@@ -174,6 +178,8 @@ export interface RegisterParticipantRequest {
   yearsExperience: number;
   readingFrequency: ReadingFrequency;
   topicFamiliarity: TopicFamiliarity;
+  structurePreference?: StructurePreference;
+  readingGoal?: ReadingGoal;
 }
 
 export interface CreateExperimentSessionRequest {

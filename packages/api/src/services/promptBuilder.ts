@@ -1,13 +1,19 @@
 import type { Profile, ArticleStructure } from '@summarizer/shared';
 
+export interface ParticipantPreferences {
+  structurePreference?: 'prose' | 'bullets' | 'mixed';
+  readingGoal?: 'overview' | 'methodology' | 'results' | 'practical';
+}
+
 export const buildSummarizationPrompt = (
   profile: Profile,
   articleContent: ArticleStructure,
-  rawText: string
+  rawText: string,
+  participantPreferences?: ParticipantPreferences
 ): string => {
   const systemContext = buildSystemContext(profile);
   const contentSection = buildContentSection(articleContent, rawText);
-  const instructions = buildInstructions(profile);
+  const instructions = buildInstructions(profile, participantPreferences);
 
   return `${systemContext}
 
@@ -34,7 +40,7 @@ const buildSystemContext = (profile: Profile): string => {
 Contexto do leitor: ${contextDescriptions[profile.context]}`;
 };
 
-const buildInstructions = (profile: Profile): string => {
+const buildInstructions = (profile: Profile, participantPreferences?: ParticipantPreferences): string => {
   const parts: string[] = [];
 
   // Expertise instructions (matches thesis examples - main.tex lines 670-690)
@@ -64,6 +70,27 @@ const buildInstructions = (profile: Profile): string => {
     comprehensive: 'Extensão: abrangente (7-10 parágrafos). Cubra todos os aspectos relevantes com profundidade. Inclua detalhes, números, contexto e discussão.',
   };
   parts.push(depthInstructions[profile.depth]);
+
+  // Structure preference instructions (from participant, not profile)
+  if (participantPreferences?.structurePreference) {
+    const structureInstructions: Record<NonNullable<ParticipantPreferences['structurePreference']>, string> = {
+      prose: 'Formato: escreva em parágrafos corridos e fluidos. Não use bullet points ou listas.',
+      bullets: 'Formato: organize as informações em tópicos e bullet points. Use listas para pontos principais, resultados e conclusões. Minimize parágrafos longos.',
+      mixed: 'Formato: combine parágrafos explicativos com bullet points para dados, resultados e listas de contribuições. Use parágrafos para contexto e listas para pontos objetivos.',
+    };
+    parts.push(structureInstructions[participantPreferences.structurePreference]);
+  }
+
+  // Reading goal instructions (from participant, not profile)
+  if (participantPreferences?.readingGoal) {
+    const goalInstructions: Record<NonNullable<ParticipantPreferences['readingGoal']>, string> = {
+      overview: 'Objetivo do leitor: obter uma visão geral rápida. Priorize a contribuição principal e as conclusões. Seja conciso e direto.',
+      methodology: 'Objetivo do leitor: entender como o estudo foi conduzido. Detalhe os métodos, procedimentos, ferramentas e métricas. Os resultados podem ser mencionados brevemente.',
+      results: 'Objetivo do leitor: conhecer os achados do estudo. Apresente resultados com números, porcentagens e comparações. A metodologia pode ser resumida brevemente.',
+      practical: 'Objetivo do leitor: aplicar as descobertas na prática. Destaque implicações concretas, recomendações e como os resultados podem ser usados no dia a dia.',
+    };
+    parts.push(goalInstructions[participantPreferences.readingGoal]);
+  }
 
   parts.push('Estruture o resumo com parágrafos bem definidos. Comece pela contribuição principal do artigo.');
 
