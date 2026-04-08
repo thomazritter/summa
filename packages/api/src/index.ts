@@ -9,6 +9,7 @@ import { summaryRoutes } from './routes/summaries.js';
 import { feedbackRoutes } from './routes/feedback.js';
 import { experimentRoutes } from './routes/experiment.js';
 import { authRoutes } from './routes/auth.js';
+import { managerRoutes } from './routes/manager.js';
 import { closeDb } from './db/connection.js';
 import { runMigrations } from './db/auto-migrate.js';
 import { getOllamaStatus } from './services/ollamaClient.js';
@@ -52,6 +53,7 @@ app.use('/api/summaries', summaryRoutes);
 app.use('/api/feedback', feedbackRoutes);
 app.use('/api/experiment', experimentRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/manager', managerRoutes);
 
 // Serve frontend in production
 if (!isDev) {

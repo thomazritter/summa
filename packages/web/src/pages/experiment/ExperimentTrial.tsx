@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { experimentApi } from '../../api/client';
 import { LikertScale } from '../../components/LikertScale';
 import { ExperimentProgress } from '../../components/ExperimentProgress';
+
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3001/api' : '/api');
 
 type SummaryRatings = {
   utilidade: number | null;
@@ -59,6 +61,7 @@ export function ExperimentTrial() {
   const [activeTab, setActiveTab] = useState<'A' | 'B'>('A');
 
   const participantId = sessionStorage.getItem('experimentParticipantId');
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const { data: session, isLoading } = useQuery({
     queryKey: ['experiment-session', sessionId],
@@ -130,6 +133,25 @@ export function ExperimentTrial() {
 
   const articleTitle = articles?.find((a) => a.id === session.articleId)?.title;
 
+  const handleDownloadArticle = useCallback(async () => {
+    setIsDownloading(true);
+    try {
+      const response = await fetch(`${API_BASE}/articles/${session.articleId}/download`, {
+        headers: { 'x-access-code': sessionStorage.getItem('accessCode') || '' },
+      });
+      if (!response.ok) throw new Error('Falha ao baixar artigo');
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${articleTitle || 'artigo'}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsDownloading(false);
+    }
+  }, [session.articleId, articleTitle]);
+
   // Reusable summary + ratings block
   const renderSummaryContent = (label: 'A' | 'B') => {
     const summaryContent = label === 'A' ? session.summaryA?.content : session.summaryB?.content;
@@ -185,6 +207,26 @@ export function ExperimentTrial() {
           Leia os dois resumos abaixo com atenção, avalie cada um individualmente e indique qual você prefere.
           Ambos foram gerados automaticamente a partir do mesmo artigo.
         </p>
+      </div>
+
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-center justify-between">
+        <div>
+          <p className="font-medium text-amber-900">Leia o artigo original antes de avaliar os resumos</p>
+          <p className="text-sm text-amber-700 mt-1">
+            É importante ler o artigo completo para poder avaliar a qualidade dos resumos.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDownloadArticle}
+          disabled={isDownloading}
+          className="ml-4 px-4 py-2 bg-amber-600 text-white font-medium rounded-lg hover:bg-amber-700 disabled:opacity-50 whitespace-nowrap flex items-center gap-2 transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          {isDownloading ? 'Baixando...' : 'Baixar Artigo'}
+        </button>
       </div>
 
       {/* Mobile: tab switcher */}

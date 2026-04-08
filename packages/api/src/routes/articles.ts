@@ -78,6 +78,28 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, async (r
   }
 });
 
+// Download article raw text as file
+articleRoutes.get('/:id/download', async (req: Request, res: Response) => {
+  const id = parseId(req.params.id);
+  if (id === null) {
+    return res.status(400).json({ error: 'Invalid article ID' });
+  }
+
+  const article = await queryOne<{ title: string; raw_text: string }>(
+    'SELECT title, raw_text FROM articles WHERE id = $1',
+    [id]
+  );
+
+  if (!article) {
+    return res.status(404).json({ error: 'Article not found' });
+  }
+
+  const safeTitle = article.title.replace(/[^a-zA-Z0-9_\-. ]/g, '_');
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.txt"`);
+  res.send(article.raw_text);
+});
+
 // Get article by ID
 articleRoutes.get('/:id', async (req: Request, res: Response) => {
   const id = parseId(req.params.id);

@@ -67,6 +67,82 @@ export const authApi = {
     }>>('/auth/codes'),
 };
 
+export const managerApi = {
+  getOverview: () => apiRequest<{
+    totalInvited: number;
+    totalCompleted: number;
+    completionRate: number;
+    sessionsByPhase: { complete: number; feedback: number; comparison: number; regenerated: number };
+  }>('/manager/overview'),
+
+  getResults: () => apiRequest<{
+    preferencePersonalized: { count: number; total: number; percentage: number };
+    preferenceGeneric: { count: number; total: number; percentage: number };
+    likertByType: {
+      generic: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
+      personalized: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
+    };
+    likertByProfile: Record<string, {
+      generic: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
+      personalized: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
+    }>;
+    feedbackCycle: { improved: number; same: number; worse: number; total: number };
+    regeneratedLikert: { utilidade: number; clareza: number; adequacao: number };
+    hasData: boolean;
+  }>('/manager/results'),
+
+  getParticipants: () => apiRequest<Array<{
+    id: number;
+    name: string;
+    experienceLevel: string;
+    yearsExperience: number;
+    hasPostTest: boolean;
+    postTestResponses: Record<string, string> | null;
+    sessions: Array<{
+      id: number;
+      articleTitle: string;
+      phase: string;
+      preference: string | null;
+      preferenceDecoded: string | null;
+      preferenceReason: string | null;
+      ratings: Array<{
+        label: string;
+        utilidade: number;
+        clareza: number;
+        adequacao: number;
+        factualidade: number;
+        comment: string | null;
+      }>;
+      regeneration: {
+        feedbackText: string;
+        improvementRating: string | null;
+        ratings: { utilidade: number; clareza: number; adequacao: number } | null;
+      } | null;
+    }>;
+  }>>('/manager/participants'),
+
+  getSummaries: () => apiRequest<Array<{
+    id: number;
+    articleTitle: string;
+    profileLevel: string;
+    content: string;
+    rouge1: number | null;
+    rouge2: number | null;
+    rougeL: number | null;
+    bertScore: number | null;
+    factuality: number | null;
+  }>>('/manager/summaries'),
+
+  exportCsv: (type: string) => {
+    const headers: Record<string, string> = {};
+    const code = sessionStorage.getItem('accessCode');
+    if (code) {
+      headers['x-access-code'] = code;
+    }
+    return fetch(`${API_BASE}/manager/export/${type}`, { headers });
+  },
+};
+
 export const experimentApi = {
   registerParticipant: (data: {
     name: string;

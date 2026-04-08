@@ -43,6 +43,10 @@ CREATE TABLE IF NOT EXISTS summaries (
   content TEXT NOT NULL,
   factuality_score REAL,
   factuality_details TEXT, -- JSON
+  rouge_1 REAL,
+  rouge_2 REAL,
+  rouge_l REAL,
+  bert_score REAL,
   generated_at TIMESTAMP DEFAULT NOW(),
   FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
   FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
