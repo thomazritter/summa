@@ -43,6 +43,21 @@ export async function runMigrations(): Promise<void> {
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');
 
+  // 2b. Create p_accuracy_scores table if not exists
+  const pAccuracyTable = `
+    CREATE TABLE IF NOT EXISTS p_accuracy_scores (
+      id SERIAL PRIMARY KEY,
+      article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+      p_accuracy_rouge REAL,
+      avg_pairwise_rouge_l REAL,
+      pairwise_details TEXT,
+      computed_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(article_id)
+    );
+  `;
+  await query(pAccuracyTable);
+  console.log('[auto-migrate] p_accuracy_scores table ensured.');
+
   // 3. Drop legacy columns from post_test_responses if they still exist
   // (overall_satisfaction and would_use_again replaced by new text fields)
   try {

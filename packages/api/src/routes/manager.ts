@@ -101,6 +101,15 @@ interface SummaryRow {
   bert_score: number | null;
 }
 
+interface PAccuracyRow {
+  article_id: number;
+  article_title: string;
+  p_accuracy_rouge: number | null;
+  avg_pairwise_rouge_l: number | null;
+  pairwise_details: string | null;
+  computed_at: string | null;
+}
+
 // ─── GET /overview ────────────────────────────────────────────────────
 
 managerRoutes.get('/overview', async (_req: Request, res: Response) => {
@@ -241,6 +250,15 @@ managerRoutes.get('/results', async (_req: Request, res: Response) => {
     adequacao: regenAvg?.avg_adequacy ? Math.round(parseFloat(regenAvg.avg_adequacy) * 100) / 100 : 0,
   };
 
+  // P-Accuracy scores
+  const pAccuracyScores = await queryAll<PAccuracyRow>(`
+    SELECT pa.article_id, a.title as article_title,
+           pa.p_accuracy_rouge, pa.avg_pairwise_rouge_l, pa.pairwise_details, pa.computed_at
+    FROM p_accuracy_scores pa
+    JOIN articles a ON pa.article_id = a.id
+    ORDER BY pa.article_id
+  `);
+
   res.json({
     preferenceStats: {
       personalizedChosen,
@@ -251,6 +269,14 @@ managerRoutes.get('/results', async (_req: Request, res: Response) => {
     likertByProfile,
     feedbackCycle,
     regeneratedLikert,
+    pAccuracy: pAccuracyScores.map(pa => ({
+      articleId: pa.article_id,
+      articleTitle: pa.article_title,
+      pAccuracyRouge: pa.p_accuracy_rouge,
+      avgPairwiseRougeL: pa.avg_pairwise_rouge_l,
+      pairwiseDetails: safeJsonParse(pa.pairwise_details),
+      computedAt: pa.computed_at,
+    })),
   });
 });
 
@@ -412,19 +438,52 @@ managerRoutes.get('/summaries', async (_req: Request, res: Response) => {
     ORDER BY s.id
   `);
 
-  res.json(summaries.map(s => ({
-    id: s.id,
-    articleId: s.article_id,
-    articleTitle: s.article_title,
-    profileId: s.profile_id,
-    profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
-    content: s.content,
-    factualityScore: s.factuality_score,
-    rouge1: s.rouge_1,
-    rouge2: s.rouge_2,
-    rougeL: s.rouge_l,
-    bertScore: s.bert_score,
-  })));
+  const pAccuracyRows = await queryAll<PAccuracyRow>(`
+    SELECT pa.article_id, a.title as article_title,
+           pa.p_accuracy_rouge, pa.avg_pairwise_rouge_l, pa.pairwise_details, pa.computed_at
+    FROM p_accuracy_scores pa
+    JOIN articles a ON pa.article_id = a.id
+    ORDER BY pa.article_id
+  `);
+
+  const pAccuracyByArticle = new Map<number, {
+    pAccuracyRouge: number | null;
+    avgPairwiseRougeL: number | null;
+    pairwiseDetails: unknown;
+    computedAt: string | null;
+  }>();
+  for (const pa of pAccuracyRows) {
+    pAccuracyByArticle.set(pa.article_id, {
+      pAccuracyRouge: pa.p_accuracy_rouge,
+      avgPairwiseRougeL: pa.avg_pairwise_rouge_l,
+      pairwiseDetails: safeJsonParse(pa.pairwise_details),
+      computedAt: pa.computed_at,
+    });
+  }
+
+  res.json({
+    summaries: summaries.map(s => ({
+      id: s.id,
+      articleId: s.article_id,
+      articleTitle: s.article_title,
+      profileId: s.profile_id,
+      profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
+      content: s.content,
+      factualityScore: s.factuality_score,
+      rouge1: s.rouge_1,
+      rouge2: s.rouge_2,
+      rougeL: s.rouge_l,
+      bertScore: s.bert_score,
+    })),
+    pAccuracy: pAccuracyRows.map(pa => ({
+      articleId: pa.article_id,
+      articleTitle: pa.article_title,
+      pAccuracyRouge: pa.p_accuracy_rouge,
+      avgPairwiseRougeL: pa.avg_pairwise_rouge_l,
+      pairwiseDetails: safeJsonParse(pa.pairwise_details),
+      computedAt: pa.computed_at,
+    })),
+  });
 });
 
 // ─── GET /export/:type ────────────────────────────────────────────────

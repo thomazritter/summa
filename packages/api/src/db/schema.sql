@@ -195,3 +195,15 @@ CREATE TABLE IF NOT EXISTS access_codes (
   FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_access_codes_code ON access_codes(code);
+
+-- ─── P-Accuracy Scores ──────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS p_accuracy_scores (
+  id SERIAL PRIMARY KEY,
+  article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  p_accuracy_rouge REAL,
+  avg_pairwise_rouge_l REAL,
+  pairwise_details TEXT, -- JSON with all pairwise comparisons
+  computed_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(article_id)
+);
