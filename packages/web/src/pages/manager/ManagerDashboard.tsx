@@ -714,7 +714,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
    ═══════════════════════════════════════════════════════════ */
 
 function SummariesTab() {
-  const { data: summaries, isLoading } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ['manager-summaries'],
     queryFn: () => managerApi.getSummaries(),
   });
@@ -724,23 +724,18 @@ function SummariesTab() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   if (isLoading) return <p className="text-gray-500">Carregando...</p>;
-  if (!summaries || summaries.length === 0) {
+  const summaries = data?.summaries ?? [];
+  const pAccuracy = data?.pAccuracy ?? [];
+  if (summaries.length === 0) {
     return <p className="text-gray-500">Nenhum dado disponível.</p>;
   }
 
   const articles = [...new Set(summaries.map((s) => s.articleTitle))];
-  const profiles = [...new Set(summaries.map((s) => s.profileLevel))];
-
-  const LEVEL_BADGE: Record<string, string> = {
-    junior: 'bg-green-100 text-green-700',
-    pleno: 'bg-blue-100 text-blue-700',
-    senior: 'bg-purple-100 text-purple-700',
-  };
-  const LEVEL_LABELS: Record<string, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sênior' };
+  const profiles = [...new Set(summaries.map((s) => s.profileLabel))];
 
   const filtered = summaries.filter((s) => {
     if (articleFilter !== 'all' && s.articleTitle !== articleFilter) return false;
-    if (profileFilter !== 'all' && s.profileLevel !== profileFilter) return false;
+    if (profileFilter !== 'all' && s.profileLabel !== profileFilter) return false;
     return true;
   });
 
@@ -781,7 +776,7 @@ function SummariesTab() {
           >
             <option value="all">Todos</option>
             {profiles.map((p) => (
-              <option key={p} value={p}>{LEVEL_LABELS[p] ?? p}</option>
+              <option key={p} value={p}>{p}</option>
             ))}
           </select>
         </div>
@@ -815,8 +810,8 @@ function SummariesTab() {
                   >
                     <td className="p-3 max-w-[200px] truncate" title={s.articleTitle}>{s.articleTitle}</td>
                     <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${LEVEL_BADGE[s.profileLevel] ?? 'bg-gray-100 text-gray-700'}`}>
-                        {LEVEL_LABELS[s.profileLevel] ?? s.profileLevel}
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700`}>
+                        {s.profileLabel}
                       </span>
                     </td>
                     <td className="p-3 max-w-[150px] truncate text-gray-500">{s.content.slice(0, 60)}...</td>
@@ -824,7 +819,7 @@ function SummariesTab() {
                     <td className="p-3 font-mono text-sm">{formatMetric(s.rouge2)}</td>
                     <td className="p-3 font-mono text-sm">{formatMetric(s.rougeL)}</td>
                     <td className="p-3 font-mono text-sm">{formatMetric(s.bertScore)}</td>
-                    <td className={`p-3 font-mono text-sm font-medium ${factualityColor(s.factuality)}`}>{formatMetric(s.factuality)}</td>
+                    <td className={`p-3 font-mono text-sm font-medium ${factualityColor(s.factualityScore)}`}>{formatMetric(s.factualityScore)}</td>
                   </tr>
                   {expandedId === s.id && (
                     <tr>
@@ -841,6 +836,33 @@ function SummariesTab() {
           </table>
         </div>
       </div>
+
+      {/* P-Accuracy */}
+      {pAccuracy.length > 0 && (
+        <div className="bg-white rounded-lg border p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">P-Accuracy (Sensibilidade de Personalização)</h3>
+          <p className="text-sm text-gray-600 mb-4">
+            Mede o quanto os resumos diferem entre perfis. Valores mais altos indicam maior personalização.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {pAccuracy.map((pa) => (
+              <div key={pa.articleId} className="border rounded-lg p-4">
+                <p className="font-medium text-sm text-gray-900 mb-2">{pa.articleTitle}</p>
+                <div className="flex items-center gap-4">
+                  <div>
+                    <span className="text-2xl font-bold text-blue-600">{(pa.pAccuracyRouge * 100).toFixed(1)}%</span>
+                    <p className="text-xs text-gray-500">P-Accuracy</p>
+                  </div>
+                  <div>
+                    <span className="text-lg font-semibold text-gray-700">{pa.avgPairwiseRougeL.toFixed(3)}</span>
+                    <p className="text-xs text-gray-500">Similaridade média entre perfis</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

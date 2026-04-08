@@ -121,17 +121,25 @@ export const managerApi = {
     }>;
   }>>('/manager/participants'),
 
-  getSummaries: () => apiRequest<Array<{
-    id: number;
-    articleTitle: string;
-    profileLevel: string;
-    content: string;
-    rouge1: number | null;
-    rouge2: number | null;
-    rougeL: number | null;
-    bertScore: number | null;
-    factuality: number | null;
-  }>>('/manager/summaries'),
+  getSummaries: () => apiRequest<{
+    summaries: Array<{
+      id: number;
+      articleTitle: string;
+      profileLabel: string;
+      content: string;
+      rouge1: number | null;
+      rouge2: number | null;
+      rougeL: number | null;
+      bertScore: number | null;
+      factualityScore: number | null;
+    }>;
+    pAccuracy: Array<{
+      articleId: number;
+      articleTitle: string;
+      pAccuracyRouge: number;
+      avgPairwiseRougeL: number;
+    }>;
+  }>('/manager/summaries'),
 
   deleteParticipant: (id: number) =>
     apiRequest<{ success: boolean; message: string }>(`/manager/participants/${id}`, {
