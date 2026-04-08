@@ -410,7 +410,7 @@ experimentRoutes.post('/post-test', async (req: Request, res: Response, next: Ne
 
 // GET /api/experiment/articles — list available articles for the experiment
 experimentRoutes.get('/articles', async (_req: Request, res: Response) => {
-  const rows = await queryAll('SELECT id, title, authors, year FROM articles ORDER BY id ASC');
+  const rows = await queryAll('SELECT id, title, authors, year, url FROM articles ORDER BY id ASC');
   res.json(rows);
 });
 
