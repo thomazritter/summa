@@ -163,7 +163,7 @@ export const experimentApi = {
     apiRequest<Array<{ id: number; phase: string; articleId: number }>>(`/experiment/participants/${participantId}/sessions`),
 
   getArticles: () =>
-    apiRequest<Array<{ id: number; title: string; authors: string | null; year: number | null }>>('/experiment/articles'),
+    apiRequest<Array<{ id: number; title: string; authors: string | null; year: number | null; url: string | null }>>('/experiment/articles'),
 
   createSession: (participantId: number, articleId: number) =>
     apiRequest<{
