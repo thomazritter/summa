@@ -34,7 +34,6 @@ export function ExperimentRegister() {
   const isValid =
     form.name.trim().length > 0 &&
     form.experienceLevel !== '' &&
-    form.yearsExperience >= 0 &&
     form.readingFrequency !== '' &&
     form.topicFamiliarity !== '';
 
@@ -89,21 +88,6 @@ export function ExperimentRegister() {
           </div>
         </div>
 
-        {/* Years of Experience */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Anos de experiência
-          </label>
-          <input
-            type="number"
-            min="0"
-            max="50"
-            value={form.yearsExperience}
-            onChange={(e) => setForm({ ...form, yearsExperience: parseInt(e.target.value) || 0 })}
-            className="w-32 border rounded-lg p-2"
-          />
-        </div>
-
         {/* Reading Frequency */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -134,7 +118,7 @@ export function ExperimentRegister() {
         {/* Topic Familiarity */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Familiaridade com os temas dos artigos do teste
+            Familiaridade com leitura de artigos científicos em computação
           </label>
           <div className="grid grid-cols-2 gap-3">
             {[
