@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
@@ -28,6 +28,32 @@ export function ExperimentRegenerated() {
     queryFn: () => experimentApi.getSession(Number(sessionId)),
     enabled: !!sessionId,
   });
+
+  // Phase guard: redirect if session is not in regenerated phase
+  useEffect(() => {
+    if (session && session.phase === 'comparison') {
+      navigate(`/experiment/trial/${sessionId}`, { replace: true });
+    }
+    if (session && session.phase === 'feedback') {
+      navigate(`/experiment/feedback/${sessionId}`, { replace: true });
+    }
+    if (session && session.phase === 'complete') {
+      navigate('/experiment/select-article', { replace: true });
+    }
+  }, [session, sessionId, navigate]);
+
+  // Warn before leaving when form has unsaved data
+  useEffect(() => {
+    const hasData = rating !== null || utilityRating !== null || clarityRating !== null || adequacyRating !== null;
+    if (!hasData) return;
+
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [rating, utilityRating, clarityRating, adequacyRating]);
 
   const { data: articles } = useQuery({
     queryKey: ['experiment-articles'],

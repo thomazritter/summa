@@ -1,11 +1,12 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
 import { ExperimentProgress } from '../../components/ExperimentProgress';
 
 export function ExperimentSelectArticle() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const participantId = sessionStorage.getItem('experimentParticipantId');
 
   const { data: articles, isLoading: loadingArticles } = useQuery({
@@ -22,8 +23,25 @@ export function ExperimentSelectArticle() {
   const createSessionMutation = useMutation({
     mutationFn: (articleId: number) =>
       experimentApi.createSession(Number(participantId), articleId),
-    onSuccess: (session) => {
-      navigate(`/experiment/trial/${session.id}`);
+    onSuccess: (session: { id: number; phase: string }) => {
+      // Navigate based on the session's current phase (handles resumed sessions)
+      switch (session.phase) {
+        case 'comparison':
+          navigate(`/experiment/trial/${session.id}`);
+          break;
+        case 'feedback':
+          navigate(`/experiment/feedback/${session.id}`);
+          break;
+        case 'regenerated':
+          navigate(`/experiment/regenerated/${session.id}`);
+          break;
+        case 'complete':
+          // Refresh to show updated completion status
+          queryClient.invalidateQueries({ queryKey: ['experiment-sessions'] });
+          break;
+        default:
+          navigate(`/experiment/trial/${session.id}`);
+      }
     },
   });
 
@@ -36,12 +54,20 @@ export function ExperimentSelectArticle() {
 
   // Determine which articles already have sessions
   const completedArticleIds = new Set(
-    (sessions ?? []).map((s) => s.articleId)
+    (sessions ?? []).filter((s) => s.phase === 'complete').map((s) => s.articleId)
   );
+
+  // Map article IDs to their in-progress sessions (not yet complete)
+  const inProgressSessionByArticle = new Map<number, { id: number; phase: string }>();
+  for (const s of sessions ?? []) {
+    if (s.phase !== 'complete') {
+      inProgressSessionByArticle.set(s.articleId, s);
+    }
+  }
 
   const totalArticles = articles?.length ?? 0;
   const completedCount = completedArticleIds.size;
-  const allDone = totalArticles > 0 && articles!.every((a) => completedArticleIds.has(a.id));
+  const allDone = totalArticles > 0 && articles!.every((a: { id: number }) => completedArticleIds.has(a.id));
 
   // Redirect to post-test when all articles completed
   useEffect(() => {
@@ -98,6 +124,30 @@ export function ExperimentSelectArticle() {
         <div className="grid gap-4">
           {articles?.map((article) => {
             const done = completedArticleIds.has(article.id);
+            const inProgress = inProgressSessionByArticle.get(article.id);
+
+            const handleClick = () => {
+              if (done) return;
+              if (inProgress) {
+                // Resume the existing in-progress session
+                switch (inProgress.phase) {
+                  case 'comparison':
+                    navigate(`/experiment/trial/${inProgress.id}`);
+                    break;
+                  case 'feedback':
+                    navigate(`/experiment/feedback/${inProgress.id}`);
+                    break;
+                  case 'regenerated':
+                    navigate(`/experiment/regenerated/${inProgress.id}`);
+                    break;
+                  default:
+                    navigate(`/experiment/trial/${inProgress.id}`);
+                }
+              } else {
+                createSessionMutation.mutate(article.id);
+              }
+            };
+
             return (
               <button
                 key={article.id}
@@ -105,11 +155,11 @@ export function ExperimentSelectArticle() {
                 disabled={done || createSessionMutation.isPending}
                 className={`w-full text-left bg-white p-4 rounded-lg border transition-colors ${
                   done
-                    ? 'opacity-50 cursor-not-allowed'
+                    ? 'opacity-60 cursor-default'
                     : 'hover:border-blue-500 cursor-pointer'
                 }`}
-                onClick={() => !done && createSessionMutation.mutate(article.id)}
-                aria-label={done ? `${article.title} — concluído` : `Avaliar: ${article.title}`}
+                onClick={handleClick}
+                aria-label={done ? `${article.title} — concluído` : inProgress ? `Continuar: ${article.title}` : `Avaliar: ${article.title}`}
               >
                 <h3 className="font-semibold text-lg">{article.title}</h3>
                 {article.authors && (
@@ -117,7 +167,12 @@ export function ExperimentSelectArticle() {
                 )}
                 {done && (
                   <span className="inline-block mt-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                    Concluído
+                    Concluido
+                  </span>
+                )}
+                {inProgress && (
+                  <span className="inline-block mt-2 text-xs bg-amber-100 text-amber-800 px-2 py-1 rounded">
+                    Em andamento - clique para continuar
                   </span>
                 )}
               </button>

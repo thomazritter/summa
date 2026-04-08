@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
@@ -27,6 +27,26 @@ export function ExperimentPostTest() {
   const [wouldUseDaily, setWouldUseDaily] = useState<string | null>(null);
   const [improvements, setImprovements] = useState('');
   const [comments, setComments] = useState('');
+
+  // Guard: if post-test already completed, redirect to complete page
+  useEffect(() => {
+    if (sessionStorage.getItem('postTestCompleted') === 'true') {
+      navigate('/experiment/complete', { replace: true });
+    }
+  }, [navigate]);
+
+  // Warn before leaving when form has unsaved data
+  useEffect(() => {
+    const hasData = noticedDifference !== null || wouldUseDaily !== null || improvements.trim() !== '' || comments.trim() !== '';
+    if (!hasData) return;
+
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [noticedDifference, wouldUseDaily, improvements, comments]);
 
   const submitMutation = useMutation({
     mutationFn: () =>

@@ -137,6 +137,15 @@ experimentRoutes.post('/sessions', async (req: Request, res: Response, next: Nex
   const { participantId, articleId } = validation.data;
 
   try {
+    // Idempotency: return existing session if participant+article pair already exists
+    const existingSession = await queryOne<SessionRow>(
+      'SELECT * FROM experiment_sessions WHERE participant_id = $1 AND article_id = $2',
+      [participantId, articleId]
+    );
+    if (existingSession) {
+      return res.json(mapSessionRow(existingSession));
+    }
+
     // Look up participant to determine profile
     const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
     if (!participant) {
@@ -258,6 +267,15 @@ experimentRoutes.post('/sessions/:id/feedback', async (req: Request, res: Respon
   }
 
   try {
+    // Idempotency: if a regeneration already exists for this session, return it
+    const existingRegen = await queryOne<RegenerationRow>(
+      'SELECT * FROM regenerations WHERE session_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [id]
+    );
+    if (existingRegen) {
+      return res.json({ ...mapRegenerationRow(existingRegen), alreadySubmitted: true });
+    }
+
     const sessionRow = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
     if (!sessionRow) {
       return res.status(404).json({ error: 'Session not found' });
@@ -316,6 +334,16 @@ experimentRoutes.post('/sessions/:id/rate-regeneration', async (req: Request, re
   }
 
   try {
+    // Idempotency: if the regeneration is already rated, return the session
+    const existingRegen = await queryOne<RegenerationRow>(
+      'SELECT * FROM regenerations WHERE session_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [id]
+    );
+    if (existingRegen && existingRegen.improvement_rating !== null) {
+      const sessionRow = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
+      if (sessionRow) return res.json(mapSessionRow(sessionRow));
+    }
+
     // Update the latest regeneration for this session
     const result = await execute(`
       UPDATE regenerations
@@ -355,6 +383,17 @@ experimentRoutes.post('/sessions/:id/ratings', async (req: Request, res: Respons
   const validation = summaryRatingsSchema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: validation.error.errors });
 
+  // Idempotency: if ratings already exist for this session, return success
+  const existingRatings = await queryOne(
+    'SELECT id FROM summary_ratings WHERE session_id = $1',
+    [id]
+  );
+  if (existingRatings) {
+    const session = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    return res.json(mapSessionRow(session));
+  }
+
   const client = await getClient();
   try {
     const { ratings, preference } = validation.data;
@@ -391,6 +430,15 @@ experimentRoutes.post('/post-test', async (req: Request, res: Response, next: Ne
 
   try {
     const { participantId, noticedDifference, differenceType, wouldUseDaily, improvements, comments } = validation.data;
+
+    // Idempotency: if post-test already submitted for this participant, return success
+    const existingPostTest = await queryOne(
+      'SELECT id FROM post_test_responses WHERE participant_id = $1',
+      [participantId]
+    );
+    if (existingPostTest) {
+      return res.json({ success: true, alreadySubmitted: true });
+    }
 
     await execute(
       `INSERT INTO post_test_responses (participant_id, noticed_difference, difference_type, would_use_daily, improvements, comments)

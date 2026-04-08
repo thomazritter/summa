@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
@@ -66,6 +66,26 @@ export function ExperimentTrial() {
     queryFn: () => experimentApi.getSession(Number(sessionId)),
     enabled: !!sessionId,
   });
+
+  // Phase guard: if session already past comparison, redirect forward
+  useEffect(() => {
+    if (session && session.phase !== 'comparison') {
+      navigate(`/experiment/feedback/${sessionId}`, { replace: true });
+    }
+  }, [session, sessionId, navigate]);
+
+  // Warn before leaving when form has unsaved data
+  useEffect(() => {
+    const hasData = ratingsA.utilidade !== null || ratingsB.utilidade !== null || selected !== null;
+    if (!hasData) return;
+
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [ratingsA, ratingsB, selected]);
 
   const { data: sessions } = useQuery({
     queryKey: ['experiment-sessions', participantId],
