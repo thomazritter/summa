@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
@@ -25,6 +26,9 @@ const isDev = process.env.NODE_ENV !== 'production';
 
 // Run database migrations on startup
 await runMigrations();
+
+// Security headers
+app.use(helmet());
 
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'];

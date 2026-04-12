@@ -3,10 +3,11 @@ import { z } from 'zod';
 import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
 import { parseId, safeJsonParse } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { regenerateSummaryWithFeedback, getSummaryById, generateGenericSummary, generatePersonalizedSummary } from '../services/summarizationService.js';
-import type { ProfileDimensions } from '../services/summarizationService.js';
+import { regenerateSummaryWithFeedback, getSummaryById } from '../services/summarizationService.js';
+import { createExperimentSession, SessionCreationError } from '../services/sessionService.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ExperimentSession, Participant, Regeneration } from '@summarizer/shared';
+import type { ParticipantRow, SessionRow, RegenerationRow } from '../types/rows.js';
 
 export const experimentRoutes = Router();
 
@@ -68,26 +69,6 @@ const postTestSchema = z.object({
   improvements: z.string().max(5000).optional(),
   comments: z.string().max(5000).optional(),
 });
-
-// ─── Profile Mapping ────────────────────────────────────────────────
-
-const GENERIC_PROFILE_ID = 99;
-
-const EXPERIENCE_TO_PROFILE: Record<string, number> = {
-  junior: 100,
-  pleno: 101,
-  senior: 102,
-};
-
-/**
- * Maps participant experience level to full profile dimensions
- * used for on-demand personalized summary generation.
- */
-const EXPERIENCE_PROFILES: Record<string, ProfileDimensions> = {
-  junior: { expertise: 'beginner', focus: 'concepts', depth: 'moderate', context: 'learning' },
-  pleno: { expertise: 'intermediate', focus: 'methodology', depth: 'detailed', context: 'research' },
-  senior: { expertise: 'advanced', focus: 'results', depth: 'comprehensive', context: 'research' },
-};
 
 // ─── IDOR Ownership Helpers ─────────────────────────────────────────
 
@@ -175,80 +156,18 @@ experimentRoutes.post('/sessions', asyncHandler(async (req: Request, res: Respon
     return res.status(400).json({ error: validation.error.errors });
   }
 
-  const { participantId, articleId } = validation.data;
-
-  // Idempotency: return existing session if participant+article pair already exists
-  const existingSession = await queryOne<SessionRow>(
-    'SELECT * FROM experiment_sessions WHERE participant_id = $1 AND article_id = $2',
-    [participantId, articleId]
-  );
-  if (existingSession) {
-    return res.json(mapSessionRow(existingSession));
+  try {
+    const { sessionRow, isExisting } = await createExperimentSession(
+      validation.data.participantId,
+      validation.data.articleId,
+    );
+    res.status(isExisting ? 200 : 201).json(mapSessionRow(sessionRow));
+  } catch (error) {
+    if (error instanceof SessionCreationError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    throw error;
   }
-
-  // Look up participant (including preference fields for personalized generation)
-  const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
-  if (!participant) {
-    return res.status(404).json({ error: 'Participant not found' });
-  }
-
-  const profileId = EXPERIENCE_TO_PROFILE[participant.experience_level];
-  if (!profileId) {
-    return res.status(400).json({ error: `No profile mapping for experience level: ${participant.experience_level}` });
-  }
-
-  const baseProfile = EXPERIENCE_PROFILES[participant.experience_level];
-  if (!baseProfile) {
-    return res.status(400).json({ error: `No profile dimensions for experience level: ${participant.experience_level}` });
-  }
-
-  // Verify article exists
-  const article = await queryOne<{ id: number }>('SELECT id FROM articles WHERE id = $1', [articleId]);
-  if (!article) {
-    return res.status(404).json({ error: 'Article not found' });
-  }
-
-  // Generic summary: reuse existing or generate on-demand (same for all participants per article)
-  let genericSummary = await queryOne<{ id: number }>(
-    'SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2',
-    [articleId, GENERIC_PROFILE_ID]
-  );
-  if (!genericSummary) {
-    const generated = await generateGenericSummary(articleId);
-    genericSummary = { id: generated.id };
-  }
-
-  // Personalized summary: always generate on-demand with full participant profile
-  const participantPreferences = {
-    structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
-    readingGoal: participant.reading_goal as 'overview' | 'methodology' | 'results' | 'practical' | undefined,
-  };
-
-  const personalizedSummary = await generatePersonalizedSummary(
-    articleId,
-    profileId,
-    baseProfile,
-    participantPreferences.structurePreference || participantPreferences.readingGoal
-      ? participantPreferences
-      : undefined
-  );
-
-  // Randomize A/B order
-  const genericIsA = Math.random() < 0.5;
-  const abOrder = genericIsA
-    ? { A: 'generic' as const, B: 'personalized' as const }
-    : { A: 'personalized' as const, B: 'generic' as const };
-
-  // Create session
-  const sessionRow = await queryOne<SessionRow>(`
-    INSERT INTO experiment_sessions (participant_id, article_id, profile_id, generic_summary_id, personalized_summary_id, ab_order, phase)
-    VALUES ($1, $2, $3, $4, $5, $6, 'comparison')
-    RETURNING *
-  `, [participantId, articleId, profileId, genericSummary.id, personalizedSummary.id, JSON.stringify(abOrder)]);
-
-  if (!sessionRow) return res.status(500).json({ error: 'Falha ao criar registro' });
-
-  res.status(201).json(mapSessionRow(sessionRow));
 }));
 
 // GET /api/experiment/sessions/:id — get session with both summaries in A/B order
@@ -552,48 +471,7 @@ experimentRoutes.get('/articles', asyncHandler(async (_req: Request, res: Respon
   res.json(rows);
 }));
 
-// ─── Internal Types & Mappers ───────────────────────────────────────
-
-interface ParticipantRow {
-  id: number;
-  name: string;
-  experience_level: string;
-  years_experience: number;
-  reading_frequency: string;
-  topic_familiarity: string;
-  structure_preference: string | null;
-  reading_goal: string | null;
-  created_at: string;
-}
-
-interface SessionRow {
-  id: number;
-  participant_id: number;
-  article_id: number;
-  profile_id: number;
-  generic_summary_id: number;
-  personalized_summary_id: number;
-  ab_order: string;
-  preference: string | null;
-  preference_rating: number | null;
-  preference_reason: string | null;
-  phase: string;
-  created_at: string;
-}
-
-interface RegenerationRow {
-  id: number;
-  session_id: number;
-  feedback_text: string;
-  regenerated_summary_id: number;
-  improvement_rating: string | null;
-  satisfaction_rating: number | null;
-  utility_rating: number | null;
-  clarity_rating: number | null;
-  adequacy_rating: number | null;
-  change_description: string | null;
-  created_at: string;
-}
+// ─── Mappers ────────────────────────────────────────────────────────
 
 const mapParticipantRow = (row: ParticipantRow): Participant => ({
   id: row.id,

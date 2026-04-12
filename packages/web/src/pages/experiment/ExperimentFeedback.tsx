@@ -15,6 +15,13 @@ export function ExperimentFeedback() {
 
   const participantId = sessionStorage.getItem('experimentParticipantId');
 
+  // Redirect to landing if no participantId in session
+  useEffect(() => {
+    if (!participantId) {
+      navigate('/experiment', { replace: true });
+    }
+  }, [participantId, navigate]);
+
   const { data: session, isLoading } = useQuery({
     queryKey: ['experiment-session', sessionId],
     queryFn: () => experimentApi.getSession(Number(sessionId)),

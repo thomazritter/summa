@@ -870,6 +870,20 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
    Tab 4: Resumos e Métricas
    ═══════════════════════════════════════════════════════════ */
 
+/** Inline info icon that explains ROUGE reference differences per profile type. */
+function RougeTooltip() {
+  return (
+    <span
+      className="ml-1 inline-block text-gray-400 cursor-help"
+      title="Genérico: ROUGE vs abstract do artigo. Personalizado: ROUGE vs resumo genérico (divergência)."
+    >
+      <svg className="w-3.5 h-3.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z" />
+      </svg>
+    </span>
+  );
+}
+
 function SummariesTab() {
   const { data, isLoading } = useQuery({
     queryKey: ['manager-summaries'],
@@ -948,9 +962,18 @@ function SummariesTab() {
                 <th className="p-3 font-medium">Artigo</th>
                 <th className="p-3 font-medium">Perfil</th>
                 <th className="p-3 font-medium">Prévia</th>
-                <th className="p-3 font-medium">ROUGE-1</th>
-                <th className="p-3 font-medium">ROUGE-2</th>
-                <th className="p-3 font-medium">ROUGE-L</th>
+                <th className="p-3 font-medium">
+                  <span>ROUGE-1</span>
+                  <RougeTooltip />
+                </th>
+                <th className="p-3 font-medium">
+                  <span>ROUGE-2</span>
+                  <RougeTooltip />
+                </th>
+                <th className="p-3 font-medium">
+                  <span>ROUGE-L</span>
+                  <RougeTooltip />
+                </th>
                 <th className="p-3 font-medium">BERT</th>
                 <th className="p-3 font-medium">Factualidade</th>
               </tr>

@@ -3,111 +3,33 @@ import { requireManager } from '../middleware/auth.js';
 import { queryOne, queryAll, execute } from '../db/connection.js';
 import { safeJsonParse } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { computePAccuracy } from '../services/metricsService.js';
+import { computePAccuracyForArticles, PROFILE_LABELS } from '../services/pAccuracyHelper.js';
 import { getActiveModel, setActiveModel, AVAILABLE_MODELS } from '../services/groqClient.js';
+import type {
+  CountRow,
+  PhaseRow,
+  AbOrder,
+  SessionRow,
+  RatingWithSession,
+  ImprovementRow,
+  RegenAvgRow,
+  ParticipantRow,
+  SessionDetailRow,
+  RatingRow,
+  RegenerationRow,
+  PostTestRow,
+  ManagerSummaryRow,
+  DeleteParticipantRow,
+  ExportParticipantRow,
+  ExportRatingRow,
+  ExportFeedbackRow,
+  ExportPostTestRow,
+} from '../types/rows.js';
 
 export const managerRoutes = Router();
 
 // All manager routes require manager auth
 managerRoutes.use(requireManager);
-
-// ─── Interfaces ───────────────────────────────────────────────────────
-
-interface CountRow { count: string }
-interface PhaseRow { phase: string; count: string }
-interface AbOrder { A: 'generic' | 'personalized'; B: 'generic' | 'personalized' }
-
-interface SessionRow {
-  id: number;
-  preference: string | null;
-  ab_order: string;
-  generic_summary_id: number;
-  personalized_summary_id: number;
-}
-
-interface RatingWithSession {
-  summary_id: number;
-  generic_summary_id: number;
-  personalized_summary_id: number;
-  experience_level: string;
-  utilidade: number;
-  clareza: number;
-  adequacao_perfil: number;
-  factualidade_percebida: number;
-}
-
-interface ImprovementRow { improvement_rating: string; count: string }
-interface RegenAvgRow { avg_utility: string | null; avg_clarity: string | null; avg_adequacy: string | null }
-
-interface ParticipantRow {
-  id: number;
-  name: string;
-  experience_level: string;
-  years_experience: number;
-  reading_frequency: string;
-  topic_familiarity: string;
-  created_at: string;
-}
-
-interface SessionDetailRow {
-  id: number;
-  article_id: number;
-  article_title: string;
-  phase: string;
-  preference: string | null;
-  preference_reason: string | null;
-  ab_order: string;
-  generic_summary_id: number;
-  personalized_summary_id: number;
-}
-
-interface RatingRow {
-  session_id: number;
-  summary_id: number;
-  ab_label: string;
-  utilidade: number;
-  clareza: number;
-  adequacao_perfil: number;
-  factualidade_percebida: number;
-  comment: string | null;
-}
-
-interface RegenerationRow {
-  session_id: number;
-  feedback_text: string;
-  improvement_rating: string | null;
-  utility_rating: number | null;
-  clarity_rating: number | null;
-  adequacy_rating: number | null;
-  change_description: string | null;
-}
-
-interface PostTestRow {
-  participant_id: number;
-  noticed_difference: string | null;
-  difference_type: string | null;
-  would_use_daily: string | null;
-  improvements: string | null;
-  comments: string | null;
-}
-
-interface SummaryRow {
-  id: number;
-  article_id: number;
-  article_title: string;
-  profile_id: number;
-  content: string;
-  factuality_score: number | null;
-  rouge_1: number | null;
-  rouge_2: number | null;
-  rouge_l: number | null;
-  bert_score: number | null;
-}
-
-interface DeleteParticipantRow {
-  id: number;
-  name: string;
-}
 
 // ─── GET /overview ────────────────────────────────────────────────────
 
@@ -249,41 +171,8 @@ managerRoutes.get('/results', asyncHandler(async (_req: Request, res: Response) 
     adequacao: regenAvg?.avg_adequacy ? Math.round(parseFloat(regenAvg.avg_adequacy) * 100) / 100 : 0,
   };
 
-  // P-Accuracy: compute on-the-fly from summaries
-  const allSummariesForPAccuracy = await queryAll<{ article_id: number; article_title: string; profile_id: number; content: string }>(`
-    SELECT s.article_id, a.title as article_title, s.profile_id, s.content
-    FROM summaries s
-    JOIN articles a ON s.article_id = a.id
-    ORDER BY s.article_id
-  `);
-
-  const byArticleForPA = new Map<number, { title: string; sums: Array<{ profileLabel: string; content: string }> }>();
-  for (const s of allSummariesForPAccuracy) {
-    if (!byArticleForPA.has(s.article_id)) {
-      byArticleForPA.set(s.article_id, { title: s.article_title, sums: [] });
-    }
-    const entry = byArticleForPA.get(s.article_id);
-    if (entry) {
-      entry.sums.push({
-        profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
-        content: s.content,
-      });
-    }
-  }
-
-  const pAccuracyResults = [];
-  for (const [articleId, { title, sums }] of byArticleForPA) {
-    if (sums.length < 2) continue;
-    const result = computePAccuracy(sums);
-    if (!result) continue;
-    pAccuracyResults.push({
-      articleId,
-      articleTitle: title,
-      pAccuracyRouge: result.pAccuracy,
-      avgPairwiseRougeL: result.avgPairwiseRougeL,
-      pairwiseDetails: result.pairwiseDetails,
-    });
-  }
+  // P-Accuracy: compute on-the-fly from summaries (shared helper)
+  const pAccuracyResults = await computePAccuracyForArticles();
 
   res.json({
     preferenceStats: {
@@ -441,15 +330,10 @@ managerRoutes.get('/participants', asyncHandler(async (_req: Request, res: Respo
 
 // ─── GET /summaries ───────────────────────────────────────────────────
 
-const PROFILE_LABELS: Record<number, string> = {
-  99: 'Generico',
-  100: 'Junior',
-  101: 'Pleno',
-  102: 'Senior',
-};
+// PROFILE_LABELS imported from pAccuracyHelper
 
 managerRoutes.get('/summaries', asyncHandler(async (_req: Request, res: Response) => {
-  const summaryRows = await queryAll<SummaryRow>(`
+  const summaryRows = await queryAll<ManagerSummaryRow>(`
     SELECT s.id, s.article_id, a.title as article_title, s.profile_id, s.content,
            s.factuality_score, s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score
     FROM summaries s
@@ -457,34 +341,8 @@ managerRoutes.get('/summaries', asyncHandler(async (_req: Request, res: Response
     ORDER BY s.id
   `);
 
-  // Group summaries by article for P-Accuracy computation
-  const byArticle = new Map<number, Array<{ profileLabel: string; content: string }>>();
-  for (const s of summaryRows) {
-    if (!byArticle.has(s.article_id)) byArticle.set(s.article_id, []);
-    const entry = byArticle.get(s.article_id);
-    if (entry) {
-      entry.push({
-        profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
-        content: s.content,
-      });
-    }
-  }
-
-  // Compute P-Accuracy per article on-the-fly (only if >= 2 distinct profiles)
-  const pAccuracy = [];
-  for (const [articleId, sums] of byArticle) {
-    if (sums.length < 2) continue;
-    const result = computePAccuracy(sums);
-    if (!result) continue;
-    const articleTitle = summaryRows.find(s => s.article_id === articleId)?.article_title || '';
-    pAccuracy.push({
-      articleId,
-      articleTitle,
-      pAccuracyRouge: result.pAccuracy,
-      avgPairwiseRougeL: result.avgPairwiseRougeL,
-      pairwiseDetails: result.pairwiseDetails,
-    });
-  }
+  // P-Accuracy computed via shared helper
+  const pAccuracy = await computePAccuracyForArticles();
 
   res.json({
     summaries: summaryRows.map(s => ({
@@ -523,57 +381,6 @@ function buildCsv(headers: string[], rows: unknown[][]): string {
   const headerLine = headers.join(',');
   const dataLines = rows.map(row => row.map(escapeCsv).join(','));
   return [headerLine, ...dataLines].join('\n');
-}
-
-interface ExportParticipantRow {
-  id: number;
-  name: string;
-  experience_level: string;
-  years_experience: number;
-  reading_frequency: string;
-  topic_familiarity: string;
-  created_at: string;
-}
-
-interface ExportRatingRow {
-  participant_id: number;
-  participant_name: string;
-  experience_level: string;
-  article_id: number;
-  article_title: string;
-  summary_id: number;
-  generic_summary_id: number;
-  personalized_summary_id: number;
-  utilidade: number;
-  clareza: number;
-  adequacao_perfil: number;
-  factualidade_percebida: number;
-  comment: string | null;
-  preference: string | null;
-  preference_reason: string | null;
-}
-
-interface ExportFeedbackRow {
-  participant_id: number;
-  participant_name: string;
-  session_id: number;
-  article_title: string;
-  feedback_text: string;
-  improvement_rating: string | null;
-  utility_rating: number | null;
-  clarity_rating: number | null;
-  adequacy_rating: number | null;
-  change_description: string | null;
-}
-
-interface ExportPostTestRow {
-  participant_id: number;
-  participant_name: string;
-  noticed_difference: string | null;
-  difference_type: string | null;
-  would_use_daily: string | null;
-  improvements: string | null;
-  comments: string | null;
 }
 
 async function getParticipantsCsv(): Promise<string> {

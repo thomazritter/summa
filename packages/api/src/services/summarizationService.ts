@@ -6,6 +6,7 @@ import { getProfileById } from './profileService.js';
 import { checkFactuality } from './factualityChecker.js';
 import { computeRouge } from './metricsService.js';
 import { safeJsonParse } from '../utils/validation.js';
+import { GENERIC_PROFILE_ID } from '../types/rows.js';
 import type { Summary, ArticleStructure, Profile } from '@summarizer/shared';
 
 export class SummarizationError extends Error {
@@ -177,8 +178,6 @@ export const generateGenericSummary = async (articleId: number): Promise<Summary
     }
     throw error;
   }
-
-  const GENERIC_PROFILE_ID = 99;
 
   const row = await queryOne<SummaryRow>(
     `INSERT INTO summaries (article_id, profile_id, content)

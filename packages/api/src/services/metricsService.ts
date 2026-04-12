@@ -71,7 +71,7 @@ function lcsLength(a: string[], b: string[]): number {
     [prev, curr] = [curr, prev];
     curr.fill(0);
   }
-  return prev.reduce((max: number, v: number) => Math.max(max, v), 0);
+  return prev[n];
 }
 
 function rougeL(summary: string, reference: string): number {
