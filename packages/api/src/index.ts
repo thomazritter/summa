@@ -12,7 +12,7 @@ import { authRoutes } from './routes/auth.js';
 import { managerRoutes } from './routes/manager.js';
 import { closeDb } from './db/connection.js';
 import { runMigrations } from './db/auto-migrate.js';
-import { getOllamaStatus } from './services/ollamaClient.js';
+import { getGroqStatus } from './services/groqClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,9 +39,9 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Ollama status check
-app.get('/api/ollama/status', async (req, res) => {
-  const status = await getOllamaStatus();
+// LLM provider status check
+app.get('/api/llm/status', async (req, res) => {
+  const status = await getGroqStatus();
   res.json(status);
 });
 

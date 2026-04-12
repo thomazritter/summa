@@ -1,12 +1,10 @@
 import { queryOne, queryAll, execute } from '../db/connection.js';
-import { generateCompletion, OllamaError } from './ollamaClient.js';
+import { generateCompletion, LLMError } from './groqClient.js';
 import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxTokensForDepth } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
 import { checkFactuality } from './factualityChecker.js';
 import { safeJsonParse } from '../utils/validation.js';
 import type { Summary, ArticleStructure } from '@summarizer/shared';
-
-const DEFAULT_MODEL = process.env.OLLAMA_MODEL || 'llama3.1:8b';
 
 export class SummarizationError extends Error {
   constructor(message: string) {
@@ -43,15 +41,12 @@ export const generateSummary = async (articleId: number, profileId: number): Pro
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
-      model: DEFAULT_MODEL,
       prompt,
-      options: {
-        temperature: 0.3, // Lower temperature for more focused output
-        num_predict: getMaxTokensForDepth(profile.depth),
-      },
+      temperature: 0.3,
+      maxTokens: getMaxTokensForDepth(profile.depth),
     });
   } catch (error) {
-    if (error instanceof OllamaError) {
+    if (error instanceof LLMError) {
       throw new SummarizationError(`Failed to generate summary: ${error.message}`);
     }
     throw error;
@@ -84,11 +79,12 @@ export const generateSummaryWithFactuality = async (articleId: number, profileId
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
-      model: DEFAULT_MODEL, prompt,
-      options: { temperature: 0.3, num_predict: getMaxTokensForDepth(profile.depth) },
+      prompt,
+      temperature: 0.3,
+      maxTokens: getMaxTokensForDepth(profile.depth),
     });
   } catch (error) {
-    if (error instanceof OllamaError) throw new SummarizationError(`Failed to generate summary: ${error.message}`);
+    if (error instanceof LLMError) throw new SummarizationError(`Failed to generate summary: ${error.message}`);
     throw error;
   }
 
@@ -169,15 +165,12 @@ export const generateGenericSummary = async (articleId: number): Promise<Summary
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
-      model: DEFAULT_MODEL,
       prompt,
-      options: {
-        temperature: 0.3,
-        num_predict: 600,
-      },
+      temperature: 0.3,
+      maxTokens: 600,
     });
   } catch (error) {
-    if (error instanceof OllamaError) {
+    if (error instanceof LLMError) {
       throw new SummarizationError(`Failed to generate generic summary: ${error.message}`);
     }
     throw error;
@@ -235,15 +228,12 @@ Gere o resumo melhorado agora:`;
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
-      model: DEFAULT_MODEL,
       prompt: feedbackPrompt,
-      options: {
-        temperature: 0.3,
-        num_predict: getMaxTokensForDepth(profile.depth),
-      },
+      temperature: 0.3,
+      maxTokens: getMaxTokensForDepth(profile.depth),
     });
   } catch (error) {
-    if (error instanceof OllamaError) {
+    if (error instanceof LLMError) {
       throw new SummarizationError(`Failed to regenerate summary with feedback: ${error.message}`);
     }
     throw error;
