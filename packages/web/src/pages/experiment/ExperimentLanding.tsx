@@ -17,20 +17,19 @@ export function ExperimentLanding() {
       <div className="bg-white p-6 rounded-lg border space-y-4">
         <h2 className="text-xl font-semibold">Sobre o Experimento</h2>
         <p className="text-gray-700">
-          Você participará de um estudo que avalia a qualidade de resumos automáticos de artigos científicos.
-          O experimento tem duas fases para cada artigo:
+          Você participará de um estudo que avalia a qualidade de resumos personalizados de artigos científicos.
+          Para cada artigo, o experimento funciona assim:
         </p>
         <ol className="list-decimal list-inside space-y-2 text-gray-700">
           <li>
-            <strong>Fase 1 — Comparação:</strong> Você lerá dois resumos (A e B) do mesmo artigo e indicará qual prefere.
+            <strong>Comparação:</strong> Você lerá dois resumos (A e B) do mesmo artigo e avaliará cada um.
           </li>
           <li>
-            <strong>Fase 2 — Feedback:</strong> Você dará feedback sobre um dos resumos, o sistema gerará uma versão melhorada,
-            e você avaliará se houve melhoria.
+            <strong>Feedback:</strong> Você dará sugestões de melhoria sobre um dos resumos e avaliará a versão refinada.
           </li>
         </ol>
         <p className="text-gray-700">
-          <strong>Tempo estimado:</strong> 30-40 minutos no total.
+          <strong>Tempo estimado:</strong> 25-35 minutos no total.
         </p>
       </div>
 

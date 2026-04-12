@@ -206,7 +206,7 @@ export function ExperimentTrial() {
         )}
         <p className="text-gray-600 mt-2">
           Leia os dois resumos abaixo com atenção, avalie cada um individualmente e indique qual você prefere.
-          Ambos foram gerados automaticamente a partir do mesmo artigo.
+          Ambos foram gerados a partir do mesmo artigo.
         </p>
       </div>
 

@@ -46,11 +46,16 @@ def extract_text_pymupdf(pdf_bytes: bytes) -> tuple[str, dict]:
 
     full_text_parts = []
     for page in doc:
-        # sort=True ensures proper reading order in multi-column layouts
-        text = page.get_text("text", sort=True)
-        full_text_parts.append(text)
+        # Use "blocks" mode for proper multi-column handling.
+        # Unlike "text" with sort=True which merges columns line-by-line,
+        # "blocks" extracts each text block independently, preserving
+        # column separation in two-column academic papers.
+        blocks = page.get_text("blocks", sort=True)
+        for b in blocks:
+            if b[6] == 0:  # text block (not image)
+                full_text_parts.append(b[4].strip())
 
-    raw_text = "\n".join(full_text_parts)
+    raw_text = "\n\n".join(full_text_parts)
 
     metadata = {}
     if doc.metadata:
