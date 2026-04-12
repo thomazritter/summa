@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireManager } from '../middleware/auth.js';
 import { queryOne, queryAll, execute } from '../db/connection.js';
 import { safeJsonParse } from '../utils/validation.js';
+import { computePAccuracy } from '../services/metricsService.js';
 
 export const managerRoutes = Router();
 
@@ -99,15 +100,6 @@ interface SummaryRow {
   rouge_2: number | null;
   rouge_l: number | null;
   bert_score: number | null;
-}
-
-interface PAccuracyRow {
-  article_id: number;
-  article_title: string;
-  p_accuracy_rouge: number | null;
-  avg_pairwise_rouge_l: number | null;
-  pairwise_details: string | null;
-  computed_at: string | null;
 }
 
 // ─── GET /overview ────────────────────────────────────────────────────
@@ -250,14 +242,38 @@ managerRoutes.get('/results', async (_req: Request, res: Response) => {
     adequacao: regenAvg?.avg_adequacy ? Math.round(parseFloat(regenAvg.avg_adequacy) * 100) / 100 : 0,
   };
 
-  // P-Accuracy scores
-  const pAccuracyScores = await queryAll<PAccuracyRow>(`
-    SELECT pa.article_id, a.title as article_title,
-           pa.p_accuracy_rouge, pa.avg_pairwise_rouge_l, pa.pairwise_details, pa.computed_at
-    FROM p_accuracy_scores pa
-    JOIN articles a ON pa.article_id = a.id
-    ORDER BY pa.article_id
+  // P-Accuracy: compute on-the-fly from summaries
+  const allSummariesForPAccuracy = await queryAll<{ article_id: number; article_title: string; profile_id: number; content: string }>(`
+    SELECT s.article_id, a.title as article_title, s.profile_id, s.content
+    FROM summaries s
+    JOIN articles a ON s.article_id = a.id
+    ORDER BY s.article_id
   `);
+
+  const byArticleForPA = new Map<number, { title: string; sums: Array<{ profileLabel: string; content: string }> }>();
+  for (const s of allSummariesForPAccuracy) {
+    if (!byArticleForPA.has(s.article_id)) {
+      byArticleForPA.set(s.article_id, { title: s.article_title, sums: [] });
+    }
+    byArticleForPA.get(s.article_id)!.sums.push({
+      profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
+      content: s.content,
+    });
+  }
+
+  const pAccuracyResults = [];
+  for (const [articleId, { title, sums }] of byArticleForPA) {
+    if (sums.length < 2) continue;
+    const result = computePAccuracy(sums);
+    if (!result) continue;
+    pAccuracyResults.push({
+      articleId,
+      articleTitle: title,
+      pAccuracyRouge: result.pAccuracy,
+      avgPairwiseRougeL: result.avgPairwiseRougeL,
+      pairwiseDetails: result.pairwiseDetails,
+    });
+  }
 
   res.json({
     preferenceStats: {
@@ -269,14 +285,7 @@ managerRoutes.get('/results', async (_req: Request, res: Response) => {
     likertByProfile,
     feedbackCycle,
     regeneratedLikert,
-    pAccuracy: pAccuracyScores.map(pa => ({
-      articleId: pa.article_id,
-      articleTitle: pa.article_title,
-      pAccuracyRouge: pa.p_accuracy_rouge,
-      avgPairwiseRougeL: pa.avg_pairwise_rouge_l,
-      pairwiseDetails: safeJsonParse(pa.pairwise_details),
-      computedAt: pa.computed_at,
-    })),
+    pAccuracy: pAccuracyResults,
   });
 });
 
@@ -430,7 +439,7 @@ const PROFILE_LABELS: Record<number, string> = {
 };
 
 managerRoutes.get('/summaries', async (_req: Request, res: Response) => {
-  const summaries = await queryAll<SummaryRow>(`
+  const summaryRows = await queryAll<SummaryRow>(`
     SELECT s.id, s.article_id, a.title as article_title, s.profile_id, s.content,
            s.factuality_score, s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score
     FROM summaries s
@@ -438,31 +447,34 @@ managerRoutes.get('/summaries', async (_req: Request, res: Response) => {
     ORDER BY s.id
   `);
 
-  const pAccuracyRows = await queryAll<PAccuracyRow>(`
-    SELECT pa.article_id, a.title as article_title,
-           pa.p_accuracy_rouge, pa.avg_pairwise_rouge_l, pa.pairwise_details, pa.computed_at
-    FROM p_accuracy_scores pa
-    JOIN articles a ON pa.article_id = a.id
-    ORDER BY pa.article_id
-  `);
+  // Group summaries by article for P-Accuracy computation
+  const byArticle = new Map<number, Array<{ profileLabel: string; content: string }>>();
+  for (const s of summaryRows) {
+    if (!byArticle.has(s.article_id)) byArticle.set(s.article_id, []);
+    byArticle.get(s.article_id)!.push({
+      profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
+      content: s.content,
+    });
+  }
 
-  const pAccuracyByArticle = new Map<number, {
-    pAccuracyRouge: number | null;
-    avgPairwiseRougeL: number | null;
-    pairwiseDetails: unknown;
-    computedAt: string | null;
-  }>();
-  for (const pa of pAccuracyRows) {
-    pAccuracyByArticle.set(pa.article_id, {
-      pAccuracyRouge: pa.p_accuracy_rouge,
-      avgPairwiseRougeL: pa.avg_pairwise_rouge_l,
-      pairwiseDetails: safeJsonParse(pa.pairwise_details),
-      computedAt: pa.computed_at,
+  // Compute P-Accuracy per article on-the-fly (only if >= 2 distinct profiles)
+  const pAccuracy = [];
+  for (const [articleId, sums] of byArticle) {
+    if (sums.length < 2) continue;
+    const result = computePAccuracy(sums);
+    if (!result) continue;
+    const articleTitle = summaryRows.find(s => s.article_id === articleId)?.article_title || '';
+    pAccuracy.push({
+      articleId,
+      articleTitle,
+      pAccuracyRouge: result.pAccuracy,
+      avgPairwiseRougeL: result.avgPairwiseRougeL,
+      pairwiseDetails: result.pairwiseDetails,
     });
   }
 
   res.json({
-    summaries: summaries.map(s => ({
+    summaries: summaryRows.map(s => ({
       id: s.id,
       articleId: s.article_id,
       articleTitle: s.article_title,
@@ -475,14 +487,7 @@ managerRoutes.get('/summaries', async (_req: Request, res: Response) => {
       rougeL: s.rouge_l,
       bertScore: s.bert_score,
     })),
-    pAccuracy: pAccuracyRows.map(pa => ({
-      articleId: pa.article_id,
-      articleTitle: pa.article_title,
-      pAccuracyRouge: pa.p_accuracy_rouge,
-      avgPairwiseRougeL: pa.avg_pairwise_rouge_l,
-      pairwiseDetails: safeJsonParse(pa.pairwise_details),
-      computedAt: pa.computed_at,
-    })),
+    pAccuracy,
   });
 });
 

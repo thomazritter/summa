@@ -4,6 +4,7 @@ import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxTokens
 import type { ParticipantPreferences } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
 import { checkFactuality } from './factualityChecker.js';
+import { computeRouge } from './metricsService.js';
 import { safeJsonParse } from '../utils/validation.js';
 import type { Summary, ArticleStructure, Profile } from '@summarizer/shared';
 
@@ -189,6 +190,19 @@ export const generateGenericSummary = async (articleId: number): Promise<Summary
   if (!row) {
     throw new SummarizationError('Failed to save generic summary');
   }
+
+  // Compute and store ROUGE metrics
+  const reference = structuredContent.abstract
+    || structuredContent.introduction
+    || article.raw_text.substring(0, 3000);
+  if (reference) {
+    const rouge = computeRouge(summaryContent, reference);
+    await execute(
+      'UPDATE summaries SET rouge_1 = $1, rouge_2 = $2, rouge_l = $3 WHERE id = $4',
+      [rouge.rouge1, rouge.rouge2, rouge.rougeL, row.id],
+    );
+  }
+
   return mapRowToSummary(row);
 };
 
@@ -264,6 +278,19 @@ export const generatePersonalizedSummary = async (
   if (!row) {
     throw new SummarizationError('Failed to save personalized summary');
   }
+
+  // Compute and store ROUGE metrics
+  const reference = structuredContent.abstract
+    || structuredContent.introduction
+    || article.raw_text.substring(0, 3000);
+  if (reference) {
+    const rouge = computeRouge(summaryContent, reference);
+    await execute(
+      'UPDATE summaries SET rouge_1 = $1, rouge_2 = $2, rouge_l = $3 WHERE id = $4',
+      [rouge.rouge1, rouge.rouge2, rouge.rougeL, row.id],
+    );
+  }
+
   return mapRowToSummary(row);
 };
 
