@@ -1,6 +1,7 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { parseId } from '../utils/validation.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 import * as summarizationService from '../services/summarizationService.js';
 import { SummarizationError, NotFoundError } from '../services/summarizationService.js';
 
@@ -13,7 +14,7 @@ const generateSummarySchema = z.object({
 });
 
 // Generate summary
-summaryRoutes.post('/generate', async (req: Request, res: Response, next: NextFunction) => {
+summaryRoutes.post('/generate', asyncHandler(async (req: Request, res: Response) => {
   const validation = generateSummarySchema.safeParse(req.body);
   if (!validation.success) {
     return res.status(400).json({ error: validation.error.errors });
@@ -32,9 +33,9 @@ summaryRoutes.post('/generate', async (req: Request, res: Response, next: NextFu
     if (error instanceof SummarizationError) {
       return res.status(400).json({ error: error.message });
     }
-    next(error);
+    throw error;
   }
-});
+}));
 
 // Get summary by ID
 summaryRoutes.get('/:id', (req: Request, res: Response) => {
@@ -63,7 +64,7 @@ summaryRoutes.get('/article/:articleId', (req: Request, res: Response) => {
 });
 
 // Regenerate summary
-summaryRoutes.post('/:id/regenerate', async (req: Request, res: Response, next: NextFunction) => {
+summaryRoutes.post('/:id/regenerate', asyncHandler(async (req: Request, res: Response) => {
   const id = parseId(req.params.id);
   if (id === null) {
     return res.status(400).json({ error: 'Invalid summary ID' });
@@ -79,6 +80,6 @@ summaryRoutes.post('/:id/regenerate', async (req: Request, res: Response, next: 
     if (error instanceof SummarizationError) {
       return res.status(400).json({ error: error.message });
     }
-    next(error);
+    throw error;
   }
-});
+}));

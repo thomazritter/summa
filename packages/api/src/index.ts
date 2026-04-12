@@ -1,12 +1,14 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { userRoutes } from './routes/users.js';
-import { profileRoutes } from './routes/profiles.js';
+// Legacy routes — disabled (no auth, not used by experiment)
+// import { userRoutes } from './routes/users.js';
+// import { profileRoutes } from './routes/profiles.js';
+// import { summaryRoutes } from './routes/summaries.js';
+// import { feedbackRoutes } from './routes/feedback.js';
 import { articleRoutes } from './routes/articles.js';
-import { summaryRoutes } from './routes/summaries.js';
-import { feedbackRoutes } from './routes/feedback.js';
 import { experimentRoutes } from './routes/experiment.js';
 import { authRoutes } from './routes/auth.js';
 import { managerRoutes } from './routes/manager.js';
@@ -45,15 +47,27 @@ app.get('/api/llm/status', async (req, res) => {
   res.json(status);
 });
 
+// Rate limiting on login to prevent brute-force attacks on access codes
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/login', loginLimiter);
+
 // Routes
-app.use('/api/users', userRoutes);
-app.use('/api/profiles', profileRoutes);
 app.use('/api/articles', articleRoutes);
-app.use('/api/summaries', summaryRoutes);
-app.use('/api/feedback', feedbackRoutes);
 app.use('/api/experiment', experimentRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/manager', managerRoutes);
+
+// Legacy routes — disabled (no auth protection, not used by experiment)
+// app.use('/api/users', userRoutes);
+// app.use('/api/profiles', profileRoutes);
+// app.use('/api/summaries', summaryRoutes);
+// app.use('/api/feedback', feedbackRoutes);
 
 // Serve frontend in production
 if (!isDev) {

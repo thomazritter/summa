@@ -1,14 +1,26 @@
+import crypto from 'crypto';
 import { queryOne, execute } from '../db/connection.js';
 
-export async function validateCode(code: string) {
-  const row = await queryOne('SELECT * FROM access_codes WHERE code = $1', [code]);
-  return row || null;
+export interface AccessCodeRow {
+  id: number;
+  code: string;
+  email: string;
+  role: string;
+  participant_id: number | null;
+  used_at: string | null;
+}
+
+export async function validateCode(code: string): Promise<AccessCodeRow | null> {
+  return queryOne<AccessCodeRow>('SELECT * FROM access_codes WHERE code = $1', [code]);
 }
 
 export function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = crypto.randomBytes(8);
   let code = 'SUMMA-';
-  for (let i = 0; i < 4; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < 8; i++) {
+    code += chars[bytes[i] % chars.length];
+  }
   return code;
 }
 

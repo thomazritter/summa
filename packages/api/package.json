@@ -17,20 +17,21 @@
   },
   "dependencies": {
     "@summarizer/shared": "1.0.0",
-    "pg": "^8.13.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
+    "express-rate-limit": "^8.3.2",
     "multer": "^1.4.5-lts.1",
     "pdf-parse": "^1.1.1",
+    "pg": "^8.13.0",
     "resend": "^6.4.2",
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@types/pg": "^8.11.0",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.11.16",
+    "@types/pg": "^8.11.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }

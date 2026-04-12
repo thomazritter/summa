@@ -18,10 +18,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   if (!access) return res.status(401).json({ error: 'Codigo invalido' });
 
   req.accessCode = {
-    code: (access as any).code,
-    email: (access as any).email,
-    role: (access as any).role,
-    participantId: (access as any).participant_id,
+    code: access.code,
+    email: access.email,
+    role: access.role,
+    participantId: access.participant_id,
   };
   next();
 }

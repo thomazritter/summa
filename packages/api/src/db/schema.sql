@@ -153,6 +153,10 @@ CREATE INDEX IF NOT EXISTS idx_experiment_sessions_participant ON experiment_ses
 CREATE INDEX IF NOT EXISTS idx_experiment_sessions_article ON experiment_sessions(article_id);
 CREATE INDEX IF NOT EXISTS idx_regenerations_session ON regenerations(session_id);
 
+-- Unique constraints to prevent race-condition duplicates
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_session_participant_article ON experiment_sessions(participant_id, article_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_summary ON summaries(article_id, profile_id) WHERE profile_id = 99;
+
 -- ─── Embedded Feedback Tables ──────────────────────────────────────
 
 -- Likert ratings per summary (Trial page, Phase 1)

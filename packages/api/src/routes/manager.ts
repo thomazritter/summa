@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { requireManager } from '../middleware/auth.js';
 import { queryOne, queryAll, execute } from '../db/connection.js';
 import { safeJsonParse } from '../utils/validation.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
 import { computePAccuracy } from '../services/metricsService.js';
 import { getActiveModel, setActiveModel, AVAILABLE_MODELS } from '../services/groqClient.js';
 
@@ -103,9 +104,14 @@ interface SummaryRow {
   bert_score: number | null;
 }
 
+interface DeleteParticipantRow {
+  id: number;
+  name: string;
+}
+
 // ─── GET /overview ────────────────────────────────────────────────────
 
-managerRoutes.get('/overview', async (_req: Request, res: Response) => {
+managerRoutes.get('/overview', asyncHandler(async (_req: Request, res: Response) => {
   const totalInvitedRow = await queryOne<CountRow>(
     "SELECT COUNT(*) as count FROM access_codes WHERE role = 'participant'"
   );
@@ -131,11 +137,11 @@ managerRoutes.get('/overview', async (_req: Request, res: Response) => {
   }
 
   res.json({ totalInvited, totalCompleted, completionRate, sessionsByPhase });
-});
+}));
 
 // ─── GET /results ─────────────────────────────────────────────────────
 
-managerRoutes.get('/results', async (_req: Request, res: Response) => {
+managerRoutes.get('/results', asyncHandler(async (_req: Request, res: Response) => {
   // Preference stats
   const sessions = await queryAll<SessionRow>(
     'SELECT id, preference, ab_order, generic_summary_id, personalized_summary_id FROM experiment_sessions WHERE preference IS NOT NULL'
@@ -256,10 +262,13 @@ managerRoutes.get('/results', async (_req: Request, res: Response) => {
     if (!byArticleForPA.has(s.article_id)) {
       byArticleForPA.set(s.article_id, { title: s.article_title, sums: [] });
     }
-    byArticleForPA.get(s.article_id)!.sums.push({
-      profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
-      content: s.content,
-    });
+    const entry = byArticleForPA.get(s.article_id);
+    if (entry) {
+      entry.sums.push({
+        profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
+        content: s.content,
+      });
+    }
   }
 
   const pAccuracyResults = [];
@@ -288,11 +297,11 @@ managerRoutes.get('/results', async (_req: Request, res: Response) => {
     regeneratedLikert,
     pAccuracy: pAccuracyResults,
   });
-});
+}));
 
 // ─── GET /participants ────────────────────────────────────────────────
 
-managerRoutes.get('/participants', async (_req: Request, res: Response) => {
+managerRoutes.get('/participants', asyncHandler(async (_req: Request, res: Response) => {
   const participants = await queryAll<ParticipantRow>(
     'SELECT id, name, experience_level, years_experience, reading_frequency, topic_familiarity, created_at FROM participants ORDER BY id'
   );
@@ -303,7 +312,7 @@ managerRoutes.get('/participants', async (_req: Request, res: Response) => {
   }
 
   // Fetch all sessions for these participants
-  const allSessions = await queryAll<SessionDetailRow>(`
+  const allSessions = await queryAll<SessionDetailRow & { participant_id: number }>(`
     SELECT es.id, es.article_id, a.title as article_title, es.phase, es.preference,
            es.preference_reason, es.ab_order, es.generic_summary_id, es.personalized_summary_id,
            es.participant_id
@@ -339,7 +348,7 @@ managerRoutes.get('/participants', async (_req: Request, res: Response) => {
 
   // Index by IDs
   const sessionsByParticipant = new Map<number, (SessionDetailRow & { participant_id: number })[]>();
-  for (const s of allSessions as (SessionDetailRow & { participant_id: number })[]) {
+  for (const s of allSessions) {
     const arr = sessionsByParticipant.get(s.participant_id) ?? [];
     arr.push(s);
     sessionsByParticipant.set(s.participant_id, arr);
@@ -428,18 +437,18 @@ managerRoutes.get('/participants', async (_req: Request, res: Response) => {
   });
 
   res.json(result);
-});
+}));
 
 // ─── GET /summaries ───────────────────────────────────────────────────
 
 const PROFILE_LABELS: Record<number, string> = {
-  99: 'Genérico',
-  100: 'Júnior',
+  99: 'Generico',
+  100: 'Junior',
   101: 'Pleno',
-  102: 'Sênior',
+  102: 'Senior',
 };
 
-managerRoutes.get('/summaries', async (_req: Request, res: Response) => {
+managerRoutes.get('/summaries', asyncHandler(async (_req: Request, res: Response) => {
   const summaryRows = await queryAll<SummaryRow>(`
     SELECT s.id, s.article_id, a.title as article_title, s.profile_id, s.content,
            s.factuality_score, s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score
@@ -452,10 +461,13 @@ managerRoutes.get('/summaries', async (_req: Request, res: Response) => {
   const byArticle = new Map<number, Array<{ profileLabel: string; content: string }>>();
   for (const s of summaryRows) {
     if (!byArticle.has(s.article_id)) byArticle.set(s.article_id, []);
-    byArticle.get(s.article_id)!.push({
-      profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
-      content: s.content,
-    });
+    const entry = byArticle.get(s.article_id);
+    if (entry) {
+      entry.push({
+        profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
+        content: s.content,
+      });
+    }
   }
 
   // Compute P-Accuracy per article on-the-fly (only if >= 2 distinct profiles)
@@ -490,14 +502,18 @@ managerRoutes.get('/summaries', async (_req: Request, res: Response) => {
     })),
     pAccuracy,
   });
-});
+}));
 
 // ─── GET /export/:type ────────────────────────────────────────────────
 
 function escapeCsv(value: unknown): string {
   if (value === null || value === undefined) return '';
-  const str = String(value);
-  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r')) {
+  let str = String(value);
+  // Prevent CSV formula injection
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  if (str.includes(',') || str.includes('"') || str.includes('\n') || str.includes('\r') || str.includes("'")) {
     return '"' + str.replace(/"/g, '""') + '"';
   }
   return str;
@@ -625,7 +641,7 @@ async function getPostTestCsv(): Promise<string> {
   );
 }
 
-managerRoutes.get('/export/:type', async (req: Request, res: Response) => {
+managerRoutes.get('/export/:type', asyncHandler(async (req: Request, res: Response) => {
   const exportType = req.params.type;
 
   if (exportType === 'all') {
@@ -655,23 +671,23 @@ managerRoutes.get('/export/:type', async (req: Request, res: Response) => {
   res.setHeader('Content-Disposition', `attachment; filename="${exportType}.csv"`);
   res.write('\uFEFF'); // BOM for Excel
   res.end(csv);
-});
+}));
 
 // ─── DELETE participant and all related data ─────────────────────────
 
-managerRoutes.delete('/participants/:id', async (req: Request, res: Response) => {
+managerRoutes.delete('/participants/:id', asyncHandler(async (req: Request, res: Response) => {
   const id = parseInt(req.params.id, 10);
-  if (isNaN(id)) return res.status(400).json({ error: 'ID inválido' });
+  if (isNaN(id)) return res.status(400).json({ error: 'ID invalido' });
 
-  const participant = await queryOne('SELECT id, name FROM participants WHERE id = $1', [id]);
-  if (!participant) return res.status(404).json({ error: 'Participante não encontrado' });
+  const participant = await queryOne<DeleteParticipantRow>('SELECT id, name FROM participants WHERE id = $1', [id]);
+  if (!participant) return res.status(404).json({ error: 'Participante nao encontrado' });
 
   // Reset access_code (SET NULL via cascade), then delete participant (cascades everything)
   await execute('UPDATE access_codes SET used_at = NULL WHERE participant_id = $1', [id]);
   await execute('DELETE FROM participants WHERE id = $1', [id]);
 
-  res.json({ success: true, message: `Participante ${(participant as any).name || id} removido com sucesso` });
-});
+  res.json({ success: true, message: `Participante ${participant.name || id} removido com sucesso` });
+}));
 
 // ─── GET /model ──────────────────────────────────────────────────────
 
@@ -684,7 +700,7 @@ managerRoutes.get('/model', (_req: Request, res: Response) => {
 managerRoutes.put('/model', (req: Request, res: Response) => {
   const { model } = req.body;
   if (!AVAILABLE_MODELS.find(m => m.id === model)) {
-    return res.status(400).json({ error: 'Modelo não disponível' });
+    return res.status(400).json({ error: 'Modelo nao disponivel' });
   }
   setActiveModel(model);
   res.json({ activeModel: getActiveModel() });

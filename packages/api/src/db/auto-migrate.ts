@@ -63,6 +63,14 @@ export async function runMigrations(): Promise<void> {
   await query(pAccuracyTable);
   console.log('[auto-migrate] p_accuracy_scores table ensured.');
 
+  // 2c. Add unique constraints to prevent race-condition duplicates
+  const uniqueConstraints = `
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_session_participant_article ON experiment_sessions(participant_id, article_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_summary ON summaries(article_id, profile_id) WHERE profile_id = 99;
+  `;
+  await query(uniqueConstraints);
+  console.log('[auto-migrate] Unique constraints ensured.');
+
   // 3. Drop legacy columns from post_test_responses if they still exist
   // (overall_satisfaction and would_use_again replaced by new text fields)
   try {
