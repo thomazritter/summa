@@ -31,7 +31,7 @@ async function main() {
       // Wait between calls to respect Groq rate limits (6K TPM on free tier)
       await new Promise(r => setTimeout(r, 30000));
 
-      let content: string;
+      let content = '';
       for (let attempt = 0; attempt < 3; attempt++) {
         try {
           content = await generateCompletion({ prompt, temperature: 0.3, maxTokens });
@@ -45,6 +45,7 @@ async function main() {
           }
         }
       }
+      if (!content) throw new Error('Failed to generate after 3 attempts');
       
       const existing = await queryOne('SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2 ORDER BY id LIMIT 1', [article.id, profile.id]);
       if (existing) {
