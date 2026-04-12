@@ -73,7 +73,7 @@ export function ExperimentPostTest() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
-      <ExperimentProgress currentStep={8} />
+      <ExperimentProgress currentStep={4} />
 
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Avaliação Final</h1>
@@ -134,9 +134,9 @@ export function ExperimentPostTest() {
         {/* Question 3: Would use daily — radio */}
         <fieldset>
           <legend className="block mb-3 font-medium text-sm text-gray-700">
-            Você usaria um sistema assim no dia a dia? <span className="text-red-500">*</span>
+            Resumos adaptados ao seu perfil seriam úteis na sua rotina de leitura? <span className="text-red-500">*</span>
           </legend>
-          <div className="space-y-2" role="radiogroup" aria-label="Você usaria um sistema assim no dia a dia?">
+          <div className="space-y-2" role="radiogroup" aria-label="Resumos adaptados ao seu perfil seriam úteis na sua rotina de leitura?">
             {DAILY_USE_OPTIONS.map((opt) => (
               <label
                 key={opt.value}
