@@ -279,12 +279,14 @@ export const generatePersonalizedSummary = async (
     throw new SummarizationError('Failed to save personalized summary');
   }
 
-  // Compute and store ROUGE metrics
-  const reference = structuredContent.abstract
-    || structuredContent.introduction
-    || article.raw_text.substring(0, 3000);
-  if (reference) {
-    const rouge = computeRouge(summaryContent, reference);
+  // Compute ROUGE against the generic summary (baseline)
+  // Measures how much personalization diverges from the generic version
+  const genericSummary = await queryOne<{ content: string }>(
+    'SELECT content FROM summaries WHERE article_id = $1 AND profile_id = 99 LIMIT 1',
+    [articleId],
+  );
+  if (genericSummary) {
+    const rouge = computeRouge(summaryContent, genericSummary.content);
     await execute(
       'UPDATE summaries SET rouge_1 = $1, rouge_2 = $2, rouge_l = $3 WHERE id = $4',
       [rouge.rouge1, rouge.rouge2, rouge.rougeL, row.id],
