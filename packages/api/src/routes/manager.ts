@@ -3,6 +3,7 @@ import { requireManager } from '../middleware/auth.js';
 import { queryOne, queryAll, execute } from '../db/connection.js';
 import { safeJsonParse } from '../utils/validation.js';
 import { computePAccuracy } from '../services/metricsService.js';
+import { getActiveModel, setActiveModel, AVAILABLE_MODELS } from '../services/groqClient.js';
 
 export const managerRoutes = Router();
 
@@ -670,4 +671,21 @@ managerRoutes.delete('/participants/:id', async (req: Request, res: Response) =>
   await execute('DELETE FROM participants WHERE id = $1', [id]);
 
   res.json({ success: true, message: `Participante ${(participant as any).name || id} removido com sucesso` });
+});
+
+// ─── GET /model ──────────────────────────────────────────────────────
+
+managerRoutes.get('/model', (_req: Request, res: Response) => {
+  res.json({ activeModel: getActiveModel(), availableModels: AVAILABLE_MODELS });
+});
+
+// ─── PUT /model ──────────────────────────────────────────────────────
+
+managerRoutes.put('/model', (req: Request, res: Response) => {
+  const { model } = req.body;
+  if (!AVAILABLE_MODELS.find(m => m.id === model)) {
+    return res.status(400).json({ error: 'Modelo não disponível' });
+  }
+  setActiveModel(model);
+  res.json({ activeModel: getActiveModel() });
 });

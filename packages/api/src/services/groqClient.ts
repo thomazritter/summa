@@ -1,7 +1,24 @@
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.1-8b-instant';
 const DEFAULT_TIMEOUT = 120000; // 2 minutes for LLM generation
+
+// ─── Model management ────────────────────────────────────────────────
+
+export const AVAILABLE_MODELS = [
+  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Melhor qualidade' },
+  { id: 'llama-3.1-70b-versatile', name: 'Llama 3.1 70B', description: 'Boa qualidade' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Mais rápido' },
+];
+
+let activeModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+
+export function getActiveModel(): string {
+  return activeModel;
+}
+
+export function setActiveModel(model: string): void {
+  activeModel = model;
+}
 
 export interface GenerateRequest {
   prompt: string;
@@ -38,7 +55,7 @@ export const generateCompletion = async (request: GenerateRequest): Promise<stri
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: GROQ_MODEL,
+        model: activeModel,
         messages: [{ role: 'user', content: request.prompt }],
         temperature: request.temperature ?? 0.3,
         max_tokens: request.maxTokens ?? 2000,
@@ -92,7 +109,7 @@ export const getGroqStatus = async (): Promise<{
   const healthy = await checkGroqHealth();
   return {
     healthy,
-    model: GROQ_MODEL,
+    model: activeModel,
     provider: 'groq',
   };
 };
