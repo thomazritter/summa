@@ -2,7 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
 import { parseId } from '../utils/validation.js';
-import { regenerateSummaryWithFeedback, getSummaryById } from '../services/summarizationService.js';
+import { regenerateSummaryWithFeedback, getSummaryById, generateGenericSummary, generatePersonalizedSummary } from '../services/summarizationService.js';
+import type { ProfileDimensions } from '../services/summarizationService.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ExperimentSession, Participant, Regeneration } from '@summarizer/shared';
 
@@ -77,6 +78,16 @@ const EXPERIENCE_TO_PROFILE: Record<string, number> = {
   senior: 102,
 };
 
+/**
+ * Maps participant experience level to full profile dimensions
+ * used for on-demand personalized summary generation.
+ */
+const EXPERIENCE_PROFILES: Record<string, ProfileDimensions> = {
+  junior: { expertise: 'beginner', focus: 'concepts', depth: 'moderate', context: 'learning' },
+  pleno: { expertise: 'intermediate', focus: 'methodology', depth: 'detailed', context: 'research' },
+  senior: { expertise: 'advanced', focus: 'results', depth: 'comprehensive', context: 'research' },
+};
+
 // ─── Routes ─────────────────────────────────────────────────────────
 
 // POST /api/experiment/participants — register participant with pre-test data
@@ -127,7 +138,7 @@ experimentRoutes.get('/participants/:id/sessions', async (req: Request, res: Res
   res.json(rows.map(mapSessionRow));
 });
 
-// POST /api/experiment/sessions — create session using pre-generated summaries
+// POST /api/experiment/sessions — create session with on-demand summary generation
 experimentRoutes.post('/sessions', async (req: Request, res: Response, next: NextFunction) => {
   const validation = createSessionSchema.safeParse(req.body);
   if (!validation.success) {
@@ -146,7 +157,7 @@ experimentRoutes.post('/sessions', async (req: Request, res: Response, next: Nex
       return res.json(mapSessionRow(existingSession));
     }
 
-    // Look up participant to determine profile
+    // Look up participant (including preference fields for personalized generation)
     const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
     if (!participant) {
       return res.status(404).json({ error: 'Participant not found' });
@@ -157,33 +168,41 @@ experimentRoutes.post('/sessions', async (req: Request, res: Response, next: Nex
       return res.status(400).json({ error: `No profile mapping for experience level: ${participant.experience_level}` });
     }
 
+    const baseProfile = EXPERIENCE_PROFILES[participant.experience_level];
+    if (!baseProfile) {
+      return res.status(400).json({ error: `No profile dimensions for experience level: ${participant.experience_level}` });
+    }
+
     // Verify article exists
     const article = await queryOne<{ id: number }>('SELECT id FROM articles WHERE id = $1', [articleId]);
     if (!article) {
       return res.status(404).json({ error: 'Article not found' });
     }
 
-    // Look up pre-generated summaries
-    const genericSummary = await queryOne<{ id: number }>(
+    // Generic summary: reuse existing or generate on-demand (same for all participants per article)
+    let genericSummary = await queryOne<{ id: number }>(
       'SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2',
       [articleId, GENERIC_PROFILE_ID]
     );
-
-    const personalizedSummary = await queryOne<{ id: number }>(
-      'SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2',
-      [articleId, profileId]
-    );
-
-    if (!genericSummary || !personalizedSummary) {
-      return res.status(400).json({
-        error: 'Resumos pre-gerados nao encontrados. Execute o script de pre-geracao primeiro: npx tsx packages/api/src/scripts/pregenerate.ts',
-        missing: {
-          generic: !genericSummary,
-          personalized: !personalizedSummary,
-          profileId,
-        },
-      });
+    if (!genericSummary) {
+      const generated = await generateGenericSummary(articleId);
+      genericSummary = { id: generated.id };
     }
+
+    // Personalized summary: always generate on-demand with full participant profile
+    const participantPreferences = {
+      structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
+      readingGoal: participant.reading_goal as 'overview' | 'methodology' | 'results' | 'practical' | undefined,
+    };
+
+    const personalizedSummary = await generatePersonalizedSummary(
+      articleId,
+      profileId,
+      baseProfile,
+      participantPreferences.structurePreference || participantPreferences.readingGoal
+        ? participantPreferences
+        : undefined
+    );
 
     // Randomize A/B order
     const genericIsA = Math.random() < 0.5;

@@ -1,10 +1,11 @@
 import { queryOne, queryAll, execute } from '../db/connection.js';
 import { generateCompletion, LLMError } from './groqClient.js';
 import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxTokensForDepth } from './promptBuilder.js';
+import type { ParticipantPreferences } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
 import { checkFactuality } from './factualityChecker.js';
 import { safeJsonParse } from '../utils/validation.js';
-import type { Summary, ArticleStructure } from '@summarizer/shared';
+import type { Summary, ArticleStructure, Profile } from '@summarizer/shared';
 
 export class SummarizationError extends Error {
   constructor(message: string) {
@@ -187,6 +188,81 @@ export const generateGenericSummary = async (articleId: number): Promise<Summary
 
   if (!row) {
     throw new SummarizationError('Failed to save generic summary');
+  }
+  return mapRowToSummary(row);
+};
+
+/**
+ * Profile dimensions used for on-demand personalized generation.
+ * Maps directly to the Profile type dimensions without requiring a stored profile entity.
+ */
+export interface ProfileDimensions {
+  expertise: Profile['expertise'];
+  focus: Profile['focus'];
+  depth: Profile['depth'];
+  context: Profile['context'];
+}
+
+/**
+ * Generate a personalized summary on-demand using participant-specific profile dimensions
+ * and preferences (structurePreference, readingGoal).
+ *
+ * Unlike generateSummary which loads a stored profile by ID, this function accepts
+ * the profile dimensions directly, allowing per-participant customization.
+ *
+ * The baseProfileId (100/101/102) is used for the FK constraint on the summaries table.
+ */
+export const generatePersonalizedSummary = async (
+  articleId: number,
+  baseProfileId: number,
+  profileDimensions: ProfileDimensions,
+  participantPreferences?: ParticipantPreferences
+): Promise<Summary> => {
+  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
+  if (!article) {
+    throw new NotFoundError('Article not found');
+  }
+
+  const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
+
+  // Build a Profile-compatible object from the dimensions for the prompt builder
+  const profileForPrompt: Profile = {
+    id: baseProfileId,
+    userId: 0,
+    name: 'on-demand',
+    expertise: profileDimensions.expertise,
+    focus: profileDimensions.focus,
+    depth: profileDimensions.depth,
+    context: profileDimensions.context,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  const prompt = buildSummarizationPrompt(profileForPrompt, structuredContent, article.raw_text, participantPreferences);
+
+  let summaryContent: string;
+  try {
+    summaryContent = await generateCompletion({
+      prompt,
+      temperature: 0.3,
+      maxTokens: getMaxTokensForDepth(profileDimensions.depth),
+    });
+  } catch (error) {
+    if (error instanceof LLMError) {
+      throw new SummarizationError(`Failed to generate personalized summary: ${error.message}`);
+    }
+    throw error;
+  }
+
+  const row = await queryOne<SummaryRow>(
+    `INSERT INTO summaries (article_id, profile_id, content)
+     VALUES ($1, $2, $3)
+     RETURNING *`,
+    [articleId, baseProfileId, summaryContent],
+  );
+
+  if (!row) {
+    throw new SummarizationError('Failed to save personalized summary');
   }
   return mapRowToSummary(row);
 };
