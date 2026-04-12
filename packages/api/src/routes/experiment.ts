@@ -275,6 +275,45 @@ experimentRoutes.post('/sessions/:id/preference', async (req: Request, res: Resp
   }
 });
 
+// POST /api/experiment/sessions/:id/evaluate — single-step evaluation (Phase 1 simplified)
+experimentRoutes.post('/sessions/:id/evaluate', async (req: Request, res: Response, next: NextFunction) => {
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
+
+  const evaluateSchema = z.object({
+    preference: z.enum(['A', 'B']),
+    rating: z.number().int().min(1).max(10),
+    comment: z.string().max(5000).optional(),
+  });
+
+  const validation = evaluateSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.errors });
+  }
+
+  const { preference, rating, comment } = validation.data;
+
+  try {
+    // Idempotency: if already evaluated, return session as-is
+    const session = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    if (session.preference) {
+      return res.json(mapSessionRow(session));
+    }
+
+    // Update session with preference, rating, comment, and mark complete
+    await execute(
+      'UPDATE experiment_sessions SET preference = $1, preference_rating = $2, preference_reason = $3, phase = $4 WHERE id = $5',
+      [preference, rating, comment || null, 'complete', id]
+    );
+
+    const updated = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
+    res.json(mapSessionRow(updated!));
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /api/experiment/sessions/:id/feedback — submit feedback text, triggers regeneration
 experimentRoutes.post('/sessions/:id/feedback', async (req: Request, res: Response, next: NextFunction) => {
   const id = parseId(req.params.id);
@@ -506,6 +545,7 @@ interface SessionRow {
   personalized_summary_id: number;
   ab_order: string;
   preference: string | null;
+  preference_rating: number | null;
   preference_reason: string | null;
   phase: string;
   created_at: string;
@@ -546,6 +586,7 @@ const mapSessionRow = (row: SessionRow): ExperimentSession => ({
   personalizedSummaryId: row.personalized_summary_id,
   abOrder: JSON.parse(row.ab_order),
   preference: row.preference as ExperimentSession['preference'],
+  preferenceRating: row.preference_rating,
   preferenceReason: row.preference_reason,
   phase: row.phase as ExperimentSession['phase'],
   createdAt: row.created_at,

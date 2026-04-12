@@ -242,6 +242,16 @@ export const experimentApi = {
       body: JSON.stringify(data),
     }),
 
+  evaluateSession: (sessionId: number, data: {
+    preference: 'A' | 'B';
+    rating: number;
+    comment?: string;
+  }) =>
+    apiRequest<{ success: boolean }>(`/experiment/sessions/${sessionId}/evaluate`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
   submitRatingsAndPreference: (sessionId: number, data: {
     ratings: Array<{
       summaryId: number;

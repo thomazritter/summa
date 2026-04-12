@@ -120,6 +120,7 @@ CREATE TABLE IF NOT EXISTS experiment_sessions (
   personalized_summary_id INTEGER NOT NULL,
   ab_order TEXT NOT NULL, -- JSON: {"A": "generic"|"personalized", "B": "generic"|"personalized"}
   preference TEXT CHECK (preference IN ('A', 'B')),
+  preference_rating INTEGER CHECK (preference_rating BETWEEN 1 AND 10),
   preference_reason TEXT,
   phase TEXT NOT NULL DEFAULT 'comparison' CHECK (phase IN ('comparison', 'feedback', 'regenerated', 'complete')),
   created_at TIMESTAMP DEFAULT NOW(),

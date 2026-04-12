@@ -152,6 +152,7 @@ export interface ExperimentSession {
   personalizedSummaryId: number;
   abOrder: { A: 'generic' | 'personalized'; B: 'generic' | 'personalized' };
   preference: 'A' | 'B' | null;
+  preferenceRating: number | null;
   preferenceReason: string | null;
   phase: 'comparison' | 'feedback' | 'regenerated' | 'complete';
   createdAt: string;

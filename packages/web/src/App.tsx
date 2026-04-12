@@ -10,8 +10,6 @@ import { ExperimentLanding } from './pages/experiment/ExperimentLanding';
 import { ExperimentRegister } from './pages/experiment/ExperimentRegister';
 import { ExperimentSelectArticle } from './pages/experiment/ExperimentSelectArticle';
 import { ExperimentTrial } from './pages/experiment/ExperimentTrial';
-import { ExperimentFeedback } from './pages/experiment/ExperimentFeedback';
-import { ExperimentRegenerated } from './pages/experiment/ExperimentRegenerated';
 import { ExperimentComplete } from './pages/experiment/ExperimentComplete';
 import { ExperimentPostTest } from './pages/experiment/ExperimentPostTest';
 
@@ -89,22 +87,6 @@ export default function App() {
                 element={
                   <AuthGuard requiredRole="participant">
                     <ExperimentTrial />
-                  </AuthGuard>
-                }
-              />
-              <Route
-                path="/experiment/feedback/:sessionId"
-                element={
-                  <AuthGuard requiredRole="participant">
-                    <ExperimentFeedback />
-                  </AuthGuard>
-                }
-              />
-              <Route
-                path="/experiment/regenerated/:sessionId"
-                element={
-                  <AuthGuard requiredRole="participant">
-                    <ExperimentRegenerated />
                   </AuthGuard>
                 }
               />

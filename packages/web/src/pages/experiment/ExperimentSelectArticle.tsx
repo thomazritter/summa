@@ -24,16 +24,9 @@ export function ExperimentSelectArticle() {
     mutationFn: (articleId: number) =>
       experimentApi.createSession(Number(participantId), articleId),
     onSuccess: (session: { id: number; phase: string }) => {
-      // Navigate based on the session's current phase (handles resumed sessions)
       switch (session.phase) {
         case 'comparison':
           navigate(`/experiment/trial/${session.id}`);
-          break;
-        case 'feedback':
-          navigate(`/experiment/feedback/${session.id}`);
-          break;
-        case 'regenerated':
-          navigate(`/experiment/regenerated/${session.id}`);
           break;
         case 'complete':
           // Refresh to show updated completion status
@@ -84,8 +77,8 @@ export function ExperimentSelectArticle() {
     return null;
   }
 
-  // Step 2 for first article, step 5 for second
-  const progressStep = completedCount === 0 ? 2 : 5;
+  // Step 2 for first article, step 3 for second
+  const progressStep = completedCount === 0 ? 2 : 3;
 
   return (
     <div className="max-w-2xl mx-auto space-y-8">
@@ -130,19 +123,7 @@ export function ExperimentSelectArticle() {
               if (done) return;
               if (inProgress) {
                 // Resume the existing in-progress session
-                switch (inProgress.phase) {
-                  case 'comparison':
-                    navigate(`/experiment/trial/${inProgress.id}`);
-                    break;
-                  case 'feedback':
-                    navigate(`/experiment/feedback/${inProgress.id}`);
-                    break;
-                  case 'regenerated':
-                    navigate(`/experiment/regenerated/${inProgress.id}`);
-                    break;
-                  default:
-                    navigate(`/experiment/trial/${inProgress.id}`);
-                }
+                navigate(`/experiment/trial/${inProgress.id}`);
               } else {
                 createSessionMutation.mutate(article.id);
               }
@@ -167,7 +148,7 @@ export function ExperimentSelectArticle() {
                 )}
                 {done && (
                   <span className="inline-block mt-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
-                    Concluido
+                    Concluído
                   </span>
                 )}
                 {inProgress && (

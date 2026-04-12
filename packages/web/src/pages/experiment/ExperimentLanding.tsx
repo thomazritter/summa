@@ -18,18 +18,14 @@ export function ExperimentLanding() {
         <h2 className="text-xl font-semibold">Sobre o Experimento</h2>
         <p className="text-gray-700">
           Você participará de um estudo que avalia a qualidade de resumos personalizados de artigos científicos.
-          Para cada artigo, o experimento funciona assim:
         </p>
+        <p className="text-gray-700">Para cada artigo:</p>
         <ol className="list-decimal list-inside space-y-2 text-gray-700">
-          <li>
-            <strong>Comparação:</strong> Você lerá dois resumos (A e B) do mesmo artigo e avaliará cada um.
-          </li>
-          <li>
-            <strong>Feedback:</strong> Você dará sugestões de melhoria sobre um dos resumos e avaliará a versão refinada.
-          </li>
+          <li>Você lerá dois resumos (A e B) do mesmo artigo</li>
+          <li>Escolherá qual prefere e dará uma nota</li>
         </ol>
         <p className="text-gray-700">
-          <strong>Tempo estimado:</strong> 25-35 minutos no total.
+          <strong>Tempo estimado:</strong> 10-15 minutos no total.
         </p>
       </div>
 
@@ -44,6 +40,7 @@ export function ExperimentLanding() {
       </div>
 
       <button
+        type="button"
         onClick={() => navigate('/experiment/register')}
         className="w-full py-4 bg-blue-600 text-white text-lg font-semibold rounded-lg hover:bg-blue-700 transition-colors"
       >

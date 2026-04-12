@@ -5,16 +5,12 @@ interface ExperimentProgressProps {
 
 const STEP_NAMES: Record<number, string> = {
   1: 'Cadastro',
-  2: 'Artigo 1 — Avaliar resumos A e B',
-  3: 'Artigo 1 — Sugerir melhorias',
-  4: 'Artigo 1 — Avaliar versão melhorada',
-  5: 'Artigo 2 — Avaliar resumos A e B',
-  6: 'Artigo 2 — Sugerir melhorias',
-  7: 'Artigo 2 — Avaliar versão melhorada',
-  8: 'Avaliação Final',
+  2: 'Artigo 1 — Avaliar resumos',
+  3: 'Artigo 2 — Avaliar resumos',
+  4: 'Avaliação Final',
 };
 
-export function ExperimentProgress({ currentStep, totalSteps = 8 }: ExperimentProgressProps) {
+export function ExperimentProgress({ currentStep, totalSteps = 4 }: ExperimentProgressProps) {
   const percentage = (currentStep / totalSteps) * 100;
   const stepName = STEP_NAMES[currentStep] ?? `Etapa ${currentStep}`;
 
