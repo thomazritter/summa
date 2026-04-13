@@ -704,8 +704,7 @@ interface ParticipantData {
   name: string;
   experienceLevel: string;
   yearsExperience: number;
-  hasPostTest: boolean;
-  postTestResponses: Record<string, string> | null;
+  postTest: Record<string, string> | null;
   sessions: Array<{
     id: number;
     articleTitle: string;
@@ -760,7 +759,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
         </td>
         <td className="px-6 py-4 text-sm">{p.yearsExperience}</td>
         <td className="px-6 py-4">
-          {p.hasPostTest ? (
+          {p.postTest ? (
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-[#16a34a]">Concluído</span>
           ) : (
             <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-[#d97706]">Em andamento</span>
@@ -850,11 +849,11 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
               ))}
 
               {/* Post-test responses */}
-              {p.postTestResponses && Object.keys(p.postTestResponses).length > 0 && (
+              {p.postTest && Object.keys(p.postTest).length > 0 && (
                 <div className="bg-white p-5 rounded-lg border border-gray-200 space-y-3">
                   <h4 className="text-sm font-semibold text-gray-700">Respostas do pós-teste</h4>
                   <dl className="grid grid-cols-1 gap-2 text-sm">
-                    {Object.entries(p.postTestResponses).map(([key, value]) => (
+                    {Object.entries(p.postTest).map(([key, value]) => (
                       <div key={key}>
                         <dt className="text-gray-500 text-xs">{key}</dt>
                         <dd className="text-gray-900">{value}</dd>

@@ -96,8 +96,7 @@ export const managerApi = {
     name: string;
     experienceLevel: string;
     yearsExperience: number;
-    hasPostTest: boolean;
-    postTestResponses: Record<string, string> | null;
+    postTest: Record<string, string> | null;
     sessions: Array<{
       id: number;
       articleTitle: string;
