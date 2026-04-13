@@ -21,7 +21,7 @@ import type {
   ManagerSummaryRow,
   DeleteParticipantRow,
   ExportParticipantRow,
-  ExportRatingRow,
+  ExportEvaluationRow,
   ExportFeedbackRow,
   ExportPostTestRow,
 } from '../types/rows.js';
@@ -385,34 +385,36 @@ function buildCsv(headers: string[], rows: unknown[][]): string {
 
 async function getParticipantsCsv(): Promise<string> {
   const rows = await queryAll<ExportParticipantRow>(
-    'SELECT id, name, experience_level, years_experience, reading_frequency, topic_familiarity, created_at FROM participants ORDER BY id'
+    'SELECT id, name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal, created_at FROM participants ORDER BY id'
   );
   return buildCsv(
-    ['id', 'nome', 'nivel', 'anos_experiencia', 'frequencia_leitura', 'familiaridade_tema', 'data_registro'],
-    rows.map(r => [r.id, r.name, r.experience_level, r.years_experience, r.reading_frequency, r.topic_familiarity, r.created_at])
+    ['id', 'nome', 'nivel', 'anos_experiencia', 'frequencia_leitura', 'familiaridade_tema', 'preferencia_estrutura', 'objetivo_leitura', 'data_registro'],
+    rows.map(r => [r.id, r.name, r.experience_level, r.years_experience, r.reading_frequency, r.topic_familiarity, r.structure_preference, r.reading_goal, r.created_at])
   );
 }
 
 async function getRatingsCsv(): Promise<string> {
-  const rows = await queryAll<ExportRatingRow>(`
+  const rows = await queryAll<ExportEvaluationRow>(`
     SELECT p.id as participant_id, p.name as participant_name, p.experience_level,
-           es.article_id, a.title as article_title,
-           sr.summary_id, es.generic_summary_id, es.personalized_summary_id,
-           sr.utilidade, sr.clareza, sr.adequacao_perfil, sr.factualidade_percebida, sr.comment,
-           es.preference, es.preference_reason
-    FROM summary_ratings sr
-    JOIN experiment_sessions es ON sr.session_id = es.id
+           es.id as session_id, a.title as article_title,
+           es.preference, es.preference_rating, es.preference_reason,
+           es.ab_order, es.phase,
+           es.generic_summary_id, es.personalized_summary_id
+    FROM experiment_sessions es
     JOIN participants p ON es.participant_id = p.id
     JOIN articles a ON es.article_id = a.id
+    WHERE es.preference IS NOT NULL
     ORDER BY p.id, es.id
   `);
   return buildCsv(
-    ['participante_id', 'participante_nome', 'participante_nivel', 'artigo_id', 'artigo_titulo', 'tipo_resumo', 'utilidade', 'clareza', 'adequacao_perfil', 'factualidade_percebida', 'comentario', 'preferencia', 'motivo_preferencia'],
+    ['participante_id', 'participante_nome', 'nivel', 'sessao_id', 'artigo', 'preferencia_ab', 'tipo_escolhido', 'nota', 'comentario'],
     rows.map(r => {
-      const tipo = r.summary_id === r.generic_summary_id ? 'generico'
-        : r.summary_id === r.personalized_summary_id ? 'personalizado'
+      const abOrder = safeJsonParse<AbOrder>(r.ab_order);
+      const chosenType = abOrder?.[r.preference as 'A' | 'B'] ?? 'unknown';
+      const tipoEscolhido = chosenType === 'personalized' ? 'personalizado'
+        : chosenType === 'generic' ? 'genérico'
         : 'desconhecido';
-      return [r.participant_id, r.participant_name, r.experience_level, r.article_id, r.article_title, tipo, r.utilidade, r.clareza, r.adequacao_perfil, r.factualidade_percebida, r.comment, r.preference, r.preference_reason];
+      return [r.participant_id, r.participant_name, r.experience_level, r.session_id, r.article_title, r.preference, tipoEscolhido, r.preference_rating, r.preference_reason];
     })
   );
 }

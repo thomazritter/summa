@@ -1098,8 +1098,8 @@ function ExportTab() {
 
   const EXPORTS = [
     { type: 'participants', title: 'Participantes', description: 'Dados demográficos e pré-teste', label: 'Exportar Participantes' },
-    { type: 'ratings', title: 'Avaliações', description: 'Ratings Likert, preferências e comentários', label: 'Exportar Avaliações' },
-    { type: 'feedbacks', title: 'Feedbacks', description: 'Texto de feedback e avaliações do regenerado', label: 'Exportar Feedbacks' },
+    { type: 'ratings', title: 'Avaliações', description: 'Preferências A/B, notas e comentários por sessão', label: 'Exportar Avaliações' },
+    { type: 'feedbacks', title: 'Feedbacks', description: 'Texto de feedback e avaliações do regenerado (disponível apenas se o ciclo de feedback foi utilizado)', label: 'Exportar Feedbacks' },
     { type: 'post-test', title: 'Pós-teste', description: 'Respostas do questionário pós-teste', label: 'Exportar Pós-teste' },
   ];
 

@@ -170,25 +170,23 @@ export interface ExportParticipantRow {
   years_experience: number;
   reading_frequency: string;
   topic_familiarity: string;
+  structure_preference: string | null;
+  reading_goal: string | null;
   created_at: string;
 }
 
-export interface ExportRatingRow {
+export interface ExportEvaluationRow {
   participant_id: number;
   participant_name: string;
   experience_level: string;
-  article_id: number;
+  session_id: number;
   article_title: string;
-  summary_id: number;
+  preference: string | null;
+  preference_rating: number | null;
+  preference_reason: string | null;
+  ab_order: string;
   generic_summary_id: number;
   personalized_summary_id: number;
-  utilidade: number;
-  clareza: number;
-  adequacao_perfil: number;
-  factualidade_percebida: number;
-  comment: string | null;
-  preference: string | null;
-  preference_reason: string | null;
 }
 
 export interface ExportFeedbackRow {
