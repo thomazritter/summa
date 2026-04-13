@@ -72,137 +72,139 @@ export function ExperimentPostTest() {
   const canSubmit = noticedDifference !== null && wouldUseDaily !== null;
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="min-h-screen bg-[#f9fafb]">
       <ExperimentProgress currentStep={4} />
 
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Avaliação Final</h1>
-        <p className="text-gray-600 mt-2">
-          Por favor, responda as perguntas abaixo sobre sua experiência com o sistema.
-        </p>
-        <p className="text-sm text-gray-500 mt-1">
-          Campos com <span className="text-red-500">*</span> são obrigatórios.
-        </p>
-      </div>
+      <div className="max-w-3xl mx-auto py-12 px-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-8">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Questionário Pós-Teste</h1>
+          <p className="text-gray-600 mb-2">
+            Por favor, responda as perguntas abaixo sobre sua experiência com o sistema.
+          </p>
+          <p className="text-sm text-gray-500 mb-8">
+            Campos com <span className="text-red-500">*</span> são obrigatórios.
+          </p>
 
-      <div className="bg-white p-6 rounded-lg border space-y-6">
-        {/* Question 1: Noticed difference — radio */}
-        <fieldset>
-          <legend className="block mb-3 font-medium text-sm text-gray-700">
-            Você percebeu diferença entre os resumos A e B? <span className="text-red-500">*</span>
-          </legend>
-          <div className="space-y-2" role="radiogroup" aria-label="Você percebeu diferença entre os resumos A e B?">
-            {DIFFERENCE_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                  noticedDifference === opt.value
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="noticedDifference"
-                  value={opt.value}
-                  checked={noticedDifference === opt.value}
-                  onChange={() => setNoticedDifference(opt.value)}
-                  className="w-4 h-4 text-blue-600"
+          <div className="space-y-8">
+            {/* Question 1: Noticed difference — radio */}
+            <fieldset>
+              <legend className="block mb-4 font-medium text-sm text-gray-700">
+                Você percebeu diferença entre os resumos A e B? <span className="text-red-500">*</span>
+              </legend>
+              <div className="space-y-3" role="radiogroup" aria-label="Você percebeu diferença entre os resumos A e B?">
+                {DIFFERENCE_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
+                      noticedDifference === opt.value
+                        ? 'border-[#2563eb] bg-blue-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="noticedDifference"
+                      value={opt.value}
+                      checked={noticedDifference === opt.value}
+                      onChange={() => setNoticedDifference(opt.value)}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-gray-700">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {/* Question 2: Type of difference — conditional, shown only if Q1 = yes */}
+            {noticedDifference === 'yes' && (
+              <div>
+                <label className="block mb-2 font-medium text-sm text-gray-700">
+                  Se sim, qual tipo de diferença? (opcional)
+                </label>
+                <textarea
+                  value={differenceType}
+                  onChange={(e) => setDifferenceType(e.target.value)}
+                  rows={4}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-vertical"
+                  placeholder="Descreva as diferenças que você percebeu..."
                 />
-                <span className="text-gray-700">{opt.label}</span>
+              </div>
+            )}
+
+            {/* Question 3: Would use daily — radio */}
+            <fieldset>
+              <legend className="block mb-4 font-medium text-sm text-gray-700">
+                Resumos adaptados ao seu perfil seriam úteis na sua rotina de leitura? <span className="text-red-500">*</span>
+              </legend>
+              <div className="space-y-3" role="radiogroup" aria-label="Resumos adaptados ao seu perfil seriam úteis na sua rotina de leitura?">
+                {DAILY_USE_OPTIONS.map((opt) => (
+                  <label
+                    key={opt.value}
+                    className={`flex items-center gap-3 p-4 rounded-lg border cursor-pointer transition-all ${
+                      wouldUseDaily === opt.value
+                        ? 'border-[#2563eb] bg-blue-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="wouldUseDaily"
+                      value={opt.value}
+                      checked={wouldUseDaily === opt.value}
+                      onChange={() => setWouldUseDaily(opt.value)}
+                      className="w-4 h-4 text-blue-600"
+                    />
+                    <span className="text-gray-700">{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            {/* Question 4: Improvements — textarea */}
+            <div>
+              <label className="block mb-2 font-medium text-sm text-gray-700">
+                O que melhoraria no sistema? (opcional)
               </label>
-            ))}
-          </div>
-        </fieldset>
+              <textarea
+                value={improvements}
+                onChange={(e) => setImprovements(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-vertical"
+                placeholder="Sugestões de melhoria para o sistema..."
+              />
+            </div>
 
-        {/* Question 2: Type of difference — conditional, shown only if Q1 = yes */}
-        {noticedDifference === 'yes' && (
-          <div>
-            <label className="block mb-2 font-medium text-sm text-gray-700">
-              Se sim, qual tipo de diferença? (opcional)
-            </label>
-            <textarea
-              value={differenceType}
-              onChange={(e) => setDifferenceType(e.target.value)}
-              rows={3}
-              className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-              placeholder="Ex: nível de detalhe, linguagem, organização..."
-            />
-          </div>
-        )}
-
-        {/* Question 3: Would use daily — radio */}
-        <fieldset>
-          <legend className="block mb-3 font-medium text-sm text-gray-700">
-            Resumos adaptados ao seu perfil seriam úteis na sua rotina de leitura? <span className="text-red-500">*</span>
-          </legend>
-          <div className="space-y-2" role="radiogroup" aria-label="Resumos adaptados ao seu perfil seriam úteis na sua rotina de leitura?">
-            {DAILY_USE_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-colors ${
-                  wouldUseDaily === opt.value
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="wouldUseDaily"
-                  value={opt.value}
-                  checked={wouldUseDaily === opt.value}
-                  onChange={() => setWouldUseDaily(opt.value)}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="text-gray-700">{opt.label}</span>
+            {/* Question 5: Additional comments — textarea */}
+            <div>
+              <label className="block mb-2 font-medium text-sm text-gray-700">
+                Comentários adicionais (opcional)
               </label>
-            ))}
+              <textarea
+                value={comments}
+                onChange={(e) => setComments(e.target.value)}
+                rows={4}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-vertical"
+                placeholder="Compartilhe suas impressões sobre os resumos, a interface ou qualquer outro aspecto..."
+              />
+            </div>
           </div>
-        </fieldset>
 
-        {/* Question 4: Improvements — textarea */}
-        <div>
-          <label className="block mb-2 font-medium text-sm text-gray-700">
-            O que melhoraria no sistema? (opcional)
-          </label>
-          <textarea
-            value={improvements}
-            onChange={(e) => setImprovements(e.target.value)}
-            rows={3}
-            className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-            placeholder="Sugestões de melhoria para o sistema..."
-          />
-        </div>
+          {submitMutation.error && (
+            <div className="bg-red-50 text-red-700 p-4 rounded-lg mt-8">
+              Erro: {(submitMutation.error as Error).message}
+            </div>
+          )}
 
-        {/* Question 5: Additional comments — textarea */}
-        <div>
-          <label className="block mb-2 font-medium text-sm text-gray-700">
-            Comentários adicionais (opcional)
-          </label>
-          <textarea
-            value={comments}
-            onChange={(e) => setComments(e.target.value)}
-            rows={3}
-            className="w-full p-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-vertical"
-            placeholder="Compartilhe suas impressões sobre os resumos, a interface ou qualquer outro aspecto..."
-          />
+          <button
+            type="button"
+            onClick={() => canSubmit && submitMutation.mutate()}
+            disabled={!canSubmit || submitMutation.isPending}
+            className="w-full py-4 bg-[#2563eb] text-white font-semibold rounded-lg hover:bg-[#1d4ed8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-8"
+          >
+            {submitMutation.isPending ? 'Salvando...' : 'Finalizar'}
+          </button>
         </div>
       </div>
-
-      {submitMutation.error && (
-        <div className="bg-red-50 text-red-700 p-4 rounded-lg">
-          Erro: {(submitMutation.error as Error).message}
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={() => canSubmit && submitMutation.mutate()}
-        disabled={!canSubmit || submitMutation.isPending}
-        className="w-full py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {submitMutation.isPending ? 'Salvando...' : 'Finalizar Experimento'}
-      </button>
     </div>
   );
 }

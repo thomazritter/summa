@@ -105,30 +105,51 @@ export function ManagerDashboard() {
   }, [inviteError]);
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className="min-h-screen bg-[#f9fafb]">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Painel do Pesquisador</h1>
-          <p className="text-gray-600">Gerencie participantes e acompanhe o experimento.</p>
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <h1 className="text-3xl font-bold text-gray-900">Painel do Pesquisador</h1>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={openInviteModal}
+              aria-label="Convidar participante"
+              className="px-4 py-2 text-sm bg-[#2563eb] text-white font-medium rounded-lg hover:bg-[#1d4ed8] transition-all"
+            >
+              Convidar
+            </button>
+            <button
+              type="button"
+              onClick={handleLogout}
+              aria-label="Sair do painel"
+              className="px-4 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all"
+            >
+              Sair
+            </button>
+          </div>
         </div>
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={openInviteModal}
-            aria-label="Convidar participante"
-            className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Convidar
-          </button>
-          <button
-            type="button"
-            onClick={handleLogout}
-            aria-label="Sair do painel"
-            className="px-4 py-2 text-sm text-gray-600 border rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Sair
-          </button>
+
+        {/* Tab bar */}
+        <div className="max-w-7xl mx-auto px-6">
+          <div role="tablist" className="flex gap-6 border-b border-gray-200">
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                role="tab"
+                type="button"
+                aria-selected={activeTab === tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-4 py-3 text-sm border-b-2 transition-all -mb-px ${
+                  activeTab === tab.key
+                    ? 'border-[#2563eb] text-[#2563eb] font-semibold'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -147,32 +168,14 @@ export function ManagerDashboard() {
         />
       )}
 
-      {/* Tab bar */}
-      <div role="tablist" className="flex border-b">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            role="tab"
-            type="button"
-            aria-selected={activeTab === tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm transition-colors -mb-px ${
-              activeTab === tab.key
-                ? 'border-b-2 border-blue-500 font-semibold text-blue-700'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       {/* Tab content */}
-      {activeTab === 'overview' && <OverviewTab />}
-      {activeTab === 'results' && <ResultsTab />}
-      {activeTab === 'participants' && <ParticipantsTab />}
-      {activeTab === 'summaries' && <SummariesTab />}
-      {activeTab === 'export' && <ExportTab />}
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {activeTab === 'overview' && <OverviewTab />}
+        {activeTab === 'results' && <ResultsTab />}
+        {activeTab === 'participants' && <ParticipantsTab />}
+        {activeTab === 'summaries' && <SummariesTab />}
+        {activeTab === 'export' && <ExportTab />}
+      </div>
     </div>
   );
 }
@@ -239,15 +242,15 @@ function InviteModal({
       aria-modal="true"
       aria-labelledby="invite-modal-title"
     >
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md mx-4 p-6 space-y-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-8 space-y-5">
         <div className="flex items-center justify-between">
-          <h2 id="invite-modal-title" className="text-lg font-semibold">Convidar participante</h2>
+          <h2 id="invite-modal-title" className="text-xl font-semibold text-gray-900">Convidar participante</h2>
           <button
             ref={closeButtonRef}
             type="button"
             onClick={onClose}
             aria-label="Fechar modal de convite"
-            className="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+            className="p-1.5 text-gray-400 hover:text-gray-600 transition-all rounded-lg hover:bg-gray-100"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -255,7 +258,7 @@ function InviteModal({
           </button>
         </div>
 
-        <form onSubmit={handleInvite} className="space-y-3">
+        <form onSubmit={handleInvite} className="space-y-4">
           <div>
             <label htmlFor="invite-email" className="sr-only">Email do participante</label>
             <input
@@ -267,7 +270,7 @@ function InviteModal({
                 if (emailValidationError) setEmailValidationError(null);
               }}
               placeholder="Email do participante"
-              className={`w-full border rounded-lg p-2 ${emailValidationError ? 'border-red-400' : ''}`}
+              className={`w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm transition-all focus:ring-2 focus:ring-[#2563eb]/20 focus:border-[#2563eb] outline-none ${emailValidationError ? 'border-red-400' : ''}`}
               required
               aria-describedby={emailValidationError ? 'email-validation-error' : undefined}
               aria-invalid={emailValidationError ? 'true' : undefined}
@@ -279,7 +282,7 @@ function InviteModal({
           <button
             type="submit"
             disabled={inviting || !email.trim()}
-            className="w-full px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="w-full px-6 py-2.5 bg-[#2563eb] text-white font-medium rounded-lg hover:bg-[#1d4ed8] disabled:opacity-50 transition-all"
           >
             {inviting ? 'Enviando...' : 'Enviar Convite'}
           </button>
@@ -314,68 +317,74 @@ function OverviewTab() {
   const participantCodes = (codes ?? []).filter((c: CodeRow) => c.role === 'participant');
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Stats cards */}
       {loadingOverview ? (
         <p className="text-gray-500">Carregando...</p>
       ) : overview ? (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg border text-center">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="text-sm text-gray-600 mb-2">Participantes Convidados</div>
             <div className="text-3xl font-bold text-gray-900">{overview.totalInvited}</div>
-            <div className="text-sm text-gray-600 mt-1">Participantes Convidados</div>
           </div>
-          <div className="bg-white p-4 rounded-lg border text-center">
-            <div className="text-3xl font-bold text-green-600">{overview.totalCompleted}</div>
-            <div className="text-sm text-gray-600 mt-1">Concluíram o Experimento</div>
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="text-sm text-gray-600 mb-2">Concluíram o Experimento</div>
+            <div className="text-3xl font-bold text-[#16a34a]">{overview.totalCompleted}</div>
           </div>
-          <div className="bg-white p-4 rounded-lg border text-center">
-            <div className="text-3xl font-bold text-blue-600">{overview.completionRate}%</div>
-            <div className="text-sm text-gray-600 mt-1">Taxa de Conclusão</div>
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="text-sm text-gray-600 mb-2">Taxa de Conclusão</div>
+            <div className="text-3xl font-bold text-[#2563eb]">{overview.completionRate}%</div>
           </div>
-          <div className="bg-white p-4 rounded-lg border">
-            <div className="text-sm text-gray-600 mb-2 text-center">Sessões por Fase</div>
+          <div className="bg-white border border-gray-200 rounded-lg p-6">
+            <div className="text-sm text-gray-600 mb-2">Sessões por Fase</div>
             <SessionPhaseBar phases={overview.sessionsByPhase} />
-            <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-xs text-gray-500 justify-center">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Completas</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500 inline-block" /> Feedback</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500 inline-block" /> Comparação</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-indigo-500 inline-block" /> Regenerado</span>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-3 text-xs text-gray-600">
+              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-green-500 inline-block" /> Completas</span>
+              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-blue-500 inline-block" /> Feedback</span>
+              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-amber-500 inline-block" /> Comparação</span>
+              <span className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-indigo-500 inline-block" /> Regenerado</span>
             </div>
           </div>
         </div>
       ) : null}
 
       {/* Codes table */}
-      <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h2 className="text-lg font-semibold">Códigos gerados</h2>
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold">Códigos de Acesso</h2>
+        </div>
         {loadingCodes ? (
-          <p className="text-gray-500">Carregando...</p>
+          <div className="p-6">
+            <p className="text-gray-500">Carregando...</p>
+          </div>
         ) : participantCodes.length === 0 ? (
-          <p className="text-gray-500">Nenhum código gerado ainda.</p>
+          <div className="p-6">
+            <p className="text-gray-500">Nenhum código gerado ainda.</p>
+          </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-gray-600">
-                  <th className="pb-2 font-medium">Código</th>
-                  <th className="pb-2 font-medium">Email</th>
-                  <th className="pb-2 font-medium">Status</th>
-                  <th className="pb-2 font-medium">Criado em</th>
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Código</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Email</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Status</th>
+                  <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Criado em</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-gray-200">
                 {participantCodes.map((c: CodeRow) => (
-                  <tr key={c.id} className="border-b last:border-0">
-                    <td className="py-2 font-mono">{c.code}</td>
-                    <td className="py-2">{c.email}</td>
-                    <td className="py-2">
+                  <tr key={c.id} className="hover:bg-gray-50 transition-all">
+                    <td className="px-6 py-4 font-mono text-sm">{c.code}</td>
+                    <td className="px-6 py-4 text-sm text-gray-700">{c.email}</td>
+                    <td className="px-6 py-4">
                       {c.used_at ? (
-                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">Usado</span>
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-[#16a34a]">Usado</span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-500">Pendente</span>
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Pendente</span>
                       )}
                     </td>
-                    <td className="py-2 text-gray-500">
+                    <td className="px-6 py-4 text-sm text-gray-600">
                       {new Date(c.created_at).toLocaleDateString('pt-BR')}
                     </td>
                   </tr>
@@ -396,7 +405,7 @@ function SessionPhaseBar({ phases }: { phases: { complete: number; feedback: num
   const pct = (v: number) => ((v / total) * 100).toFixed(0);
 
   return (
-    <div className="flex h-5 rounded-full overflow-hidden">
+    <div className="flex h-8 rounded overflow-hidden mt-4">
       {phases.complete > 0 && <div className="bg-green-500" style={{ width: `${pct(phases.complete)}%` }} title={`Completas: ${phases.complete}`} />}
       {phases.feedback > 0 && <div className="bg-blue-500" style={{ width: `${pct(phases.feedback)}%` }} title={`Feedback: ${phases.feedback}`} />}
       {phases.comparison > 0 && <div className="bg-amber-500" style={{ width: `${pct(phases.comparison)}%` }} title={`Comparação: ${phases.comparison}`} />}
@@ -426,32 +435,32 @@ function ResultsTab() {
   const PROFILE_LABELS: Record<string, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sênior' };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Card 1: Preferência */}
-      <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h3 className="text-lg font-semibold">Preferência: Personalizado vs. Genérico</h3>
+      <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
+        <h3 className="text-lg font-semibold">Preferência de Resumos</h3>
         <PreferenceBar label="Personalizado" pct={results.preferencePersonalized.percentage} count={results.preferencePersonalized.count} total={results.preferencePersonalized.total} color="bg-blue-500" />
         <PreferenceBar label="Genérico" pct={results.preferenceGeneric.percentage} count={results.preferenceGeneric.count} total={results.preferenceGeneric.total} color="bg-gray-400" />
       </div>
 
       {/* Card 2: Médias Likert por Tipo */}
-      <div className="bg-white p-6 rounded-lg border space-y-4">
-        <h3 className="text-lg font-semibold">Médias Likert por Tipo de Resumo</h3>
+      <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
+        <h3 className="text-lg font-semibold">Comparação de Avaliações (Média)</h3>
         <LikertComparisonTable generic={results.likertByType.generic} personalized={results.likertByType.personalized} />
       </div>
 
       {/* Card 3: Médias Likert por Perfil */}
       {profileKeys.length > 0 && (
-        <div className="bg-white p-6 rounded-lg border space-y-4">
-          <h3 className="text-lg font-semibold">Médias Likert por Perfil</h3>
+        <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-6">
+          <h3 className="text-lg font-semibold">Análise por Perfil</h3>
           <div className="flex gap-2">
             {profileKeys.map((key) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setProfileTab(key)}
-                className={`px-3 py-1 rounded-full text-sm transition-colors ${
-                  profileTab === key ? 'bg-blue-100 text-blue-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                className={`px-4 py-2 rounded-full text-sm transition-all ${
+                  profileTab === key ? 'bg-[#2563eb] text-white font-medium' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
                 {PROFILE_LABELS[key] ?? key}
@@ -468,7 +477,7 @@ function ResultsTab() {
       )}
 
       {/* Card 4: Ciclo de Feedback */}
-      <div className="bg-white p-6 rounded-lg border space-y-4">
+      <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
         <h3 className="text-lg font-semibold">Ciclo de Feedback</h3>
         {results.feedbackCycle.total === 0 ? (
           <p className="text-gray-500">Nenhum dado disponível.</p>
@@ -485,20 +494,20 @@ function ResultsTab() {
       </div>
 
       {/* Card 5: Likert Regenerado */}
-      <div className="bg-white p-6 rounded-lg border space-y-4">
+      <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
         <h3 className="text-lg font-semibold">Médias Likert: Resumo Regenerado</h3>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-gray-600">
-                <th className="pb-2 font-medium">Métrica</th>
-                <th className="pb-2 font-medium">Média</th>
+          <table className="w-full">
+            <thead className="border-b border-gray-200">
+              <tr>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Métrica</th>
+                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Média</th>
               </tr>
             </thead>
-            <tbody>
-              <tr className="border-b"><td className="py-2">Utilidade</td><td className="py-2">{results.regeneratedLikert.utilidade.toFixed(1)}</td></tr>
-              <tr className="border-b"><td className="py-2">Clareza</td><td className="py-2">{results.regeneratedLikert.clareza.toFixed(1)}</td></tr>
-              <tr><td className="py-2">Adequação</td><td className="py-2">{results.regeneratedLikert.adequacao.toFixed(1)}</td></tr>
+            <tbody className="divide-y divide-gray-200">
+              <tr><td className="px-4 py-4 text-sm text-gray-700">Utilidade</td><td className="px-4 py-4 text-sm">{results.regeneratedLikert.utilidade.toFixed(1)}</td></tr>
+              <tr><td className="px-4 py-4 text-sm text-gray-700">Clareza</td><td className="px-4 py-4 text-sm">{results.regeneratedLikert.clareza.toFixed(1)}</td></tr>
+              <tr><td className="px-4 py-4 text-sm text-gray-700">Adequação</td><td className="px-4 py-4 text-sm">{results.regeneratedLikert.adequacao.toFixed(1)}</td></tr>
             </tbody>
           </table>
         </div>
@@ -515,12 +524,12 @@ function pct(value: number, total: number): string {
 function PreferenceBar({ label, pct: percentage, count, total, color }: { label: string; pct: number; count: number; total: number; color: string }) {
   return (
     <div>
-      <div className="flex justify-between text-sm mb-1">
-        <span className="font-medium">{label}</span>
-        <span className="text-gray-600">{percentage}% ({count} de {total})</span>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm text-gray-700">{label}</span>
+        <span className="text-sm text-gray-900">{percentage}% ({count} de {total})</span>
       </div>
-      <div className="w-full bg-gray-100 rounded-full h-4">
-        <div className={`${color} h-4 rounded-full transition-all`} style={{ width: `${percentage}%` }} />
+      <div className="h-8 bg-gray-100 rounded overflow-hidden">
+        <div className={`${color} h-full transition-all`} style={{ width: `${percentage}%` }} />
       </div>
     </div>
   );
@@ -539,24 +548,24 @@ function LikertComparisonTable({ generic, personalized }: {
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b text-left text-gray-600">
-            <th className="pb-2 font-medium">Métrica</th>
-            <th className="pb-2 font-medium">Genérico</th>
-            <th className="pb-2 font-medium">Personalizado</th>
-            <th className="pb-2 font-medium">Diferença</th>
+      <table className="w-full">
+        <thead className="border-b border-gray-200">
+          <tr>
+            <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Métrica</th>
+            <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">Genérico</th>
+            <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">Personalizado</th>
+            <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">Diferença</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="divide-y divide-gray-200">
           {rows.map((r) => {
             const diff = personalized[r.key] - generic[r.key];
             return (
-              <tr key={r.key} className="border-b last:border-0">
-                <td className="py-2">{r.label}</td>
-                <td className="py-2">{generic[r.key].toFixed(1)}</td>
-                <td className="py-2">{personalized[r.key].toFixed(1)}</td>
-                <td className={`py-2 font-medium ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+              <tr key={r.key}>
+                <td className="px-4 py-4 text-sm text-gray-700">{r.label}</td>
+                <td className="px-4 py-4 text-center text-sm">{generic[r.key].toFixed(1)}</td>
+                <td className="px-4 py-4 text-center text-sm">{personalized[r.key].toFixed(1)}</td>
+                <td className={`px-4 py-4 text-center text-sm font-medium ${diff > 0 ? 'text-[#16a34a]' : diff < 0 ? 'text-red-600' : 'text-gray-500'}`}>
                   {diff > 0 ? '+' : ''}{diff.toFixed(1)}
                 </td>
               </tr>
@@ -571,10 +580,22 @@ function LikertComparisonTable({ generic, personalized }: {
 function FeedbackCycleBar({ cycle }: { cycle: { improved: number; same: number; worse: number; total: number } }) {
   const p = (v: number) => ((v / cycle.total) * 100).toFixed(0);
   return (
-    <div className="flex h-5 rounded-full overflow-hidden">
-      {cycle.improved > 0 && <div className="bg-green-500" style={{ width: `${p(cycle.improved)}%` }} />}
-      {cycle.same > 0 && <div className="bg-gray-400" style={{ width: `${p(cycle.same)}%` }} />}
-      {cycle.worse > 0 && <div className="bg-red-500" style={{ width: `${p(cycle.worse)}%` }} />}
+    <div className="flex h-12 rounded overflow-hidden">
+      {cycle.improved > 0 && (
+        <div className="bg-[#16a34a] flex items-center justify-center text-white text-sm" style={{ width: `${p(cycle.improved)}%` }}>
+          Melhorou {p(cycle.improved)}%
+        </div>
+      )}
+      {cycle.same > 0 && (
+        <div className="bg-gray-300 flex items-center justify-center text-gray-700 text-sm" style={{ width: `${p(cycle.same)}%` }}>
+          Igual {p(cycle.same)}%
+        </div>
+      )}
+      {cycle.worse > 0 && (
+        <div className="bg-red-500 flex items-center justify-center text-white text-sm" style={{ width: `${p(cycle.worse)}%` }}>
+          Piorou {p(cycle.worse)}%
+        </div>
+      )}
     </div>
   );
 }
@@ -621,8 +642,8 @@ function ParticipantsTab() {
   }
 
   const LEVEL_BADGE: Record<string, string> = {
-    junior: 'bg-green-100 text-green-700',
-    pleno: 'bg-blue-100 text-blue-700',
+    junior: 'bg-green-100 text-[#16a34a]',
+    pleno: 'bg-blue-100 text-[#2563eb]',
     senior: 'bg-purple-100 text-purple-700',
   };
   const LEVEL_LABELS: Record<string, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sênior' };
@@ -630,13 +651,13 @@ function ParticipantsTab() {
   return (
     <div className="space-y-4">
       {deleteError && (
-        <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-center justify-between" role="alert">
+        <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm flex items-center justify-between" role="alert">
           <span>{deleteError}</span>
           <button
             type="button"
             onClick={() => setDeleteError(null)}
             aria-label="Fechar mensagem de erro"
-            className="text-red-500 hover:text-red-700 ml-2"
+            className="text-red-500 hover:text-red-700 ml-2 transition-all"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -644,16 +665,16 @@ function ParticipantsTab() {
           </button>
         </div>
       )}
-      <div className="bg-white rounded-lg border overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-600 bg-gray-50">
-              <th className="p-3 font-medium">Nome</th>
-              <th className="p-3 font-medium">Nível</th>
-              <th className="p-3 font-medium">Anos Exp.</th>
-              <th className="p-3 font-medium">Status</th>
-              <th className="p-3 font-medium">Sessões</th>
-              <th className="p-3 font-medium w-8" aria-label="Expandir" />
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Nome</th>
+              <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Nível</th>
+              <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Anos Exp.</th>
+              <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Status</th>
+              <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Sessões</th>
+              <th className="px-6 py-3 w-8" aria-label="Expandir" />
             </tr>
           </thead>
           <tbody>
@@ -717,7 +738,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
   levelLabel: string;
 }) {
   const IMPROVEMENT_BADGE: Record<string, { label: string; cls: string }> = {
-    improved: { label: 'Melhorou', cls: 'bg-green-100 text-green-700' },
+    improved: { label: 'Melhorou', cls: 'bg-green-100 text-[#16a34a]' },
     same: { label: 'Igual', cls: 'bg-gray-100 text-gray-600' },
     worse: { label: 'Piorou', cls: 'bg-red-100 text-red-700' },
   };
@@ -726,27 +747,27 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
     <>
       <tr
         role="row"
-        className="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
+        className="border-b last:border-0 hover:bg-gray-50 cursor-pointer transition-all"
         onClick={onToggle}
         tabIndex={0}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
         aria-expanded={isOpen}
         aria-label={`Participante ${p.name}, clique para ${isOpen ? 'recolher' : 'expandir'} detalhes`}
       >
-        <td className="p-3 font-medium">{p.name}</td>
-        <td className="p-3">
-          <span className={`px-2 py-0.5 rounded text-xs font-medium ${levelBadge}`}>{levelLabel}</span>
+        <td className="px-6 py-4 text-sm font-medium text-gray-900">{p.name}</td>
+        <td className="px-6 py-4">
+          <span className={`px-3 py-1 rounded-full text-xs font-medium ${levelBadge}`}>{levelLabel}</span>
         </td>
-        <td className="p-3">{p.yearsExperience}</td>
-        <td className="p-3">
+        <td className="px-6 py-4 text-sm">{p.yearsExperience}</td>
+        <td className="px-6 py-4">
           {p.hasPostTest ? (
-            <span className="text-green-600 font-medium text-xs">Completo</span>
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-[#16a34a]">Concluído</span>
           ) : (
-            <span className="text-amber-600 font-medium text-xs">Em andamento</span>
+            <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-[#d97706]">Em andamento</span>
           )}
         </td>
-        <td className="p-3">{p.sessions.length}</td>
-        <td className="p-3 text-gray-400">
+        <td className="px-6 py-4 text-sm">{p.sessions.length}</td>
+        <td className="px-6 py-4 text-gray-400">
           <svg className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
@@ -754,15 +775,15 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
       </tr>
       {isOpen && (
         <tr>
-          <td colSpan={6} className="p-4 bg-gray-50 border-b">
+          <td colSpan={6} className="px-6 py-5 bg-gray-50 border-b">
             <div className="space-y-4">
               {/* Sessions detail */}
               {p.sessions.map((s) => (
-                <div key={s.id} className="bg-white p-4 rounded-lg border space-y-3">
+                <div key={s.id} className="bg-white p-5 rounded-lg border border-gray-200 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-medium">{s.articleTitle}</span>
-                      <span className="ml-2 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">{s.phase}</span>
+                      <span className="font-medium text-gray-900">{s.articleTitle}</span>
+                      <span className="ml-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">{s.phase}</span>
                     </div>
                     {s.preferenceDecoded && (
                       <span className="text-sm text-gray-600">
@@ -778,25 +799,25 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
                   {s.ratings.length > 0 && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
-                        <thead>
-                          <tr className="border-b text-left text-gray-500">
-                            <th className="pb-1 font-medium">Resumo</th>
-                            <th className="pb-1 font-medium">Util.</th>
-                            <th className="pb-1 font-medium">Clar.</th>
-                            <th className="pb-1 font-medium">Adeq.</th>
-                            <th className="pb-1 font-medium">Fact.</th>
-                            <th className="pb-1 font-medium">Comentário</th>
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600">Resumo</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600">Util.</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600">Clar.</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600">Adeq.</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600">Fact.</th>
+                            <th className="px-3 py-2 text-left font-medium text-gray-600">Comentário</th>
                           </tr>
                         </thead>
-                        <tbody>
+                        <tbody className="divide-y divide-gray-100">
                           {s.ratings.map((r, i) => (
-                            <tr key={i} className="border-b last:border-0">
-                              <td className="py-1 font-medium">{r.label}</td>
-                              <td className="py-1">{r.utilidade}</td>
-                              <td className="py-1">{r.clareza}</td>
-                              <td className="py-1">{r.adequacao}</td>
-                              <td className="py-1">{r.factualidade}</td>
-                              <td className="py-1 text-gray-500 max-w-xs truncate">{r.comment ?? '—'}</td>
+                            <tr key={i} className="hover:bg-gray-50 transition-all">
+                              <td className="px-3 py-2 font-medium">{r.label}</td>
+                              <td className="px-3 py-2">{r.utilidade}</td>
+                              <td className="px-3 py-2">{r.clareza}</td>
+                              <td className="px-3 py-2">{r.adequacao}</td>
+                              <td className="px-3 py-2">{r.factualidade}</td>
+                              <td className="px-3 py-2 text-gray-500 max-w-xs truncate">{r.comment ?? '—'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -810,7 +831,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-medium text-amber-700">Feedback de regeneração</span>
                         {s.regeneration.improvementRating && IMPROVEMENT_BADGE[s.regeneration.improvementRating] && (
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${IMPROVEMENT_BADGE[s.regeneration.improvementRating].cls}`}>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${IMPROVEMENT_BADGE[s.regeneration.improvementRating].cls}`}>
                             {IMPROVEMENT_BADGE[s.regeneration.improvementRating].label}
                           </span>
                         )}
@@ -830,7 +851,7 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
 
               {/* Post-test responses */}
               {p.postTestResponses && Object.keys(p.postTestResponses).length > 0 && (
-                <div className="bg-white p-4 rounded-lg border space-y-2">
+                <div className="bg-white p-5 rounded-lg border border-gray-200 space-y-3">
                   <h4 className="text-sm font-semibold text-gray-700">Respostas do pós-teste</h4>
                   <dl className="grid grid-cols-1 gap-2 text-sm">
                     {Object.entries(p.postTestResponses).map(([key, value]) => (
@@ -844,10 +865,10 @@ function ParticipantRow({ participant: p, isOpen, onToggle, onDelete, levelBadge
               )}
 
               {/* Delete participant */}
-              <div className="pt-2 border-t flex justify-end">
+              <div className="pt-3 border-t border-gray-200 flex justify-end">
                 <button
                   type="button"
-                  className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                  className="px-4 py-2 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-all"
                   onClick={(e) => {
                     e.stopPropagation();
                     if (window.confirm(`Tem certeza que deseja remover ${p.name || 'este participante'} e todos os seus dados? Esta ação não pode ser desfeita.`)) {
@@ -920,7 +941,7 @@ function SummariesTab() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Filters */}
       <div className="flex gap-4">
         <div>
@@ -929,7 +950,7 @@ function SummariesTab() {
             id="article-filter"
             value={articleFilter}
             onChange={(e) => setArticleFilter(e.target.value)}
-            className="border rounded-lg px-3 py-1.5 text-sm"
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm transition-all focus:ring-2 focus:ring-[#2563eb]/20 focus:border-[#2563eb] outline-none"
           >
             <option value="all">Todos</option>
             {articles.map((a) => (
@@ -943,7 +964,7 @@ function SummariesTab() {
             id="profile-filter"
             value={profileFilter}
             onChange={(e) => setProfileFilter(e.target.value)}
-            className="border rounded-lg px-3 py-1.5 text-sm"
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm transition-all focus:ring-2 focus:ring-[#2563eb]/20 focus:border-[#2563eb] outline-none"
           >
             <option value="all">Todos</option>
             {profiles.map((p) => (
@@ -954,57 +975,57 @@ function SummariesTab() {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-lg border overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-gray-600 bg-gray-50">
-                <th className="p-3 font-medium">Artigo</th>
-                <th className="p-3 font-medium">Perfil</th>
-                <th className="p-3 font-medium">Prévia</th>
-                <th className="p-3 font-medium">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Artigo</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Perfil</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Prévia</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
                   <span>ROUGE-1</span>
                   <RougeTooltip />
                 </th>
-                <th className="p-3 font-medium">
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
                   <span>ROUGE-2</span>
                   <RougeTooltip />
                 </th>
-                <th className="p-3 font-medium">
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">
                   <span>ROUGE-L</span>
                   <RougeTooltip />
                 </th>
-                <th className="p-3 font-medium">BERT</th>
-                <th className="p-3 font-medium">Factualidade</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">BERT</th>
+                <th className="px-6 py-3 text-left text-sm font-medium text-gray-600">Factualidade</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-gray-200">
               {filtered.map((s) => (
                 <Fragment key={s.id}>
                   <tr
                     role="row"
-                    className="border-b last:border-0 hover:bg-gray-50 cursor-pointer"
+                    className="hover:bg-gray-50 cursor-pointer transition-all"
                     onClick={() => setExpandedId(expandedId === s.id ? null : s.id)}
                     tabIndex={0}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedId(expandedId === s.id ? null : s.id); } }}
                     aria-expanded={expandedId === s.id}
                   >
-                    <td className="p-3 max-w-[200px] truncate" title={s.articleTitle}>{s.articleTitle}</td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700`}>
+                    <td className="px-6 py-4 max-w-[200px] truncate text-sm" title={s.articleTitle}>{s.articleTitle}</td>
+                    <td className="px-6 py-4">
+                      <span className="px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
                         {s.profileLabel}
                       </span>
                     </td>
-                    <td className="p-3 max-w-[150px] truncate text-gray-500">{s.content.slice(0, 60)}...</td>
-                    <td className="p-3 font-mono text-sm">{formatMetric(s.rouge1)}</td>
-                    <td className="p-3 font-mono text-sm">{formatMetric(s.rouge2)}</td>
-                    <td className="p-3 font-mono text-sm">{formatMetric(s.rougeL)}</td>
-                    <td className="p-3 font-mono text-sm">{formatMetric(s.bertScore)}</td>
-                    <td className={`p-3 font-mono text-sm font-medium ${factualityColor(s.factualityScore)}`}>{formatMetric(s.factualityScore)}</td>
+                    <td className="px-6 py-4 max-w-[150px] truncate text-sm text-gray-500">{s.content.slice(0, 60)}...</td>
+                    <td className="px-6 py-4 font-mono text-sm">{formatMetric(s.rouge1)}</td>
+                    <td className="px-6 py-4 font-mono text-sm">{formatMetric(s.rouge2)}</td>
+                    <td className="px-6 py-4 font-mono text-sm">{formatMetric(s.rougeL)}</td>
+                    <td className="px-6 py-4 font-mono text-sm">{formatMetric(s.bertScore)}</td>
+                    <td className={`px-6 py-4 font-mono text-sm font-medium ${factualityColor(s.factualityScore)}`}>{formatMetric(s.factualityScore)}</td>
                   </tr>
                   {expandedId === s.id && (
                     <tr>
-                      <td colSpan={8} className="p-4 bg-gray-50 border-b">
+                      <td colSpan={8} className="px-6 py-5 bg-gray-50 border-b">
                         <div className="prose prose-sm max-w-none">
                           <ReactMarkdown>{s.content}</ReactMarkdown>
                         </div>
@@ -1020,14 +1041,14 @@ function SummariesTab() {
 
       {/* P-Accuracy */}
       {pAccuracy.length > 0 && (
-        <div className="bg-white rounded-lg border p-6">
+        <div className="bg-white border border-gray-200 rounded-lg p-8">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">P-Accuracy (Sensibilidade de Personalização)</h3>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-gray-600 mb-6">
             Mede o quanto os resumos diferem entre perfis. Valores mais altos indicam maior personalização.
           </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {pAccuracy.map((pa) => (
-              <div key={pa.articleId} className="border rounded-lg p-4">
+              <div key={pa.articleId} className="border border-gray-200 rounded-lg p-5">
                 <p className="font-medium text-sm text-gray-900 mb-2">{pa.articleTitle}</p>
                 <div className="flex items-center gap-4">
                   <div>
@@ -1083,15 +1104,15 @@ function ExportTab() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {exportError && (
-        <div className="bg-red-50 text-red-700 p-3 rounded-lg text-sm flex items-center justify-between" role="alert">
+        <div className="bg-red-50 text-red-700 p-4 rounded-lg text-sm flex items-center justify-between" role="alert">
           <span>{exportError}</span>
           <button
             type="button"
             onClick={() => setExportError(null)}
             aria-label="Fechar mensagem de erro"
-            className="text-red-500 hover:text-red-700 ml-2"
+            className="text-red-500 hover:text-red-700 ml-2 transition-all"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1099,16 +1120,16 @@ function ExportTab() {
           </button>
         </div>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {EXPORTS.map((exp) => (
-          <div key={exp.type} className="bg-white p-6 rounded-lg border space-y-3">
-            <h3 className="text-lg font-semibold">{exp.title}</h3>
+          <div key={exp.type} className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">{exp.title}</h3>
             <p className="text-sm text-gray-600">{exp.description}</p>
             <button
               type="button"
               onClick={() => handleExport(exp.type)}
               disabled={downloading !== null}
-              className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className="w-full py-2.5 text-sm bg-[#2563eb] text-white font-medium rounded-lg hover:bg-[#1d4ed8] disabled:opacity-50 transition-all"
             >
               {downloading === exp.type ? 'Baixando...' : exp.label}
             </button>
@@ -1117,17 +1138,21 @@ function ExportTab() {
       </div>
 
       {/* Export all */}
-      <div className="bg-blue-50 p-6 rounded-lg border border-blue-200 space-y-3">
-        <h3 className="text-lg font-semibold text-blue-900">Exportar Tudo</h3>
-        <p className="text-sm text-blue-700">Baixar todos os dados do experimento em um único arquivo.</p>
-        <button
-          type="button"
-          onClick={() => handleExport('all')}
-          disabled={downloading !== null}
-          className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-        >
-          {downloading === 'all' ? 'Baixando...' : 'Exportar Tudo'}
-        </button>
+      <div className="bg-blue-50 border border-[#2563eb] rounded-lg p-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Exportar Tudo</h3>
+            <p className="text-sm text-gray-700">Baixar todos os dados do experimento em um único arquivo</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleExport('all')}
+            disabled={downloading !== null}
+            className="px-6 py-3 text-sm bg-[#2563eb] text-white font-medium rounded-lg hover:bg-[#1d4ed8] disabled:opacity-50 transition-all"
+          >
+            {downloading === 'all' ? 'Baixando...' : 'Exportar Tudo'}
+          </button>
+        </div>
       </div>
     </div>
   );
