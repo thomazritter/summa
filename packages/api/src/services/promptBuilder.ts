@@ -146,16 +146,12 @@ const truncateText = (text: string, maxLength: number): string => {
 };
 
 /**
- * Get the recommended max tokens for the given depth level
+ * Safety ceiling for token output. The actual summary length is controlled
+ * by the prompt instructions (e.g. "2-3 parágrafos"). This is just a
+ * hard limit to prevent runaway generation — same for all depths.
  */
-export const getMaxTokensForDepth = (depth: Profile['depth']): number => {
-  const tokenLimits: Record<Profile['depth'], number> = {
-    brief: 400,
-    moderate: 800,
-    detailed: 1500,
-    comprehensive: 2500,
-  };
-  return tokenLimits[depth];
+export const getMaxTokensForDepth = (_depth: Profile['depth']): number => {
+  return 8192;
 };
 
 /**
