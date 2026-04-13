@@ -10,9 +10,6 @@ import type {
   PhaseRow,
   AbOrder,
   SessionRow,
-  RatingWithSession,
-  ImprovementRow,
-  RegenAvgRow,
   ParticipantRow,
   SessionDetailRow,
   RatingRow,
@@ -63,127 +60,109 @@ managerRoutes.get('/overview', asyncHandler(async (_req: Request, res: Response)
 
 // ─── GET /results ─────────────────────────────────────────────────────
 
-managerRoutes.get('/results', asyncHandler(async (_req: Request, res: Response) => {
-  // Preference stats
-  const sessions = await queryAll<SessionRow>(
-    'SELECT id, preference, ab_order, generic_summary_id, personalized_summary_id FROM experiment_sessions WHERE preference IS NOT NULL'
-  );
+interface ResultsSessionRow {
+  preference: string | null;
+  preference_rating: number | null;
+  ab_order: string;
+  experience_level: string;
+}
 
+managerRoutes.get('/results', asyncHandler(async (_req: Request, res: Response) => {
+  // Fetch all sessions with their preference data and participant experience level
+  const sessions = await queryAll<ResultsSessionRow>(`
+    SELECT es.preference, es.preference_rating, es.ab_order, p.experience_level
+    FROM experiment_sessions es
+    JOIN participants p ON es.participant_id = p.id
+    WHERE es.preference IS NOT NULL
+  `);
+
+  // ─── Preference stats ──────────────────────────────────────────────
   let personalizedChosen = 0;
   let genericChosen = 0;
+
+  // ─── Rating by type accumulators ───────────────────────────────────
+  const ratingAccum = {
+    personalized: { sum: 0, count: 0 },
+    generic: { sum: 0, count: 0 },
+  };
+
+  // ─── Rating by profile accumulators ────────────────────────────────
+  const profileAccum: Record<string, {
+    ratingSum: number;
+    ratingCount: number;
+    personalizedChosen: number;
+    total: number;
+  }> = {};
+
   for (const s of sessions) {
     const abOrder = safeJsonParse<AbOrder>(s.ab_order);
     if (!abOrder || !s.preference) continue;
+
     const chosenType = abOrder[s.preference as 'A' | 'B'];
     if (chosenType === 'personalized') personalizedChosen++;
     else if (chosenType === 'generic') genericChosen++;
-  }
 
-  // Likert by type
-  const ratings = await queryAll<RatingWithSession>(`
-    SELECT sr.summary_id, es.generic_summary_id, es.personalized_summary_id,
-           p.experience_level, sr.utilidade, sr.clareza, sr.adequacao_perfil, sr.factualidade_percebida
-    FROM summary_ratings sr
-    JOIN experiment_sessions es ON sr.session_id = es.id
-    JOIN participants p ON es.participant_id = p.id
-  `);
+    // Rating by type
+    if (s.preference_rating !== null && chosenType) {
+      ratingAccum[chosenType as 'personalized' | 'generic'].sum += s.preference_rating;
+      ratingAccum[chosenType as 'personalized' | 'generic'].count++;
+    }
 
-  const likertAccum = {
-    generic: { utilidade: 0, clareza: 0, adequacao: 0, factualidade: 0, count: 0 },
-    personalized: { utilidade: 0, clareza: 0, adequacao: 0, factualidade: 0, count: 0 },
-  };
-
-  const profileAccum: Record<string, Record<string, { utilidade: number; clareza: number; adequacao: number; factualidade: number; count: number }>> = {};
-
-  for (const r of ratings) {
-    const type = r.summary_id === r.generic_summary_id ? 'generic'
-      : r.summary_id === r.personalized_summary_id ? 'personalized'
-      : null;
-    if (!type) continue;
-
-    likertAccum[type].utilidade += r.utilidade;
-    likertAccum[type].clareza += r.clareza;
-    likertAccum[type].adequacao += r.adequacao_perfil;
-    likertAccum[type].factualidade += r.factualidade_percebida;
-    likertAccum[type].count++;
-
-    const level = r.experience_level;
+    // Rating by profile
+    const level = s.experience_level;
     if (!profileAccum[level]) {
-      profileAccum[level] = {
-        generic: { utilidade: 0, clareza: 0, adequacao: 0, factualidade: 0, count: 0 },
-        personalized: { utilidade: 0, clareza: 0, adequacao: 0, factualidade: 0, count: 0 },
-      };
+      profileAccum[level] = { ratingSum: 0, ratingCount: 0, personalizedChosen: 0, total: 0 };
     }
-    profileAccum[level][type].utilidade += r.utilidade;
-    profileAccum[level][type].clareza += r.clareza;
-    profileAccum[level][type].adequacao += r.adequacao_perfil;
-    profileAccum[level][type].factualidade += r.factualidade_percebida;
-    profileAccum[level][type].count++;
+    profileAccum[level].total++;
+    if (chosenType === 'personalized') profileAccum[level].personalizedChosen++;
+    if (s.preference_rating !== null) {
+      profileAccum[level].ratingSum += s.preference_rating;
+      profileAccum[level].ratingCount++;
+    }
   }
 
-  const avg = (sum: number, count: number) => count > 0 ? Math.round((sum / count) * 100) / 100 : 0;
+  const total = personalizedChosen + genericChosen;
+  const round2 = (sum: number, count: number) => count > 0 ? Math.round((sum / count) * 100) / 100 : 0;
 
-  const likertByType = {
-    generic: {
-      utilidade: avg(likertAccum.generic.utilidade, likertAccum.generic.count),
-      clareza: avg(likertAccum.generic.clareza, likertAccum.generic.count),
-      adequacao: avg(likertAccum.generic.adequacao, likertAccum.generic.count),
-      factualidade: avg(likertAccum.generic.factualidade, likertAccum.generic.count),
-    },
+  const ratingByType = {
     personalized: {
-      utilidade: avg(likertAccum.personalized.utilidade, likertAccum.personalized.count),
-      clareza: avg(likertAccum.personalized.clareza, likertAccum.personalized.count),
-      adequacao: avg(likertAccum.personalized.adequacao, likertAccum.personalized.count),
-      factualidade: avg(likertAccum.personalized.factualidade, likertAccum.personalized.count),
+      avgRating: round2(ratingAccum.personalized.sum, ratingAccum.personalized.count),
+      count: ratingAccum.personalized.count,
+    },
+    generic: {
+      avgRating: round2(ratingAccum.generic.sum, ratingAccum.generic.count),
+      count: ratingAccum.generic.count,
     },
   };
 
-  const likertByProfile: Record<string, Record<string, { utilidade: number; clareza: number; adequacao: number; factualidade: number }>> = {};
-  for (const [level, types] of Object.entries(profileAccum)) {
-    likertByProfile[level] = {};
-    for (const [type, accum] of Object.entries(types)) {
-      likertByProfile[level][type] = {
-        utilidade: avg(accum.utilidade, accum.count),
-        clareza: avg(accum.clareza, accum.count),
-        adequacao: avg(accum.adequacao, accum.count),
-        factualidade: avg(accum.factualidade, accum.count),
-      };
-    }
+  const ratingByProfile: Record<string, {
+    avgRating: number;
+    count: number;
+    personalizedChosen: number;
+    total: number;
+  }> = {};
+  for (const [level, accum] of Object.entries(profileAccum)) {
+    ratingByProfile[level] = {
+      avgRating: round2(accum.ratingSum, accum.ratingCount),
+      count: accum.ratingCount,
+      personalizedChosen: accum.personalizedChosen,
+      total: accum.total,
+    };
   }
 
-  // Feedback cycle
-  const improvementRows = await queryAll<ImprovementRow>(
-    'SELECT improvement_rating, COUNT(*) as count FROM regenerations WHERE improvement_rating IS NOT NULL GROUP BY improvement_rating'
-  );
-  const feedbackCycle: Record<string, number> = { improved: 0, same: 0, worse: 0, total: 0 };
-  for (const row of improvementRows) {
-    feedbackCycle[row.improvement_rating] = parseInt(row.count, 10);
-    feedbackCycle.total += parseInt(row.count, 10);
-  }
-
-  // Regenerated likert
-  const regenAvg = await queryOne<RegenAvgRow>(
-    'SELECT AVG(utility_rating) as avg_utility, AVG(clarity_rating) as avg_clarity, AVG(adequacy_rating) as avg_adequacy FROM regenerations WHERE utility_rating IS NOT NULL'
-  );
-  const regeneratedLikert = {
-    utilidade: regenAvg?.avg_utility ? Math.round(parseFloat(regenAvg.avg_utility) * 100) / 100 : 0,
-    clareza: regenAvg?.avg_clarity ? Math.round(parseFloat(regenAvg.avg_clarity) * 100) / 100 : 0,
-    adequacao: regenAvg?.avg_adequacy ? Math.round(parseFloat(regenAvg.avg_adequacy) * 100) / 100 : 0,
-  };
-
-  // P-Accuracy: compute on-the-fly from summaries (shared helper)
+  // ─── P-Accuracy ────────────────────────────────────────────────────
   const pAccuracyResults = await computePAccuracyForArticles();
 
   res.json({
     preferenceStats: {
       personalizedChosen,
       genericChosen,
-      total: personalizedChosen + genericChosen,
+      total,
+      personalizedPercentage: total > 0 ? Math.round((personalizedChosen / total) * 100) : 0,
+      genericPercentage: total > 0 ? Math.round((genericChosen / total) * 100) : 0,
     },
-    likertByType,
-    likertByProfile,
-    feedbackCycle,
-    regeneratedLikert,
+    ratingByType,
+    ratingByProfile,
     pAccuracy: pAccuracyResults,
   });
 }));

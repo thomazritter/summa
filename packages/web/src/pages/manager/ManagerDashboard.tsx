@@ -424,104 +424,140 @@ function ResultsTab() {
     queryFn: () => managerApi.getResults(),
   });
 
-  const [profileTab, setProfileTab] = useState<string>('junior');
-
   if (isLoading) return <p className="text-gray-500">Carregando...</p>;
-  if (!results || !results.hasData) {
+  if (!results || results.preferenceStats.total === 0) {
     return <p className="text-gray-500">Dados insuficientes para análise.</p>;
   }
 
-  const profileKeys = Object.keys(results.likertByProfile);
+  const { preferenceStats, ratingByType, ratingByProfile, pAccuracy } = results;
+
   const PROFILE_LABELS: Record<string, string> = { junior: 'Júnior', pleno: 'Pleno', senior: 'Sênior' };
+  const profileKeys = Object.keys(ratingByProfile);
 
   return (
     <div className="space-y-8">
-      {/* Card 1: Preferência */}
+      {/* Card 1: Preferência A/B */}
       <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
-        <h3 className="text-lg font-semibold">Preferência de Resumos</h3>
-        <PreferenceBar label="Personalizado" pct={results.preferencePersonalized.percentage} count={results.preferencePersonalized.count} total={results.preferencePersonalized.total} color="bg-blue-500" />
-        <PreferenceBar label="Genérico" pct={results.preferenceGeneric.percentage} count={results.preferenceGeneric.count} total={results.preferenceGeneric.total} color="bg-gray-400" />
+        <h3 className="text-lg font-semibold">Preferência A/B</h3>
+        <PreferenceBar
+          label="Personalizado"
+          percentage={preferenceStats.personalizedPercentage}
+          count={preferenceStats.personalizedChosen}
+          total={preferenceStats.total}
+          color="bg-blue-500"
+        />
+        <PreferenceBar
+          label="Genérico"
+          percentage={preferenceStats.genericPercentage}
+          count={preferenceStats.genericChosen}
+          total={preferenceStats.total}
+          color="bg-gray-400"
+        />
       </div>
 
-      {/* Card 2: Médias Likert por Tipo */}
-      <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
-        <h3 className="text-lg font-semibold">Comparação de Avaliações (Média)</h3>
-        <LikertComparisonTable generic={results.likertByType.generic} personalized={results.likertByType.personalized} />
-      </div>
-
-      {/* Card 3: Médias Likert por Perfil */}
-      {profileKeys.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-6">
-          <h3 className="text-lg font-semibold">Análise por Perfil</h3>
-          <div className="flex gap-2">
-            {profileKeys.map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setProfileTab(key)}
-                className={`px-4 py-2 rounded-full text-sm transition-all ${
-                  profileTab === key ? 'bg-[#2563eb] text-white font-medium' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {PROFILE_LABELS[key] ?? key}
-              </button>
-            ))}
+      {/* Card 2: Nota média por tipo */}
+      <div className="bg-white border border-gray-200 rounded-lg p-8">
+        <h3 className="text-lg font-semibold mb-6">Nota média por tipo</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="border border-gray-200 rounded-lg p-6 text-center">
+            <p className="text-sm text-gray-600 mb-2">Personalizado</p>
+            <p className="text-4xl font-bold text-blue-600">
+              {ratingByType.personalized.avgRating.toFixed(1)}
+              <span className="text-lg font-normal text-gray-400">/10</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-2">{ratingByType.personalized.count} avaliação(ões)</p>
           </div>
-          {results.likertByProfile[profileTab] && (
-            <LikertComparisonTable
-              generic={results.likertByProfile[profileTab].generic}
-              personalized={results.likertByProfile[profileTab].personalized}
-            />
-          )}
+          <div className="border border-gray-200 rounded-lg p-6 text-center">
+            <p className="text-sm text-gray-600 mb-2">Genérico</p>
+            <p className="text-4xl font-bold text-gray-700">
+              {ratingByType.generic.avgRating.toFixed(1)}
+              <span className="text-lg font-normal text-gray-400">/10</span>
+            </p>
+            <p className="text-xs text-gray-500 mt-2">{ratingByType.generic.count} avaliação(ões)</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Card 3: Resultados por perfil */}
+      {profileKeys.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
+          <h3 className="text-lg font-semibold">Resultados por perfil</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="border-b border-gray-200">
+                <tr>
+                  <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Nível</th>
+                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">Nota média</th>
+                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">% Personalizado</th>
+                  <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">Sessões</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {profileKeys.map((key) => {
+                  const profile = ratingByProfile[key];
+                  const pctPersonalized = profile.total > 0
+                    ? Math.round((profile.personalizedChosen / profile.total) * 100)
+                    : 0;
+                  return (
+                    <tr key={key} className="hover:bg-gray-50 transition-all">
+                      <td className="px-4 py-4 text-sm font-medium text-gray-900">
+                        {PROFILE_LABELS[key] ?? key}
+                      </td>
+                      <td className="px-4 py-4 text-center text-sm">
+                        {profile.count > 0 ? profile.avgRating.toFixed(1) : '—'}
+                      </td>
+                      <td className="px-4 py-4 text-center text-sm">
+                        {profile.total > 0 ? `${pctPersonalized}%` : '—'}
+                      </td>
+                      <td className="px-4 py-4 text-center text-sm text-gray-600">
+                        {profile.total}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
-      {/* Card 4: Ciclo de Feedback */}
-      <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
-        <h3 className="text-lg font-semibold">Ciclo de Feedback</h3>
-        {results.feedbackCycle.total === 0 ? (
-          <p className="text-gray-500">Nenhum dado disponível.</p>
-        ) : (
-          <>
-            <FeedbackCycleBar cycle={results.feedbackCycle} />
-            <div className="flex gap-4 text-xs text-gray-500">
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" /> Melhorou: {results.feedbackCycle.improved} ({pct(results.feedbackCycle.improved, results.feedbackCycle.total)}%)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-400 inline-block" /> Igual: {results.feedbackCycle.same} ({pct(results.feedbackCycle.same, results.feedbackCycle.total)}%)</span>
-              <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500 inline-block" /> Piorou: {results.feedbackCycle.worse} ({pct(results.feedbackCycle.worse, results.feedbackCycle.total)}%)</span>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Card 5: Likert Regenerado */}
-      <div className="bg-white border border-gray-200 rounded-lg p-8 space-y-4">
-        <h3 className="text-lg font-semibold">Médias Likert: Resumo Regenerado</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="border-b border-gray-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Métrica</th>
-                <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Média</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              <tr><td className="px-4 py-4 text-sm text-gray-700">Utilidade</td><td className="px-4 py-4 text-sm">{results.regeneratedLikert.utilidade.toFixed(1)}</td></tr>
-              <tr><td className="px-4 py-4 text-sm text-gray-700">Clareza</td><td className="px-4 py-4 text-sm">{results.regeneratedLikert.clareza.toFixed(1)}</td></tr>
-              <tr><td className="px-4 py-4 text-sm text-gray-700">Adequação</td><td className="px-4 py-4 text-sm">{results.regeneratedLikert.adequacao.toFixed(1)}</td></tr>
-            </tbody>
-          </table>
+      {/* Card 4: P-Accuracy */}
+      {pAccuracy.length > 0 && (
+        <div className="bg-white border border-gray-200 rounded-lg p-8">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">P-Accuracy (Sensibilidade de Personalização)</h3>
+          <p className="text-sm text-gray-600 mb-6">
+            Mede o quanto os resumos diferem entre perfis. Valores mais altos indicam maior personalização.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {pAccuracy.map((pa) => (
+              <div key={pa.articleId} className="border border-gray-200 rounded-lg p-5">
+                <p className="font-medium text-sm text-gray-900 mb-2">{pa.articleTitle}</p>
+                <div className="flex items-center gap-4">
+                  <div>
+                    <span className="text-2xl font-bold text-blue-600">{(pa.pAccuracyRouge * 100).toFixed(1)}%</span>
+                    <p className="text-xs text-gray-500">P-Accuracy</p>
+                  </div>
+                  <div>
+                    <span className="text-lg font-semibold text-gray-700">{pa.avgPairwiseRougeL.toFixed(3)}</span>
+                    <p className="text-xs text-gray-500">Similaridade média entre perfis</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
-function pct(value: number, total: number): string {
-  if (total === 0) return '0';
-  return ((value / total) * 100).toFixed(0);
-}
-
-function PreferenceBar({ label, pct: percentage, count, total, color }: { label: string; pct: number; count: number; total: number; color: string }) {
+function PreferenceBar({ label, percentage, count, total, color }: {
+  label: string;
+  percentage: number;
+  count: number;
+  total: number;
+  color: string;
+}) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
@@ -531,71 +567,6 @@ function PreferenceBar({ label, pct: percentage, count, total, color }: { label:
       <div className="h-8 bg-gray-100 rounded overflow-hidden">
         <div className={`${color} h-full transition-all`} style={{ width: `${percentage}%` }} />
       </div>
-    </div>
-  );
-}
-
-function LikertComparisonTable({ generic, personalized }: {
-  generic: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
-  personalized: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
-}) {
-  const rows: { label: string; key: keyof typeof generic }[] = [
-    { label: 'Utilidade', key: 'utilidade' },
-    { label: 'Clareza', key: 'clareza' },
-    { label: 'Adequação', key: 'adequacao' },
-    { label: 'Factualidade', key: 'factualidade' },
-  ];
-
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead className="border-b border-gray-200">
-          <tr>
-            <th className="px-4 py-3 text-left text-sm font-medium text-gray-600">Métrica</th>
-            <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">Genérico</th>
-            <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">Personalizado</th>
-            <th className="px-4 py-3 text-center text-sm font-medium text-gray-600">Diferença</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-200">
-          {rows.map((r) => {
-            const diff = personalized[r.key] - generic[r.key];
-            return (
-              <tr key={r.key}>
-                <td className="px-4 py-4 text-sm text-gray-700">{r.label}</td>
-                <td className="px-4 py-4 text-center text-sm">{generic[r.key].toFixed(1)}</td>
-                <td className="px-4 py-4 text-center text-sm">{personalized[r.key].toFixed(1)}</td>
-                <td className={`px-4 py-4 text-center text-sm font-medium ${diff > 0 ? 'text-[#16a34a]' : diff < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                  {diff > 0 ? '+' : ''}{diff.toFixed(1)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function FeedbackCycleBar({ cycle }: { cycle: { improved: number; same: number; worse: number; total: number } }) {
-  const p = (v: number) => ((v / cycle.total) * 100).toFixed(0);
-  return (
-    <div className="flex h-12 rounded overflow-hidden">
-      {cycle.improved > 0 && (
-        <div className="bg-[#16a34a] flex items-center justify-center text-white text-sm" style={{ width: `${p(cycle.improved)}%` }}>
-          Melhorou {p(cycle.improved)}%
-        </div>
-      )}
-      {cycle.same > 0 && (
-        <div className="bg-gray-300 flex items-center justify-center text-gray-700 text-sm" style={{ width: `${p(cycle.same)}%` }}>
-          Igual {p(cycle.same)}%
-        </div>
-      )}
-      {cycle.worse > 0 && (
-        <div className="bg-red-500 flex items-center justify-center text-white text-sm" style={{ width: `${p(cycle.worse)}%` }}>
-          Piorou {p(cycle.worse)}%
-        </div>
-      )}
     </div>
   );
 }

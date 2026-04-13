@@ -76,19 +76,29 @@ export const managerApi = {
   }>('/manager/overview'),
 
   getResults: () => apiRequest<{
-    preferencePersonalized: { count: number; total: number; percentage: number };
-    preferenceGeneric: { count: number; total: number; percentage: number };
-    likertByType: {
-      generic: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
-      personalized: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
+    preferenceStats: {
+      personalizedChosen: number;
+      genericChosen: number;
+      total: number;
+      personalizedPercentage: number;
+      genericPercentage: number;
     };
-    likertByProfile: Record<string, {
-      generic: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
-      personalized: { utilidade: number; clareza: number; adequacao: number; factualidade: number };
+    ratingByType: {
+      personalized: { avgRating: number; count: number };
+      generic: { avgRating: number; count: number };
+    };
+    ratingByProfile: Record<string, {
+      avgRating: number;
+      count: number;
+      personalizedChosen: number;
+      total: number;
     }>;
-    feedbackCycle: { improved: number; same: number; worse: number; total: number };
-    regeneratedLikert: { utilidade: number; clareza: number; adequacao: number };
-    hasData: boolean;
+    pAccuracy: Array<{
+      articleId: number;
+      articleTitle: string;
+      pAccuracyRouge: number;
+      avgPairwiseRougeL: number;
+    }>;
   }>('/manager/results'),
 
   getParticipants: () => apiRequest<Array<{
