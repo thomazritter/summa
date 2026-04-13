@@ -165,6 +165,8 @@ export const experimentApi = {
     topicFamiliarity: string;
     structurePreference?: string;
     readingGoal?: string;
+    preferredLength?: string;
+    englishComfort?: string;
   }) =>
     apiRequest<{ id: number; name: string; experienceLevel: string }>('/experiment/participants', {
       method: 'POST',

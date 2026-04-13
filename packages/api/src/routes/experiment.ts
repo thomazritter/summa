@@ -24,6 +24,8 @@ const registerParticipantSchema = z.object({
   topicFamiliarity: z.enum(['none', 'little', 'moderate', 'high']),
   structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
   readingGoal: z.enum(['overview', 'methodology', 'results', 'practical']).optional(),
+  preferredLength: z.enum(['brief', 'moderate', 'detailed']).optional(),
+  englishComfort: z.enum(['keep_english', 'translate']).optional(),
 });
 
 const createSessionSchema = z.object({
@@ -100,13 +102,13 @@ experimentRoutes.post('/participants', asyncHandler(async (req: Request, res: Re
     return res.status(400).json({ error: validation.error.errors });
   }
 
-  const { name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference, readingGoal } = validation.data;
+  const { name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference, readingGoal, preferredLength, englishComfort } = validation.data;
 
   const row = await queryOne<ParticipantRow>(`
-    INSERT INTO participants (name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
+    INSERT INTO participants (name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal, preferred_length, english_comfort)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     RETURNING *
-  `, [name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference || null, readingGoal || null]);
+  `, [name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference || null, readingGoal || null, preferredLength || null, englishComfort || null]);
 
   if (!row) return res.status(500).json({ error: 'Falha ao criar registro' });
 
@@ -482,6 +484,8 @@ const mapParticipantRow = (row: ParticipantRow): Participant => ({
   topicFamiliarity: row.topic_familiarity as Participant['topicFamiliarity'],
   structurePreference: row.structure_preference as Participant['structurePreference'],
   readingGoal: row.reading_goal as Participant['readingGoal'],
+  preferredLength: row.preferred_length as Participant['preferredLength'],
+  englishComfort: row.english_comfort as Participant['englishComfort'],
   createdAt: row.created_at,
 });
 

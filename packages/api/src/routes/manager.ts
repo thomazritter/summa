@@ -385,11 +385,11 @@ function buildCsv(headers: string[], rows: unknown[][]): string {
 
 async function getParticipantsCsv(): Promise<string> {
   const rows = await queryAll<ExportParticipantRow>(
-    'SELECT id, name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal, created_at FROM participants ORDER BY id'
+    'SELECT id, name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal, preferred_length, english_comfort, created_at FROM participants ORDER BY id'
   );
   return buildCsv(
-    ['id', 'nome', 'nivel', 'anos_experiencia', 'frequencia_leitura', 'familiaridade_tema', 'preferencia_estrutura', 'objetivo_leitura', 'data_registro'],
-    rows.map(r => [r.id, r.name, r.experience_level, r.years_experience, r.reading_frequency, r.topic_familiarity, r.structure_preference, r.reading_goal, r.created_at])
+    ['id', 'nome', 'nivel', 'anos_experiencia', 'frequencia_leitura', 'familiaridade_tema', 'preferencia_estrutura', 'objetivo_leitura', 'extensao_preferida', 'conforto_ingles', 'data_registro'],
+    rows.map(r => [r.id, r.name, r.experience_level, r.years_experience, r.reading_frequency, r.topic_familiarity, r.structure_preference, r.reading_goal, r.preferred_length, r.english_comfort, r.created_at])
   );
 }
 

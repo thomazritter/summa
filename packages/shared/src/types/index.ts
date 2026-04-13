@@ -130,6 +130,8 @@ export type ReadingFrequency = 'never' | 'rarely' | 'sometimes' | 'frequently';
 export type TopicFamiliarity = 'none' | 'little' | 'moderate' | 'high';
 export type StructurePreference = 'prose' | 'bullets' | 'mixed';
 export type ReadingGoal = 'overview' | 'methodology' | 'results' | 'practical';
+export type PreferredLength = 'brief' | 'moderate' | 'detailed';
+export type EnglishComfort = 'keep_english' | 'translate';
 
 export interface Participant {
   id: number;
@@ -140,6 +142,8 @@ export interface Participant {
   topicFamiliarity: TopicFamiliarity;
   structurePreference: StructurePreference | null;
   readingGoal: ReadingGoal | null;
+  preferredLength: PreferredLength | null;
+  englishComfort: EnglishComfort | null;
   createdAt: string;
 }
 
@@ -181,6 +185,8 @@ export interface RegisterParticipantRequest {
   topicFamiliarity: TopicFamiliarity;
   structurePreference?: StructurePreference;
   readingGoal?: ReadingGoal;
+  preferredLength?: PreferredLength;
+  englishComfort?: EnglishComfort;
 }
 
 export interface CreateExperimentSessionRequest {

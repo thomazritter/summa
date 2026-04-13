@@ -107,6 +107,8 @@ CREATE TABLE IF NOT EXISTS participants (
   topic_familiarity TEXT NOT NULL CHECK (topic_familiarity IN ('none', 'little', 'moderate', 'high')),
   structure_preference TEXT CHECK (structure_preference IN ('prose', 'bullets', 'mixed')),
   reading_goal TEXT CHECK (reading_goal IN ('overview', 'methodology', 'results', 'practical')),
+  preferred_length TEXT CHECK (preferred_length IN ('brief', 'moderate', 'detailed')),
+  english_comfort TEXT CHECK (english_comfort IN ('keep_english', 'translate')),
   created_at TIMESTAMP DEFAULT NOW()
 );
 

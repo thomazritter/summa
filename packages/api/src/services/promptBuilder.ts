@@ -3,6 +3,7 @@ import type { Profile, ArticleStructure } from '@summarizer/shared';
 export interface ParticipantPreferences {
   structurePreference?: 'prose' | 'bullets' | 'mixed';
   readingGoal?: 'overview' | 'methodology' | 'results' | 'practical';
+  englishComfort?: 'keep_english' | 'translate';
 }
 
 export const buildSummarizationPrompt = (
@@ -90,6 +91,15 @@ const buildInstructions = (profile: Profile, participantPreferences?: Participan
       practical: 'Objetivo do leitor: aplicar as descobertas na prática. Destaque implicações concretas, recomendações e como os resultados podem ser usados no dia a dia.',
     };
     parts.push(goalInstructions[participantPreferences.readingGoal]);
+  }
+
+  // English comfort instructions (from participant, not profile)
+  if (participantPreferences?.englishComfort) {
+    const englishInstructions: Record<NonNullable<ParticipantPreferences['englishComfort']>, string> = {
+      keep_english: 'Mantenha termos técnicos em inglês quando forem amplamente usados na área (ex: code review, bug, commit, framework). Não traduza terminologia consagrada.',
+      translate: 'Traduza todos os termos técnicos para português sempre que possível. Se não houver tradução consolidada, apresente o termo em português seguido do original em inglês entre parênteses na primeira ocorrência.',
+    };
+    parts.push(englishInstructions[participantPreferences.englishComfort]);
   }
 
   parts.push('Estruture o resumo com parágrafos bem definidos. Comece pela contribuição principal do artigo.');

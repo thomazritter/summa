@@ -12,6 +12,8 @@ interface FormData {
   topicFamiliarity: string;
   structurePreference: string;
   readingGoal: string;
+  preferredLength: string;
+  englishComfort: string;
 }
 
 export function ExperimentRegister() {
@@ -24,6 +26,8 @@ export function ExperimentRegister() {
     topicFamiliarity: '',
     structurePreference: '',
     readingGoal: '',
+    preferredLength: '',
+    englishComfort: '',
   });
 
   const registerMutation = useMutation({
@@ -41,7 +45,9 @@ export function ExperimentRegister() {
     form.readingFrequency !== '' &&
     form.topicFamiliarity !== '' &&
     form.structurePreference !== '' &&
-    form.readingGoal !== '';
+    form.readingGoal !== '' &&
+    form.preferredLength !== '' &&
+    form.englishComfort !== '';
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -196,6 +202,60 @@ export function ExperimentRegister() {
                     onClick={() => setForm({ ...form, readingGoal: opt.value })}
                     className={`p-4 border rounded-lg text-center transition-all ${
                       form.readingGoal === opt.value
+                        ? 'bg-blue-50 border-[#2563eb]'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Preferred Length */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Quanto detalhe você prefere nos resumos?
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[
+                  { value: 'brief', label: 'Breve', desc: '2-3 parágrafos' },
+                  { value: 'moderate', label: 'Moderado', desc: '4-5 parágrafos' },
+                  { value: 'detailed', label: 'Detalhado', desc: '6+ parágrafos' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setForm({ ...form, preferredLength: opt.value })}
+                    className={`p-4 border rounded-lg text-left transition-all ${
+                      form.preferredLength === opt.value
+                        ? 'bg-blue-50 border-[#2563eb]'
+                        : 'border-gray-300 hover:border-gray-400'
+                    }`}
+                  >
+                    <div className="font-medium text-gray-900">{opt.label}</div>
+                    <div className="text-xs text-gray-600 mt-1">{opt.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* English Comfort */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Como prefere os termos técnicos em inglês?
+              </label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { value: 'keep_english', label: 'Manter em inglês' },
+                  { value: 'translate', label: 'Traduzir para português' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setForm({ ...form, englishComfort: opt.value })}
+                    className={`p-4 border rounded-lg text-center transition-all ${
+                      form.englishComfort === opt.value
                         ? 'bg-blue-50 border-[#2563eb]'
                         : 'border-gray-300 hover:border-gray-400'
                     }`}

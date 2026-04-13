@@ -97,18 +97,29 @@ export async function createExperimentSession(
   }
 
   // Personalized summary: always generate on-demand with full participant profile
+  // Use participant's preferred_length for depth (overrides experience-based depth),
+  // falling back to the experience config depth if not set
+  const depth = (participant.preferred_length as ProfileDimensions['depth']) || config.dimensions.depth;
+  const dimensions: ProfileDimensions = {
+    ...config.dimensions,
+    depth,
+  };
+
   const participantPreferences = {
     structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
     readingGoal: participant.reading_goal as 'overview' | 'methodology' | 'results' | 'practical' | undefined,
+    englishComfort: participant.english_comfort as 'keep_english' | 'translate' | undefined,
   };
+
+  const hasPreferences = participantPreferences.structurePreference
+    || participantPreferences.readingGoal
+    || participantPreferences.englishComfort;
 
   const personalizedSummary = await generatePersonalizedSummary(
     articleId,
     config.profileId,
-    config.dimensions,
-    participantPreferences.structurePreference || participantPreferences.readingGoal
-      ? participantPreferences
-      : undefined,
+    dimensions,
+    hasPreferences ? participantPreferences : undefined,
   );
 
   // Randomize A/B order

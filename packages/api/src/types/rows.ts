@@ -21,6 +21,8 @@ export interface ParticipantRow {
   topic_familiarity: string;
   structure_preference: string | null;
   reading_goal: string | null;
+  preferred_length: string | null;
+  english_comfort: string | null;
   created_at: string;
 }
 
@@ -172,6 +174,8 @@ export interface ExportParticipantRow {
   topic_familiarity: string;
   structure_preference: string | null;
   reading_goal: string | null;
+  preferred_length: string | null;
+  english_comfort: string | null;
   created_at: string;
 }
 

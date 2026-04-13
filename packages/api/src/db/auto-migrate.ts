@@ -42,6 +42,8 @@ export async function runMigrations(): Promise<void> {
 
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS structure_preference TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS reading_goal TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS preferred_length TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS english_comfort TEXT;
 
     ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS preference_rating INTEGER;
   `;
