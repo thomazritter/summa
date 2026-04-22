@@ -7,14 +7,15 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies (CPU-only torch)
+# Install Python dependencies (ONNX Runtime - much lighter than PyTorch)
 COPY requirements.txt .
-RUN pip install --no-cache-dir --extra-index-url https://download.pytorch.org/whl/cpu -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Download model at build time so it's baked into the image
-RUN python -c "from transformers import AutoTokenizer, AutoModelForSequenceClassification; \
+# Download and convert model to ONNX at build time
+RUN python -c "from transformers import AutoTokenizer; \
+    from optimum.onnxruntime import ORTModelForSequenceClassification; \
     AutoTokenizer.from_pretrained('cross-encoder/nli-deberta-v3-base'); \
-    AutoModelForSequenceClassification.from_pretrained('cross-encoder/nli-deberta-v3-base')"
+    ORTModelForSequenceClassification.from_pretrained('cross-encoder/nli-deberta-v3-base', export=True)"
 
 COPY app.py .
 

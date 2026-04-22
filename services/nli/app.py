@@ -1,16 +1,17 @@
 """
 NLI (Natural Language Inference) microservice for factuality verification.
 
-Uses cross-encoder/nli-deberta-v3-base to classify premise-hypothesis pairs
-as supported (entailment), contradicted (contradiction), or neutral.
+Uses cross-encoder/nli-deberta-v3-base via ONNX Runtime for low memory usage.
+Classifies premise-hypothesis pairs as supported, contradicted, or neutral.
 """
 
 import logging
 import os
 
+import numpy as np
 from flask import Flask, jsonify, request
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-import torch
+from optimum.onnxruntime import ORTModelForSequenceClassification
+from transformers import AutoTokenizer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -25,13 +26,16 @@ LABEL_MAP = {0: "contradicted", 1: "supported", 2: "neutral"}
 
 app = Flask(__name__)
 
-# Load model and tokenizer at startup
-logger.info("Loading model: %s", MODEL_NAME)
+# Load model and tokenizer at startup using ONNX Runtime (much less memory than PyTorch)
+logger.info("Loading model: %s (ONNX)", MODEL_NAME)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, torch_dtype=torch.float32)
-model.eval()
-torch.set_num_threads(1)
+model = ORTModelForSequenceClassification.from_pretrained(MODEL_NAME, export=True)
 logger.info("Model loaded successfully")
+
+
+def softmax(logits):
+    exp = np.exp(logits - np.max(logits))
+    return exp / exp.sum()
 
 
 @app.route("/health", methods=["GET"])
@@ -51,8 +55,7 @@ def classify():
     if not premise or not hypothesis:
         return jsonify({"error": "Both 'premise' and 'hypothesis' are required"}), 400
 
-    # Truncate inputs to avoid exceeding model max length (512 tokens)
-    # Leave room for special tokens by truncating text conservatively
+    # Truncate inputs to avoid exceeding model max length
     max_chars = 1500
     premise = premise[:max_chars]
     hypothesis = hypothesis[:max_chars]
@@ -61,23 +64,22 @@ def classify():
         inputs = tokenizer(
             premise,
             hypothesis,
-            return_tensors="pt",
+            return_tensors="np",
             truncation=True,
             max_length=512,
             padding=True,
         )
 
-        with torch.no_grad():
-            outputs = model(**inputs)
-            logits = outputs.logits
-            probabilities = torch.softmax(logits, dim=1).squeeze()
+        outputs = model(**inputs)
+        logits = outputs.logits[0]
+        probabilities = softmax(logits)
 
         scores = {
-            LABEL_MAP[i]: round(probabilities[i].item(), 4)
+            LABEL_MAP[i]: round(float(probabilities[i]), 4)
             for i in range(len(LABEL_MAP))
         }
 
-        predicted_idx = torch.argmax(probabilities).item()
+        predicted_idx = int(np.argmax(probabilities))
         label = LABEL_MAP[predicted_idx]
         confidence = scores[label]
 
