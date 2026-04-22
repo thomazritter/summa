@@ -28,8 +28,9 @@ app = Flask(__name__)
 # Load model and tokenizer at startup
 logger.info("Loading model: %s", MODEL_NAME)
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
+model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME, torch_dtype=torch.float32)
 model.eval()
+torch.set_num_threads(1)
 logger.info("Model loaded successfully")
 
 
