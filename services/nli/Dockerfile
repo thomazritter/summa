@@ -7,15 +7,15 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends gcc && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies (ONNX Runtime - much lighter than PyTorch)
+# Install Python dependencies (ONNX Runtime only - no PyTorch)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Download and convert model to ONNX at build time
+# Download pre-converted ONNX model and tokenizer at build time
 RUN python -c "from transformers import AutoTokenizer; \
-    from optimum.onnxruntime import ORTModelForSequenceClassification; \
+    from huggingface_hub import hf_hub_download; \
     AutoTokenizer.from_pretrained('cross-encoder/nli-deberta-v3-base'); \
-    ORTModelForSequenceClassification.from_pretrained('cross-encoder/nli-deberta-v3-base', export=True)"
+    hf_hub_download(repo_id='xenova/nli-deberta-v3-base', filename='onnx/model.onnx')"
 
 COPY app.py .
 
