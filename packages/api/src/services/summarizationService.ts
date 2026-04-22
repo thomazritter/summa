@@ -170,7 +170,7 @@ export const generateGenericSummary = async (articleId: number): Promise<Summary
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
-      maxTokens: 600,
+      maxTokens: 8192,
     });
   } catch (error) {
     if (error instanceof LLMError) {

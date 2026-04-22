@@ -24,7 +24,7 @@ async function main() {
         prompt = buildSummarizationPrompt(profile as any, sc, article.raw_text);
       }
       
-      const maxTokens = profile.id === 99 ? 800 : getMaxTokensForDepth(profile.depth);
+      const maxTokens = getMaxTokensForDepth(profile.depth);
       
       console.log('  Generating for', profile.name, '(maxTokens:', maxTokens, ')...');
 

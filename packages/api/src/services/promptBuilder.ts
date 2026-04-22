@@ -102,6 +102,8 @@ const buildInstructions = (profile: Profile, participantPreferences?: Participan
     parts.push(englishInstructions[participantPreferences.englishComfort]);
   }
 
+  parts.push('IMPORTANTE: Cite apenas dados, números e porcentagens que aparecem explicitamente no texto do artigo. Não invente, arredonde ou estime estatísticas. Se o artigo diz "14%", use "14%" — não "12%" ou "aproximadamente 15%".');
+
   parts.push('Estruture o resumo com parágrafos bem definidos. Comece pela contribuição principal do artigo.');
 
   return parts.join('\n\n');
@@ -110,39 +112,32 @@ const buildInstructions = (profile: Profile, participantPreferences?: Participan
 const buildContentSection = (structure: ArticleStructure, rawText: string): string => {
   const parts: string[] = [];
 
-  // Prioritize structured content if available
+  // Send full article content — models have 128K context, no need to truncate
   if (structure.abstract) {
     parts.push(`ABSTRACT:\n${structure.abstract}`);
   }
   if (structure.introduction) {
-    parts.push(`INTRODUCTION:\n${truncateText(structure.introduction, 2000)}`);
+    parts.push(`INTRODUCTION:\n${structure.introduction}`);
   }
   if (structure.methodology) {
-    parts.push(`METHODOLOGY:\n${truncateText(structure.methodology, 2000)}`);
+    parts.push(`METHODOLOGY:\n${structure.methodology}`);
   }
   if (structure.results) {
-    parts.push(`RESULTS:\n${truncateText(structure.results, 2000)}`);
+    parts.push(`RESULTS:\n${structure.results}`);
   }
   if (structure.discussion) {
-    parts.push(`DISCUSSION:\n${truncateText(structure.discussion, 1500)}`);
+    parts.push(`DISCUSSION:\n${structure.discussion}`);
   }
   if (structure.conclusion) {
-    parts.push(`CONCLUSION:\n${truncateText(structure.conclusion, 1000)}`);
+    parts.push(`CONCLUSION:\n${structure.conclusion}`);
   }
 
   // If no structured content, use raw text
   if (parts.length === 0) {
-    parts.push(truncateText(rawText, 8000));
+    parts.push(rawText);
   }
 
   return parts.join('\n\n');
-};
-
-const truncateText = (text: string, maxLength: number): string => {
-  if (text.length <= maxLength) {
-    return text;
-  }
-  return text.slice(0, maxLength) + '... [truncated]';
 };
 
 /**
@@ -165,6 +160,8 @@ export const buildGenericSummarizationPrompt = (
   const contentSection = buildContentSection(articleContent, rawText);
 
   return `Resuma o seguinte artigo científico em português. Produza um resumo objetivo de 3-4 parágrafos cobrindo o que o artigo faz, como faz e o que encontrou. Não adapte o texto para nenhum público específico.
+
+IMPORTANTE: Cite apenas dados, números e porcentagens que aparecem explicitamente no texto do artigo. Não invente, arredonde ou estime estatísticas.
 
 ---
 CONTEÚDO DO ARTIGO:
