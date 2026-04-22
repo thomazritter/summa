@@ -1,0 +1,4 @@
+torch==2.2.2+cpu
+transformers==4.40.2
+flask==3.0.3
+gunicorn==22.0.0

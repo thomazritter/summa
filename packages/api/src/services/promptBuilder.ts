@@ -102,8 +102,6 @@ const buildInstructions = (profile: Profile, participantPreferences?: Participan
     parts.push(englishInstructions[participantPreferences.englishComfort]);
   }
 
-  parts.push('IMPORTANTE: Cite apenas dados, números e porcentagens que aparecem explicitamente no texto do artigo. Não invente, arredonde ou estime estatísticas. Se o artigo diz "14%", use "14%" — não "12%" ou "aproximadamente 15%".');
-
   parts.push('Estruture o resumo com parágrafos bem definidos. Comece pela contribuição principal do artigo.');
 
   return parts.join('\n\n');
@@ -160,8 +158,6 @@ export const buildGenericSummarizationPrompt = (
   const contentSection = buildContentSection(articleContent, rawText);
 
   return `Resuma o seguinte artigo científico em português. Produza um resumo objetivo de 3-4 parágrafos cobrindo o que o artigo faz, como faz e o que encontrou. Não adapte o texto para nenhum público específico.
-
-IMPORTANTE: Cite apenas dados, números e porcentagens que aparecem explicitamente no texto do artigo. Não invente, arredonde ou estime estatísticas.
 
 ---
 CONTEÚDO DO ARTIGO:

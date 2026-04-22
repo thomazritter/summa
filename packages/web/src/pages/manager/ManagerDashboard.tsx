@@ -903,13 +903,6 @@ function SummariesTab() {
 
   const formatMetric = (v: number | null) => (v !== null ? v.toFixed(3) : 'N/D');
 
-  const factualityColor = (v: number | null) => {
-    if (v === null) return 'text-gray-400';
-    if (v >= 0.8) return 'text-green-600';
-    if (v >= 0.6) return 'text-amber-600';
-    return 'text-red-600';
-  };
-
   return (
     <div className="space-y-6">
       {/* Filters */}
@@ -991,7 +984,21 @@ function SummariesTab() {
                     <td className="px-6 py-4 font-mono text-sm">{formatMetric(s.rouge2)}</td>
                     <td className="px-6 py-4 font-mono text-sm">{formatMetric(s.rougeL)}</td>
                     <td className="px-6 py-4 font-mono text-sm">{formatMetric(s.bertScore)}</td>
-                    <td className={`px-6 py-4 font-mono text-sm font-medium ${factualityColor(s.factualityScore)}`}>{formatMetric(s.factualityScore)}</td>
+                    <td className="px-6 py-4">
+                      {s.factualityScore !== null ? (
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                          s.factualityScore >= 0.8
+                            ? 'bg-green-100 text-green-700'
+                            : s.factualityScore >= 0.6
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-red-100 text-red-700'
+                        }`}>
+                          {s.factualityScore.toFixed(2)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">Pendente</span>
+                      )}
+                    </td>
                   </tr>
                   {expandedId === s.id && (
                     <tr>

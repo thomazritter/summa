@@ -3,7 +3,7 @@ import { generateCompletion, LLMError } from './groqClient.js';
 import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxTokensForDepth } from './promptBuilder.js';
 import type { ParticipantPreferences } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
-import { checkFactuality } from './factualityChecker.js';
+import { checkFactuality, checkNliServiceHealth } from './factualityChecker.js';
 import { computeRouge } from './metricsService.js';
 import { safeJsonParse } from '../utils/validation.js';
 import { GENERIC_PROFILE_ID } from '../types/rows.js';
@@ -153,6 +153,39 @@ export const updateSummaryFactuality = async (
 };
 
 /**
+ * Run factuality verification in the background without blocking the response.
+ * If the NLI service is unavailable or the check fails, it logs a warning and skips.
+ */
+const checkFactualityInBackground = (
+  summaryId: number,
+  summaryContent: string,
+  structuredContent: ArticleStructure,
+  rawText: string
+): void => {
+  // Fire-and-forget: do not await
+  (async () => {
+    try {
+      const health = await checkNliServiceHealth();
+      if (!health.available) {
+        console.warn(`[factuality] NLI service unavailable – skipping factuality check for summary ${summaryId}`);
+        return;
+      }
+
+      const { score, results } = await checkFactuality(summaryContent, structuredContent, rawText);
+
+      await execute(
+        'UPDATE summaries SET factuality_score = $1, factuality_details = $2 WHERE id = $3',
+        [score, JSON.stringify(results), summaryId],
+      );
+
+      console.info(`[factuality] Summary ${summaryId} scored ${score.toFixed(3)} (${results.length} claims checked)`);
+    } catch (error) {
+      console.warn(`[factuality] Background check failed for summary ${summaryId}:`, error);
+    }
+  })();
+};
+
+/**
  * Generate a generic summary (no profile parameterization).
  * Used as the control condition in the experiment.
  */
@@ -201,6 +234,9 @@ export const generateGenericSummary = async (articleId: number): Promise<Summary
       [rouge.rouge1, rouge.rouge2, rouge.rougeL, row.id],
     );
   }
+
+  // Run factuality check in background (non-blocking)
+  checkFactualityInBackground(row.id, summaryContent, structuredContent, article.raw_text);
 
   return mapRowToSummary(row);
 };
@@ -291,6 +327,9 @@ export const generatePersonalizedSummary = async (
       [rouge.rouge1, rouge.rouge2, rouge.rougeL, row.id],
     );
   }
+
+  // Run factuality check in background (non-blocking)
+  checkFactualityInBackground(row.id, summaryContent, structuredContent, article.raw_text);
 
   return mapRowToSummary(row);
 };
