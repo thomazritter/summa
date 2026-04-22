@@ -20,11 +20,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "cross-encoder/nli-deberta-v3-base"
-ONNX_MODEL = "xenova/nli-deberta-v3-base"
+MODEL_NAME = "MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
+ONNX_MODEL = "xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7"
 
-# NLI label mapping: [contradiction, entailment, neutral]
-LABEL_MAP = {0: "contradicted", 1: "supported", 2: "neutral"}
+# NLI label mapping: [entailment, neutral, contradiction]
+LABEL_MAP = {0: "supported", 1: "neutral", 2: "contradicted"}
 
 app = Flask(__name__)
 

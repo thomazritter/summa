@@ -14,8 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Download pre-converted ONNX model and tokenizer at build time
 RUN python -c "from transformers import AutoTokenizer; \
     from huggingface_hub import hf_hub_download; \
-    AutoTokenizer.from_pretrained('cross-encoder/nli-deberta-v3-base'); \
-    hf_hub_download(repo_id='xenova/nli-deberta-v3-base', filename='onnx/model.onnx')"
+    AutoTokenizer.from_pretrained('MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7'); \
+    hf_hub_download(repo_id='xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7', filename='onnx/model.onnx')"
 
 COPY app.py .
 
