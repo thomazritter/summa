@@ -74,13 +74,9 @@ def classify():
             padding=True,
         )
 
-        ort_inputs = {
-            "input_ids": inputs["input_ids"],
-            "attention_mask": inputs["attention_mask"],
-        }
-        # Add token_type_ids if the model expects it
-        if "token_type_ids" in inputs:
-            ort_inputs["token_type_ids"] = inputs["token_type_ids"]
+        # Only pass inputs that the ONNX model accepts
+        model_input_names = {i.name for i in session.get_inputs()}
+        ort_inputs = {k: v for k, v in dict(inputs).items() if k in model_input_names}
 
         outputs = session.run(None, ort_inputs)
         logits = outputs[0][0]
