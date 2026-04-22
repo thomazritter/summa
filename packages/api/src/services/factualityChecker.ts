@@ -44,6 +44,7 @@ const verifySentence = async (
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ premise: context, hypothesis: sentence }),
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!response.ok) {
@@ -97,7 +98,9 @@ const calculateFactualityScore = (results: FactualityResult[]): number => {
 
 export const checkNliServiceHealth = async (): Promise<{ available: boolean; model?: string }> => {
   try {
-    const response = await fetch(`${NLI_SERVICE_URL}/health`);
+    const response = await fetch(`${NLI_SERVICE_URL}/health`, {
+      signal: AbortSignal.timeout(5000),
+    });
     if (response.ok) {
       const data = await response.json() as { status: string; model: string };
       return { available: true, model: data.model };
