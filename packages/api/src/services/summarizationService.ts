@@ -188,15 +188,19 @@ const checkFactualityInBackground = (
 /**
  * Generate a generic summary (no profile parameterization).
  * Used as the control condition in the experiment.
+ * Accepts englishComfort to match participant's language preference for A/B blinding.
  */
-export const generateGenericSummary = async (articleId: number): Promise<Summary> => {
+export const generateGenericSummary = async (
+  articleId: number,
+  englishComfort?: 'keep_english' | 'translate'
+): Promise<Summary> => {
   const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
   if (!article) {
     throw new NotFoundError('Article not found');
   }
 
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
-  const prompt = buildGenericSummarizationPrompt(structuredContent, article.raw_text);
+  const prompt = buildGenericSummarizationPrompt(structuredContent, article.raw_text, englishComfort);
 
   let summaryContent: string;
   try {

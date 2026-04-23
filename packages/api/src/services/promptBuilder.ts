@@ -150,14 +150,21 @@ export const getMaxTokensForDepth = (_depth: Profile['depth']): number => {
 /**
  * Build a generic summarization prompt with no profile parameterization.
  * Used as the control condition in the experiment.
+ * Accepts englishComfort to match participant's language preference,
+ * preserving A/B blinding (otherwise the participant can tell which is personalized).
  */
 export const buildGenericSummarizationPrompt = (
   articleContent: ArticleStructure,
-  rawText: string
+  rawText: string,
+  englishComfort?: 'keep_english' | 'translate'
 ): string => {
   const contentSection = buildContentSection(articleContent, rawText);
 
-  return `Resuma o seguinte artigo científico em português. Produza um resumo objetivo de 3-4 parágrafos cobrindo o que o artigo faz, como faz e o que encontrou. Não adapte o texto para nenhum público específico.
+  const englishInstruction = englishComfort === 'translate'
+    ? '\n\nTraduza todos os termos técnicos para português sempre que possível. Se não houver tradução consolidada, apresente o termo em português seguido do original em inglês entre parênteses na primeira ocorrência.'
+    : '\n\nMantenha termos técnicos em inglês quando forem amplamente usados na área (ex: code review, bug, commit, framework). Não traduza terminologia consagrada.';
+
+  return `Resuma o seguinte artigo científico em português. Produza um resumo objetivo de 3-4 parágrafos cobrindo o que o artigo faz, como faz e o que encontrou. Não adapte o texto para nenhum público específico.${englishInstruction}
 
 ---
 CONTEÚDO DO ARTIGO:

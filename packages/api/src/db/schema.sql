@@ -157,7 +157,7 @@ CREATE INDEX IF NOT EXISTS idx_regenerations_session ON regenerations(session_id
 
 -- Unique constraints to prevent race-condition duplicates
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_session_participant_article ON experiment_sessions(participant_id, article_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_summary ON summaries(article_id, profile_id) WHERE profile_id = 99;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_variant ON summaries(article_id, profile_id) WHERE profile_id IN (98, 99);
 
 -- ─── Embedded Feedback Tables ──────────────────────────────────────
 

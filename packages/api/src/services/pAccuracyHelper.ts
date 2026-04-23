@@ -9,6 +9,7 @@ import { queryAll } from '../db/connection.js';
 import { computePAccuracy } from './metricsService.js';
 
 const PROFILE_LABELS: Record<number, string> = {
+  98: 'Generico (Traduzido)',
   99: 'Generico',
   100: 'Junior',
   101: 'Pleno',

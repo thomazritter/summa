@@ -6,7 +6,7 @@
  * and session creation.
  */
 
-import { queryOne, queryAll } from '../db/connection.js';
+import { queryOne, queryAll, execute } from '../db/connection.js';
 import { generateGenericSummary, generatePersonalizedSummary } from './summarizationService.js';
 import type { ProfileDimensions } from './summarizationService.js';
 import { GENERIC_PROFILE_ID } from '../types/rows.js';
@@ -86,13 +86,21 @@ export async function createExperimentSession(
     throw new SessionCreationError('Article not found', 404);
   }
 
-  // Generic summary: reuse existing or generate on-demand (same for all participants per article)
+  // Generic summary: one per article+englishComfort combination to preserve A/B blinding.
+  // If participant prefers translated terms, both summaries must use translated terms.
+  const englishComfort = (participant.english_comfort as 'keep_english' | 'translate') || 'keep_english';
+  const genericVariantId = englishComfort === 'translate' ? 98 : GENERIC_PROFILE_ID; // 98=translate, 99=keep_english
+
   let genericSummary = await queryOne<{ id: number }>(
     'SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2',
-    [articleId, GENERIC_PROFILE_ID],
+    [articleId, genericVariantId],
   );
   if (!genericSummary) {
-    const generated = await generateGenericSummary(articleId);
+    const generated = await generateGenericSummary(articleId, englishComfort);
+    // Update the profile_id to the variant ID
+    if (genericVariantId !== GENERIC_PROFILE_ID) {
+      await execute('UPDATE summaries SET profile_id = $1 WHERE id = $2', [genericVariantId, generated.id]);
+    }
     genericSummary = { id: generated.id };
   }
 
