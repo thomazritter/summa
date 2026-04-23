@@ -2,7 +2,6 @@ import type { Profile, ArticleStructure } from '@summarizer/shared';
 
 export interface ParticipantPreferences {
   structurePreference?: 'prose' | 'bullets' | 'mixed';
-  readingGoal?: 'overview' | 'methodology' | 'results' | 'practical';
   englishComfort?: 'keep_english' | 'translate';
 }
 
@@ -80,17 +79,6 @@ const buildInstructions = (profile: Profile, participantPreferences?: Participan
       mixed: 'Formato: combine parágrafos explicativos com bullet points para dados, resultados e listas de contribuições. Use parágrafos para contexto e listas para pontos objetivos.',
     };
     parts.push(structureInstructions[participantPreferences.structurePreference]);
-  }
-
-  // Reading goal instructions (from participant, not profile)
-  if (participantPreferences?.readingGoal) {
-    const goalInstructions: Record<NonNullable<ParticipantPreferences['readingGoal']>, string> = {
-      overview: 'Objetivo do leitor: obter uma visão geral rápida. Priorize a contribuição principal e as conclusões. Seja conciso e direto.',
-      methodology: 'Objetivo do leitor: entender como o estudo foi conduzido. Detalhe os métodos, procedimentos, ferramentas e métricas. Os resultados podem ser mencionados brevemente.',
-      results: 'Objetivo do leitor: conhecer os achados do estudo. Apresente resultados com números, porcentagens e comparações. A metodologia pode ser resumida brevemente.',
-      practical: 'Objetivo do leitor: aplicar as descobertas na prática. Destaque implicações concretas, recomendações e como os resultados podem ser usados no dia a dia.',
-    };
-    parts.push(goalInstructions[participantPreferences.readingGoal]);
   }
 
   // English comfort instructions (from participant, not profile)

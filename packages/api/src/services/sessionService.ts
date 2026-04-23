@@ -104,23 +104,37 @@ export async function createExperimentSession(
     genericSummary = { id: generated.id };
   }
 
-  // Personalized summary: always generate on-demand with full participant profile
-  // Use participant's preferred_length for depth (overrides experience-based depth),
-  // falling back to the experience config depth if not set
+  // Build profile dimensions from experience level as defaults,
+  // then override with participant's explicit choices.
+  // Principle: user's explicit answers always win over level-derived defaults.
+
+  // depth: participant's preferred_length overrides level default
   const depth = (participant.preferred_length as ProfileDimensions['depth']) || config.dimensions.depth;
+
+  // focus: participant's readingGoal overrides level default
+  const goalToFocus: Record<string, ProfileDimensions['focus']> = {
+    overview: 'all',
+    methodology: 'methodology',
+    results: 'results',
+    practical: 'applications',
+  };
+  const focus = (participant.reading_goal && goalToFocus[participant.reading_goal])
+    || config.dimensions.focus;
+
   const dimensions: ProfileDimensions = {
-    ...config.dimensions,
+    expertise: config.dimensions.expertise,
+    focus,
     depth,
+    context: config.dimensions.context,
   };
 
+  // Remaining preferences that don't map to profile dimensions
   const participantPreferences = {
     structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
-    readingGoal: participant.reading_goal as 'overview' | 'methodology' | 'results' | 'practical' | undefined,
     englishComfort: participant.english_comfort as 'keep_english' | 'translate' | undefined,
   };
 
   const hasPreferences = participantPreferences.structurePreference
-    || participantPreferences.readingGoal
     || participantPreferences.englishComfort;
 
   const personalizedSummary = await generatePersonalizedSummary(
