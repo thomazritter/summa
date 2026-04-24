@@ -192,7 +192,8 @@ const checkFactualityInBackground = (
  */
 export const generateGenericSummary = async (
   articleId: number,
-  englishComfort?: 'keep_english' | 'translate'
+  englishComfort?: 'keep_english' | 'translate',
+  profileId: number = GENERIC_PROFILE_ID,
 ): Promise<Summary> => {
   const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
   if (!article) {
@@ -220,7 +221,7 @@ export const generateGenericSummary = async (
     `INSERT INTO summaries (article_id, profile_id, content)
      VALUES ($1, $2, $3)
      RETURNING *`,
-    [articleId, GENERIC_PROFILE_ID, summaryContent],
+    [articleId, profileId, summaryContent],
   );
 
   if (!row) {

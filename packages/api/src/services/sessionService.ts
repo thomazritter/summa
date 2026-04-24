@@ -6,7 +6,7 @@
  * and session creation.
  */
 
-import { queryOne, queryAll, execute } from '../db/connection.js';
+import { queryOne, queryAll } from '../db/connection.js';
 import { generateGenericSummary, generatePersonalizedSummary } from './summarizationService.js';
 import type { ProfileDimensions } from './summarizationService.js';
 import { GENERIC_PROFILE_ID } from '../types/rows.js';
@@ -96,11 +96,7 @@ export async function createExperimentSession(
     [articleId, genericVariantId],
   );
   if (!genericSummary) {
-    const generated = await generateGenericSummary(articleId, englishComfort);
-    // Update the profile_id to the variant ID
-    if (genericVariantId !== GENERIC_PROFILE_ID) {
-      await execute('UPDATE summaries SET profile_id = $1 WHERE id = $2', [genericVariantId, generated.id]);
-    }
+    const generated = await generateGenericSummary(articleId, englishComfort, genericVariantId);
     genericSummary = { id: generated.id };
   }
 
