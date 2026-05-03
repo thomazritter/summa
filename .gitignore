@@ -37,3 +37,6 @@ __pycache__/
 
 # Uploaded files
 packages/api/uploads/
+
+# Data exports
+data/

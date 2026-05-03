@@ -31,7 +31,16 @@ const isDev = process.env.NODE_ENV !== 'production';
 await runMigrations();
 
 // Security headers
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:"],
+    },
+  },
+}));
 
 // CORS configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:5173'];
@@ -40,8 +49,14 @@ app.use(cors({
   credentials: true,
 }));
 
+// Require ALLOWED_ORIGINS in production
+if (process.env.NODE_ENV === 'production' && !process.env.ALLOWED_ORIGINS) {
+  console.error('FATAL: ALLOWED_ORIGINS must be set in production');
+  process.exit(1);
+}
+
 // Body parsing with size limits
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
 
 // Health check
 app.get('/health', (req, res) => {

@@ -18,12 +18,6 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
   return response.json();
 }
 
-export const profileApi = {
-  getQuestionnaire: () => apiRequest<unknown[]>('/profiles/questionnaire'),
-  getByUser: (userId: number) => apiRequest<unknown[]>(`/profiles/user/${userId}`),
-  create: (userId: number, data: unknown) => apiRequest<unknown>(`/profiles/${userId}`, { method: 'POST', body: JSON.stringify(data) }),
-};
-
 export interface ArticleUploadResponse {
   article: {
     id: number;
@@ -59,16 +53,6 @@ export const articleApi = {
     }
     return response.json();
   },
-};
-
-export const summaryApi = {
-  generate: (articleId: number, profileId: number) => apiRequest<unknown>('/summaries/generate', { method: 'POST', body: JSON.stringify({ articleId, profileId }) }),
-  get: (id: number) => apiRequest<unknown>(`/summaries/${id}`),
-  regenerate: (id: number) => apiRequest<unknown>(`/summaries/${id}/regenerate`, { method: 'POST' }),
-};
-
-export const feedbackApi = {
-  submit: (data: unknown) => apiRequest<unknown>('/feedback', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 export const authApi = {

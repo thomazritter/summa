@@ -8,6 +8,7 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { queryAll, queryOne } from '../db/connection.js';
+import { parseId } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { generatePersonalizedSummary, SummarizationError, NotFoundError } from '../services/summarizationService.js';
 import type { ProfileDimensions } from '../services/summarizationService.js';
@@ -132,7 +133,8 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
 
   const validation = summarizeSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
   const { articleId, modelId } = validation.data;
@@ -204,8 +206,8 @@ userRoutes.delete('/summaries/:id', asyncHandler(async (req: Request, res: Respo
     return res.status(400).json({ error: 'Perfil de participante nao configurado' });
   }
 
-  const summaryId = Number(req.params.id);
-  if (!summaryId || summaryId <= 0) {
+  const summaryId = parseId(req.params.id);
+  if (summaryId === null) {
     return res.status(400).json({ error: 'ID de resumo invalido' });
   }
 

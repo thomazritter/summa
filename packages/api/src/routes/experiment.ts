@@ -167,7 +167,8 @@ async function verifySessionOwnership(req: Request, res: Response, sessionId: nu
 experimentRoutes.post('/participants', asyncHandler(async (req: Request, res: Response) => {
   const validation = registerParticipantSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
   const { name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference, readingGoal, preferredLength, englishComfort } = validation.data;
@@ -223,7 +224,13 @@ experimentRoutes.get('/participants/:id/sessions', asyncHandler(async (req: Requ
 experimentRoutes.post('/sessions', asyncHandler(async (req: Request, res: Response) => {
   const validation = createSessionSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
+  }
+
+  // IDOR check: verify the authenticated user owns this participant
+  if (!canAccessParticipant(req, validation.data.participantId)) {
+    return res.status(403).json({ error: 'Acesso negado' });
   }
 
   try {
@@ -279,7 +286,8 @@ experimentRoutes.post('/sessions/:id/preference', asyncHandler(async (req: Reque
 
   const validation = preferenceSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
   const result = await execute(
@@ -313,7 +321,8 @@ experimentRoutes.post('/sessions/:id/evaluate', asyncHandler(async (req: Request
 
   const validation = evaluateSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
   const { preference, rating, comment } = validation.data;
@@ -347,7 +356,8 @@ experimentRoutes.post('/sessions/:id/feedback', asyncHandler(async (req: Request
 
   const validation = feedbackSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
   // Idempotency: if a regeneration already exists for this session, return it
@@ -412,9 +422,14 @@ experimentRoutes.post('/sessions/:id/rate-regeneration', asyncHandler(async (req
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
 
+  // IDOR check
+  const sessionCheck = await verifySessionOwnership(req, res, id);
+  if (!sessionCheck) return;
+
   const validation = rateRegenerationSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
   // Idempotency: if the regeneration is already rated, return the session
@@ -461,8 +476,15 @@ experimentRoutes.post('/sessions/:id/ratings', asyncHandler(async (req: Request,
   const id = parseId(req.params.id);
   if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
 
+  // IDOR check
+  const sessionCheck = await verifySessionOwnership(req, res, id);
+  if (!sessionCheck) return;
+
   const validation = summaryRatingsSchema.safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: validation.error.errors });
+  if (!validation.success) {
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
+  }
 
   // Idempotency: if ratings already exist for this session, return success
   const existingRatings = await queryOne(
@@ -507,9 +529,18 @@ experimentRoutes.post('/sessions/:id/ratings', asyncHandler(async (req: Request,
 // POST /api/experiment/post-test — submit post-test responses
 experimentRoutes.post('/post-test', asyncHandler(async (req: Request, res: Response) => {
   const validation = postTestSchema.safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: validation.error.errors });
+  if (!validation.success) {
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
+  }
 
   const { participantId, noticedDifference, differenceType, wouldUseDaily, improvements, comments } = validation.data;
+
+  // IDOR check: verify the authenticated user owns this participant
+  const authParticipantId = req.accessCode?.participantId;
+  if (!authParticipantId || authParticipantId !== participantId) {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
 
   // Idempotency: if post-test already submitted for this participant, return success
   const existingPostTest = await queryOne(
@@ -558,7 +589,8 @@ experimentRoutes.post('/cv-profile', cvUpload.single('file'), handleCvMulterErro
 experimentRoutes.post('/participants/from-cv', asyncHandler(async (req: Request, res: Response) => {
   const validation = registerFromCvSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
   const { name, dimensions, experienceLevel, englishComfort, structurePreference } = validation.data;
@@ -634,7 +666,8 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
 
   const validation = updateProfileSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
   const { overrides } = validation.data;
@@ -740,7 +773,8 @@ experimentRoutes.post('/sessions/:id/try-model', asyncHandler(async (req: Reques
 
   const validation = tryModelSchema.safeParse(req.body);
   if (!validation.success) {
-    return res.status(400).json({ error: validation.error.errors });
+    const messages = validation.error.errors.map(e => e.message).join('; ');
+    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
   const { modelId } = validation.data;
