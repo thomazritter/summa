@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import multer, { MulterError } from 'multer';
 import { queryOne, queryAll } from '../db/connection.js';
 import { processPDF, PDFProcessingError } from '../services/pdfProcessor.js';
+import { validatePreStructuring, validatePostStructuring } from '../services/articleValidator.js';
 import { parseId, safeJsonParse, MAX_PDF_SIZE } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import type { ArticleStructure } from '@summarizer/shared';
@@ -53,23 +54,50 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
 
   const { rawText, structuredContent, metadata } = await processPDF(req.file.buffer);
 
+  // Phase 1: Pre-structuring validation (blocking)
+  const preValidation = validatePreStructuring(rawText);
+  if (!preValidation.valid) {
+    return res.status(422).json({
+      error: 'Article validation failed',
+      validation: { errors: preValidation.errors },
+    });
+  }
+
+  // Resolve uploaded_by from access code if present
+  const uploadedBy = req.accessCode?.participantId ?? null;
+
   const inserted = await queryOne<ArticleRow>(
-    `INSERT INTO articles (title, authors, raw_text, structured_content)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO articles (title, authors, raw_text, structured_content, uploaded_by)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
     [
       metadata.title || 'Untitled Article',
       metadata.authors || null,
       rawText,
       JSON.stringify(structuredContent),
+      uploadedBy,
     ]
   );
 
-  if (inserted) {
-    res.status(201).json(mapRowToArticle(inserted));
-  } else {
-    res.status(500).json({ error: 'Failed to create article' });
+  if (!inserted) {
+    return res.status(500).json({ error: 'Failed to create article' });
   }
+
+  // Phase 2: Post-structuring validation (non-blocking warnings)
+  const postValidation = validatePostStructuring(rawText, structuredContent);
+
+  const sectionKeys = ['abstract', 'introduction', 'methodology', 'results', 'discussion', 'conclusion'] as const;
+  const sectionsFound = sectionKeys.filter(
+    s => structuredContent[s] && structuredContent[s]!.length > 50
+  );
+
+  res.status(201).json({
+    article: mapRowToArticle(inserted),
+    validation: {
+      warnings: postValidation.warnings,
+      sectionsFound,
+    },
+  });
 }));
 
 // Download article raw text as file
@@ -136,6 +164,7 @@ interface ArticleRow {
   url: string | null;
   raw_text: string;
   structured_content: string;
+  uploaded_by: number | null;
   created_at: string;
 }
 

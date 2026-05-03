@@ -24,12 +24,39 @@ export const profileApi = {
   create: (userId: number, data: unknown) => apiRequest<unknown>(`/profiles/${userId}`, { method: 'POST', body: JSON.stringify(data) }),
 };
 
+export interface ArticleUploadResponse {
+  article: {
+    id: number;
+    title: string;
+    authors: string | null;
+    rawText: string;
+    structuredContent: Record<string, unknown> | null;
+  };
+  validation: {
+    warnings: string[];
+    errors?: string[];
+    sectionsFound: string[];
+  };
+}
+
 export const articleApi = {
-  upload: async (file: File) => {
+  upload: async (file: File): Promise<ArticleUploadResponse> => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await fetch(`${API_BASE}/articles/upload`, { method: 'POST', body: formData });
-    if (!response.ok) throw new Error('Upload failed');
+    const headers: Record<string, string> = {};
+    const code = sessionStorage.getItem('accessCode');
+    if (code) {
+      headers['x-access-code'] = code;
+    }
+    const response = await fetch(`${API_BASE}/articles/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(error.error || 'Upload failed');
+    }
     return response.json();
   },
 };

@@ -70,6 +70,7 @@ export interface ArticleRow {
   url: string | null;
   raw_text: string;
   structured_content: string;
+  uploaded_by: number | null;
   created_at: string;
 }
 

@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS articles (
   url TEXT,
   raw_text TEXT NOT NULL,
   structured_content TEXT NOT NULL, -- JSON
+  uploaded_by INTEGER,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
