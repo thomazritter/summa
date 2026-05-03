@@ -54,3 +54,47 @@ export async function sendAccessCode(email: string, code: string) {
     `,
   });
 }
+
+export async function sendMagicLinkEmail(email: string, code: string) {
+  const siteUrl = process.env.SITE_URL || 'https://summa.thomazritter.com.br';
+  const magicLinkUrl = `${siteUrl}/auth/verify?code=${code}`;
+
+  if (!process.env.RESEND_API_KEY) {
+    console.log(`[DEV] Magic link for ${email}: ${magicLinkUrl}`);
+    return;
+  }
+
+  await resend.emails.send({
+    from: process.env.RESEND_FROM_EMAIL || 'Summa <onboarding@resend.dev>',
+    to: email,
+    subject: 'Seu link de acesso ao Summa',
+    html: `
+      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; color: #1f2937;">
+        <h2 style="color: #1e3a5f;">Acesse o Summa</h2>
+
+        <p>Clique no botão abaixo para acessar o Summa. Este link expira em 15 minutos.</p>
+
+        <p style="text-align: center; margin: 32px 0;">
+          <a href="${magicLinkUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 1.1rem;">Acessar o Summa</a>
+        </p>
+
+        <p style="color: #6b7280; font-size: 0.875rem;">Se o botão não funcionar, copie e cole este link no navegador:</p>
+        <p style="color: #6b7280; font-size: 0.875rem; word-break: break-all;">
+          <a href="${magicLinkUrl}" style="color: #2563eb;">${magicLinkUrl}</a>
+        </p>
+
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+
+        <p style="color: #6b7280; font-size: 0.875rem;">
+          Se você não solicitou este link, pode ignorar este email com segurança.
+        </p>
+
+        <p style="color: #6b7280; font-size: 0.875rem;">
+          Em caso de dúvidas, entre em contato: <a href="mailto:thomaz.ritter207@gmail.com" style="color: #2563eb;">thomaz.ritter207@gmail.com</a>
+        </p>
+
+        <p style="color: #6b7280; font-size: 0.875rem;"><strong>Thomaz Justo Ritter</strong><br/>Ciência da Computação — UNISINOS</p>
+      </div>
+    `,
+  });
+}

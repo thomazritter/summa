@@ -17,6 +17,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const access = await validateCode(code);
   if (!access) return res.status(401).json({ error: 'Codigo invalido' });
 
+  // If expires_at is set and has passed, the magic link has expired
+  if (access.expires_at) {
+    const expiresAt = new Date(access.expires_at);
+    if (expiresAt < new Date()) {
+      return res.status(401).json({ error: 'Link expirado' });
+    }
+  }
+
   req.accessCode = {
     code: access.code,
     email: access.email,

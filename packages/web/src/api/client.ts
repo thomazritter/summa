@@ -77,6 +77,11 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ code }),
     }),
+  requestMagicLink: (email: string) =>
+    apiRequest<{ message: string }>('/auth/magic-link', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
   invite: (email: string) =>
     apiRequest<{ code: string; email: string }>('/auth/invite', {
       method: 'POST',

@@ -58,9 +58,15 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE articles ADD COLUMN IF NOT EXISTS uploaded_by INTEGER;
 
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;
+
+    ALTER TABLE access_codes ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
   `;
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');
+
+  // 2d. Add index for email lookups on access_codes
+  await query('CREATE INDEX IF NOT EXISTS idx_access_codes_email ON access_codes(email);');
+  console.log('[auto-migrate] access_codes indexes ensured.');
 
   // 2b. Create p_accuracy_scores table if not exists
   const pAccuracyTable = `

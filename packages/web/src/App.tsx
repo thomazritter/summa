@@ -4,6 +4,7 @@ import { ProfileSelector } from './pages/ProfileSelector';
 import { ArticleUpload } from './pages/ArticleUpload';
 import { SummaryView } from './pages/SummaryView';
 import { Login } from './pages/Login';
+import { AuthVerify } from './pages/AuthVerify';
 import { AuthGuard } from './components/AuthGuard';
 import { ManagerDashboard } from './pages/manager/ManagerDashboard';
 import { ExperimentLanding } from './pages/experiment/ExperimentLanding';
@@ -43,6 +44,7 @@ export default function App() {
             <Routes>
               {/* Auth */}
               <Route path="/" element={<Login />} />
+              <Route path="/auth/verify" element={<AuthVerify />} />
 
               {/* Original app routes (no auth guard — keep backward compatible) */}
               <Route path="/profiles" element={<ProfileSelector userId={USER_ID} />} />

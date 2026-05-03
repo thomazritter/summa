@@ -201,10 +201,12 @@ CREATE TABLE IF NOT EXISTS access_codes (
   role TEXT NOT NULL CHECK (role IN ('participant', 'manager')) DEFAULT 'participant',
   participant_id INTEGER,
   used_at TIMESTAMP,
+  expires_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
   FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE SET NULL
 );
 CREATE INDEX IF NOT EXISTS idx_access_codes_code ON access_codes(code);
+CREATE INDEX IF NOT EXISTS idx_access_codes_email ON access_codes(email);
 
 -- ─── Profile Overrides & Snapshot ───────────────────────────────────
 

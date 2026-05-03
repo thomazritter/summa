@@ -62,6 +62,16 @@ const loginLimiter = rateLimit({
 });
 app.use('/api/auth/login', loginLimiter);
 
+// Rate limiting on magic link to prevent abuse
+const magicLinkLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // per IP — additional per-email limit is enforced in the route handler
+  message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/auth/magic-link', magicLinkLimiter);
+
 // Routes
 app.use('/api/articles', articleRoutes);
 app.use('/api/experiment', experimentRoutes);
