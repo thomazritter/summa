@@ -5,9 +5,11 @@ const DEFAULT_TIMEOUT = 120000; // 2 minutes for LLM generation
 // ─── Model management ────────────────────────────────────────────────
 
 export const AVAILABLE_MODELS = [
-  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Melhor qualidade' },
-  { id: 'llama-3.1-70b-versatile', name: 'Llama 3.1 70B', description: 'Boa qualidade' },
-  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Mais rápido' },
+  { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B', description: 'Melhor qualidade (default)' },
+  { id: 'meta-llama/llama-4-scout-17b-16e-instruct', name: 'Llama 4 Scout 17B', description: 'Última geração Meta' },
+  { id: 'qwen/qwen3-32b', name: 'Qwen 3 32B', description: 'Forte em raciocínio (Alibaba)' },
+  { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B', description: 'Maior modelo disponível (OpenAI)' },
+  { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Mais rápido e leve' },
 ];
 
 let activeModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
