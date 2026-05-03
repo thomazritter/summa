@@ -293,4 +293,30 @@ export const experimentApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+
+  getProfile: () =>
+    apiRequest<{
+      dimensions: Record<string, string | null>;
+      sources: Record<string, string>;
+      profileSource: string;
+    }>('/experiment/profile'),
+
+  updateProfile: (overrides: Record<string, string>) =>
+    apiRequest<{
+      dimensions: Record<string, string | null>;
+      sources: Record<string, string>;
+      profileSource: string;
+    }>('/experiment/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ overrides }),
+    }),
+
+  resetProfile: () =>
+    apiRequest<{
+      dimensions: Record<string, string | null>;
+      sources: Record<string, string>;
+      profileSource: string;
+    }>('/experiment/profile/reset', {
+      method: 'POST',
+    }),
 };

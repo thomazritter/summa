@@ -6,7 +6,7 @@
  * and session creation.
  */
 
-import { queryOne, queryAll } from '../db/connection.js';
+import { queryOne, queryAll, execute } from '../db/connection.js';
 import { generateGenericSummary, generatePersonalizedSummary } from './summarizationService.js';
 import type { ProfileDimensions } from './summarizationService.js';
 import { GENERIC_PROFILE_ID } from '../types/rows.js';
@@ -31,6 +31,59 @@ export const EXPERIENCE_CONFIG: Record<string, ExperienceConfig> = {
     dimensions: { expertise: 'advanced', focus: 'results', depth: 'comprehensive', context: 'research' },
   },
 };
+
+/**
+ * Compute the effective profile dimensions for a participant,
+ * applying manual overrides on top of questionnaire-derived defaults.
+ *
+ * Reusable by the profile endpoints and the session creation flow.
+ */
+export function computeProfileDimensions(participant: ParticipantRow): ProfileDimensions {
+  const config = EXPERIENCE_CONFIG[participant.experience_level];
+  if (!config) {
+    return { expertise: 'intermediate', focus: 'all', depth: 'moderate', context: 'learning' };
+  }
+
+  const depth = (participant.preferred_length as ProfileDimensions['depth']) || config.dimensions.depth;
+
+  const goalToFocus: Record<string, ProfileDimensions['focus']> = {
+    overview: 'all',
+    methodology: 'methodology',
+    results: 'results',
+    practical: 'applications',
+  };
+  const focus = (participant.reading_goal && goalToFocus[participant.reading_goal])
+    || config.dimensions.focus;
+
+  return {
+    expertise: (participant.override_expertise as ProfileDimensions['expertise']) || config.dimensions.expertise,
+    focus: (participant.override_focus as ProfileDimensions['focus']) || focus,
+    depth: (participant.override_depth as ProfileDimensions['depth']) || depth,
+    context: (participant.override_context as ProfileDimensions['context']) || config.dimensions.context,
+  };
+}
+
+/**
+ * Compute per-dimension sources to show whether a value comes from
+ * the questionnaire, manual override, or CV analysis.
+ */
+export function computeProfileSources(participant: ParticipantRow): Record<string, string> {
+  const profileSource = participant.profile_source || 'questionnaire';
+  const sourceLabel = (override: string | null): string => {
+    if (override) return 'manual';
+    if (profileSource === 'cv') return 'cv';
+    return 'questionnaire';
+  };
+
+  return {
+    expertise: sourceLabel(participant.override_expertise),
+    focus: sourceLabel(participant.override_focus),
+    depth: sourceLabel(participant.override_depth),
+    context: sourceLabel(participant.override_context),
+    structurePreference: 'questionnaire',
+    englishComfort: 'questionnaire',
+  };
+}
 
 export class SessionCreationError extends Error {
   public readonly statusCode: number;
@@ -102,7 +155,7 @@ export async function createExperimentSession(
 
   // Build profile dimensions from experience level as defaults,
   // then override with participant's explicit choices.
-  // Principle: user's explicit answers always win over level-derived defaults.
+  // Principle: manual overrides > questionnaire answers > level-derived defaults.
 
   // depth: participant's preferred_length overrides level default
   const depth = (participant.preferred_length as ProfileDimensions['depth']) || config.dimensions.depth;
@@ -117,11 +170,12 @@ export async function createExperimentSession(
   const focus = (participant.reading_goal && goalToFocus[participant.reading_goal])
     || config.dimensions.focus;
 
+  // Apply manual overrides if the participant has set them (profile editor)
   const dimensions: ProfileDimensions = {
-    expertise: config.dimensions.expertise,
-    focus,
-    depth,
-    context: config.dimensions.context,
+    expertise: (participant.override_expertise as ProfileDimensions['expertise']) || config.dimensions.expertise,
+    focus: (participant.override_focus as ProfileDimensions['focus']) || focus,
+    depth: (participant.override_depth as ProfileDimensions['depth']) || depth,
+    context: (participant.override_context as ProfileDimensions['context']) || config.dimensions.context,
   };
 
   // Remaining preferences that don't map to profile dimensions
@@ -156,6 +210,12 @@ export async function createExperimentSession(
   if (!sessionRow) {
     throw new SessionCreationError('Falha ao criar registro', 500);
   }
+
+  // Save profile snapshot so we can reconstruct what dimensions were used
+  await execute(
+    'UPDATE experiment_sessions SET profile_snapshot = $1 WHERE id = $2',
+    [JSON.stringify(dimensions), sessionRow.id],
+  );
 
   return { sessionRow, isExisting: false };
 }

@@ -1,7 +1,8 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 export function ExperimentLanding() {
   const navigate = useNavigate();
+  const participantId = sessionStorage.getItem('experimentParticipantId');
 
   return (
     <div className="min-h-screen bg-[#f9fafb] py-12 px-6">
@@ -74,6 +75,17 @@ export function ExperimentLanding() {
             Iniciar Experimento
           </button>
         </div>
+
+        {participantId && (
+          <div className="text-center mb-4">
+            <Link
+              to="/experiment/profile"
+              className="text-[#2563eb] hover:text-[#1d4ed8] text-sm font-medium transition-colors"
+            >
+              Ver seu perfil
+            </Link>
+          </div>
+        )}
 
         <p className="text-center text-sm text-gray-500">
           Trabalho de Conclusão de Curso — UNISINOS

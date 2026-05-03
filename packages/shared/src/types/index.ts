@@ -235,6 +235,32 @@ export interface PostTestResponse {
   createdAt: string;
 }
 
+// ─── Profile Editor Types ──────────────────────────────────────────
+
+export interface ProfileResponse {
+  dimensions: {
+    expertise: ExpertiseLevel;
+    focus: FocusArea;
+    depth: DepthLevel;
+    context: ReadingContext;
+    structurePreference: StructurePreference | null;
+    englishComfort: EnglishComfort | null;
+  };
+  sources: Record<string, string>;
+  profileSource: string;
+}
+
+export interface UpdateProfileRequest {
+  overrides: {
+    expertise?: ExpertiseLevel;
+    focus?: FocusArea;
+    depth?: DepthLevel;
+    context?: ReadingContext;
+    structurePreference?: StructurePreference;
+    englishComfort?: EnglishComfort;
+  };
+}
+
 // Generic summary — summary generated without profile parameterization
 export interface GenericSummaryRequest {
   articleId: number;

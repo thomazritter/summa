@@ -23,6 +23,11 @@ export interface ParticipantRow {
   reading_goal: string | null;
   preferred_length: string | null;
   english_comfort: string | null;
+  override_expertise: string | null;
+  override_focus: string | null;
+  override_depth: string | null;
+  override_context: string | null;
+  profile_source: string;
   created_at: string;
 }
 
@@ -38,6 +43,7 @@ export interface SessionRow {
   preference_rating: number | null;
   preference_reason: string | null;
   phase: string;
+  profile_snapshot: string | null;
   created_at: string;
 }
 

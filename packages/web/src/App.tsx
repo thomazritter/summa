@@ -12,6 +12,7 @@ import { ExperimentSelectArticle } from './pages/experiment/ExperimentSelectArti
 import { ExperimentTrial } from './pages/experiment/ExperimentTrial';
 import { ExperimentComplete } from './pages/experiment/ExperimentComplete';
 import { ExperimentPostTest } from './pages/experiment/ExperimentPostTest';
+import { ProfileView } from './pages/experiment/ProfileView';
 
 const queryClient = new QueryClient();
 const USER_ID = 1; // MVP: hardcoded user
@@ -87,6 +88,14 @@ export default function App() {
                 element={
                   <AuthGuard requiredRole="participant">
                     <ExperimentTrial />
+                  </AuthGuard>
+                }
+              />
+              <Route
+                path="/experiment/profile"
+                element={
+                  <AuthGuard requiredRole="participant">
+                    <ProfileView />
                   </AuthGuard>
                 }
               />

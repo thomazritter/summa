@@ -4,7 +4,7 @@ import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
 import { parseId, safeJsonParse } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { regenerateSummaryWithFeedback, getSummaryById } from '../services/summarizationService.js';
-import { createExperimentSession, SessionCreationError } from '../services/sessionService.js';
+import { createExperimentSession, SessionCreationError, computeProfileDimensions, computeProfileSources, EXPERIENCE_CONFIG } from '../services/sessionService.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ExperimentSession, Participant, Regeneration } from '@summarizer/shared';
 import type { ParticipantRow, SessionRow, RegenerationRow } from '../types/rows.js';
@@ -70,6 +70,17 @@ const postTestSchema = z.object({
   wouldUseDaily: z.string().max(5000),
   improvements: z.string().max(5000).optional(),
   comments: z.string().max(5000).optional(),
+});
+
+const updateProfileSchema = z.object({
+  overrides: z.object({
+    expertise: z.enum(['beginner', 'intermediate', 'advanced', 'expert']).optional(),
+    focus: z.enum(['concepts', 'methodology', 'results', 'applications', 'all']).optional(),
+    depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']).optional(),
+    context: z.enum(['quick_review', 'learning', 'research', 'teaching']).optional(),
+    structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
+    englishComfort: z.enum(['keep_english', 'translate']).optional(),
+  }),
 });
 
 // ─── IDOR Ownership Helpers ─────────────────────────────────────────
@@ -465,6 +476,125 @@ experimentRoutes.post('/post-test', asyncHandler(async (req: Request, res: Respo
   );
 
   res.json({ success: true });
+}));
+
+// ─── Profile Endpoints ─────────────────────────────────────────────
+
+// GET /api/experiment/profile — get computed profile with sources
+experimentRoutes.get('/profile', asyncHandler(async (req: Request, res: Response) => {
+  const participantId = req.accessCode?.participantId;
+  if (!participantId) {
+    return res.status(400).json({ error: 'Nenhum participante vinculado a este codigo de acesso' });
+  }
+
+  const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
+  if (!participant) {
+    return res.status(404).json({ error: 'Participante nao encontrado' });
+  }
+
+  const dimensions = computeProfileDimensions(participant);
+  const sources = computeProfileSources(participant);
+
+  res.json({
+    dimensions: {
+      ...dimensions,
+      structurePreference: participant.structure_preference || null,
+      englishComfort: participant.english_comfort || null,
+    },
+    sources,
+    profileSource: participant.profile_source || 'questionnaire',
+  });
+}));
+
+// PUT /api/experiment/profile — update profile overrides
+experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response) => {
+  const participantId = req.accessCode?.participantId;
+  if (!participantId) {
+    return res.status(400).json({ error: 'Nenhum participante vinculado a este codigo de acesso' });
+  }
+
+  const validation = updateProfileSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.errors });
+  }
+
+  const { overrides } = validation.data;
+
+  // Save dimension overrides to override columns
+  await execute(
+    `UPDATE participants
+     SET override_expertise = COALESCE($1, override_expertise),
+         override_focus     = COALESCE($2, override_focus),
+         override_depth     = COALESCE($3, override_depth),
+         override_context   = COALESCE($4, override_context),
+         structure_preference = COALESCE($5, structure_preference),
+         english_comfort    = COALESCE($6, english_comfort)
+     WHERE id = $7`,
+    [
+      overrides.expertise || null,
+      overrides.focus || null,
+      overrides.depth || null,
+      overrides.context || null,
+      overrides.structurePreference || null,
+      overrides.englishComfort || null,
+      participantId,
+    ],
+  );
+
+  // Return the updated profile
+  const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
+  if (!participant) {
+    return res.status(404).json({ error: 'Participante nao encontrado' });
+  }
+
+  const dimensions = computeProfileDimensions(participant);
+  const sources = computeProfileSources(participant);
+
+  res.json({
+    dimensions: {
+      ...dimensions,
+      structurePreference: participant.structure_preference || null,
+      englishComfort: participant.english_comfort || null,
+    },
+    sources,
+    profileSource: participant.profile_source || 'questionnaire',
+  });
+}));
+
+// POST /api/experiment/profile/reset — reset all manual overrides
+experimentRoutes.post('/profile/reset', asyncHandler(async (req: Request, res: Response) => {
+  const participantId = req.accessCode?.participantId;
+  if (!participantId) {
+    return res.status(400).json({ error: 'Nenhum participante vinculado a este codigo de acesso' });
+  }
+
+  await execute(
+    `UPDATE participants
+     SET override_expertise = NULL,
+         override_focus     = NULL,
+         override_depth     = NULL,
+         override_context   = NULL
+     WHERE id = $1`,
+    [participantId],
+  );
+
+  const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
+  if (!participant) {
+    return res.status(404).json({ error: 'Participante nao encontrado' });
+  }
+
+  const dimensions = computeProfileDimensions(participant);
+  const sources = computeProfileSources(participant);
+
+  res.json({
+    dimensions: {
+      ...dimensions,
+      structurePreference: participant.structure_preference || null,
+      englishComfort: participant.english_comfort || null,
+    },
+    sources,
+    profileSource: participant.profile_source || 'questionnaire',
+  });
 }));
 
 // GET /api/experiment/articles — list available articles for the experiment

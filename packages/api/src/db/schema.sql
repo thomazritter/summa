@@ -205,6 +205,15 @@ CREATE TABLE IF NOT EXISTS access_codes (
 );
 CREATE INDEX IF NOT EXISTS idx_access_codes_code ON access_codes(code);
 
+-- ─── Profile Overrides & Snapshot ───────────────────────────────────
+
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_expertise TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_focus TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_depth TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_context TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
+ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
+
 -- ─── P-Accuracy Scores ──────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS p_accuracy_scores (
