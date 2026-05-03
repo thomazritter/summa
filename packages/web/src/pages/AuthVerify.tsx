@@ -28,6 +28,9 @@ export function AuthVerify() {
 
         sessionStorage.setItem('accessCode', result.code);
         sessionStorage.setItem('accessRole', result.role);
+        if (result.email) {
+          sessionStorage.setItem('userEmail', result.email);
+        }
         if (result.participantId) {
           sessionStorage.setItem('experimentParticipantId', String(result.participantId));
         }
@@ -35,11 +38,7 @@ export function AuthVerify() {
         if (result.role === 'manager') {
           navigate('/manager', { replace: true });
         } else {
-          if (result.participantId) {
-            navigate('/experiment/select-article', { replace: true });
-          } else {
-            navigate('/experiment', { replace: true });
-          }
+          navigate('/dashboard', { replace: true });
         }
       } catch {
         if (cancelled) return;

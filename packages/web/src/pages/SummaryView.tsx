@@ -30,7 +30,7 @@ export function SummaryView() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Your Personalized Summary</h2>
-        <Link to="/profiles" className="text-blue-600 hover:underline">Summarize Another</Link>
+        <Link to="/dashboard" className="text-[#2563eb] hover:text-[#1d4ed8] font-medium transition-colors">&larr; Voltar ao dashboard</Link>
       </div>
 
       <div className="bg-white p-6 rounded-lg border">

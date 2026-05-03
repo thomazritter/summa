@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
-import { ExperimentProgress } from '../../components/ExperimentProgress';
 
 interface FormData {
   name: string;
@@ -35,7 +34,7 @@ export function ExperimentRegister() {
     onSuccess: (participant) => {
       sessionStorage.setItem('experimentParticipantId', String(participant.id));
       sessionStorage.setItem('experimentParticipantName', participant.name);
-      navigate('/experiment/select-article');
+      navigate('/dashboard');
     },
   });
 
@@ -51,9 +50,15 @@ export function ExperimentRegister() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
-      <ExperimentProgress currentStep={1} />
-
       <div className="max-w-3xl mx-auto py-12 px-6">
+        <div className="mb-6">
+          <Link
+            to="/dashboard"
+            className="text-[#2563eb] hover:text-[#1d4ed8] text-sm font-medium transition-colors"
+          >
+            &larr; Voltar ao dashboard
+          </Link>
+        </div>
         <div className="bg-white border border-gray-200 rounded-lg p-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Pré-teste: Dados do Participante</h1>
           <p className="text-gray-600 mb-8">

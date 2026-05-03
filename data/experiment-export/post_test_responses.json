@@ -1,0 +1,92 @@
+[
+  {
+    "id": 3,
+    "participant_id": 9,
+    "comments": "O modelo poderia saber a área do usuario e ao solicitar um resumo sobre algo de fora da área dele, retornar mais exemplos e explicações sobre o novo contexto.",
+    "created_at": "2026-04-13T04:31:39.453Z",
+    "noticed_difference": "yes",
+    "difference_type": "Resumo 2 muito mais detalhado.",
+    "would_use_daily": "definitely_yes",
+    "improvements": "Trazer mais exemplos de fora do artigo, como por exemplo no artigo 2 buscar por exemplos de linguagens de tipagem dinâmica ou estática. Acredito que seria útil para leitores que não são necessáriamente da área."
+  },
+  {
+    "id": 4,
+    "participant_id": 10,
+    "comments": null,
+    "created_at": "2026-04-15T04:15:15.535Z",
+    "noticed_difference": "yes",
+    "difference_type": "o A parecia ser um pouco mais generico do que o B, mesmo que em alguns momentos o B ainda faltava algumas coisas. Porem o B dava alguns detalhes extras sobre mais quantidade de desenvolvedores por exemplo, os tipos de dev, que fazem o resumo ser um pouco melhor e mais accurate",
+    "would_use_daily": "probably_yes",
+    "improvements": null
+  },
+  {
+    "id": 5,
+    "participant_id": 11,
+    "comments": null,
+    "created_at": "2026-04-16T01:50:50.893Z",
+    "noticed_difference": "yes",
+    "difference_type": "Tem diferença, mas não lembro de cabeça",
+    "would_use_daily": "maybe",
+    "improvements": "Hoje em dia eu vejo mais valor em \"conversar com o PDF\" do que receber o resumo pronto, as vezes eu tenho dúvidas específicas e faz mais sentido perguntar pra um claude/gpt direto"
+  },
+  {
+    "id": 6,
+    "participant_id": 13,
+    "comments": null,
+    "created_at": "2026-04-19T21:02:41.362Z",
+    "noticed_difference": "yes",
+    "difference_type": "A objetividade dos artigos",
+    "would_use_daily": "definitely_yes",
+    "improvements": null
+  },
+  {
+    "id": 7,
+    "participant_id": 14,
+    "comments": null,
+    "created_at": "2026-04-19T21:39:26.953Z",
+    "noticed_difference": "yes",
+    "difference_type": "O B estrutura melhor o texto e geralmente traz detalhes mais ricos, embora percebi que em alguns momentos o B deixou algumas informações de fora que o A conseguiu trazer",
+    "would_use_daily": "definitely_yes",
+    "improvements": "Visualizar ambos lado a lado é bom para comparação, mas no dia a dia será bem mais prático ter apenas um principal e ter outras versões do resumo de forma secundária, caso o usuário queira."
+  },
+  {
+    "id": 8,
+    "participant_id": 12,
+    "comments": "Projeto interessante e bastante útil. Talvez alguma opção de trazer as imagem/gráficos/tabelas possa ser útil.",
+    "created_at": "2026-04-20T04:27:59.562Z",
+    "noticed_difference": "yes",
+    "difference_type": "Normalmente o resumo A era mais detalhado e porquanto, maior.",
+    "would_use_daily": "probably_yes",
+    "improvements": "Creio que estará na versão final, mas um link direto para as referências abaixo do texto, além de referências aos trechos resumidos/referenciados durante o resumo."
+  },
+  {
+    "id": 9,
+    "participant_id": 15,
+    "comments": "Continua o bom trabalho maninho!",
+    "created_at": "2026-04-22T22:11:46.706Z",
+    "noticed_difference": "yes",
+    "difference_type": "O resumo A nos dois casos se mostrou mais genérico.",
+    "would_use_daily": "probably_yes",
+    "improvements": "Ao invés de criar um texto direto com o resumo, separa ele em tópicos, ou páginas; Cria perguntas sobre o artigo, que lendo o resumo tu consegue responder; Cria Flashcards de estudo do artigo."
+  },
+  {
+    "id": 10,
+    "participant_id": 18,
+    "comments": "Acredito que resumos adaptados seriam úteis na rotina. Ler artigos científicos, mesmo curtos, pode ser massante às vezes, mas as informações contidas neles incentivam a consulta aos detalhes do original.",
+    "created_at": "2026-04-23T14:37:41.454Z",
+    "noticed_difference": "yes",
+    "difference_type": "A estrutura e organizacão, detalhes quantitativos e a profundidade.\nO resumo A é mais superficial e resumido, o Resumo B é mais fiel ao artigo original com análise crítica",
+    "would_use_daily": "definitely_yes",
+    "improvements": null
+  },
+  {
+    "id": 11,
+    "participant_id": 20,
+    "comments": null,
+    "created_at": "2026-04-26T04:34:54.798Z",
+    "noticed_difference": "yes",
+    "difference_type": null,
+    "would_use_daily": "probably_yes",
+    "improvements": null
+  }
+]

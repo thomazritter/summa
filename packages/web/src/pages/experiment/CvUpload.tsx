@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
-import { ExperimentProgress } from '../../components/ExperimentProgress';
+
 
 interface DimensionConfig {
   key: string;
@@ -126,7 +126,7 @@ export function CvUpload() {
     onSuccess: (participant) => {
       sessionStorage.setItem('experimentParticipantId', String(participant.id));
       sessionStorage.setItem('experimentParticipantName', participant.name);
-      navigate('/experiment/select-article');
+      navigate('/dashboard');
     },
   });
 
@@ -229,9 +229,15 @@ export function CvUpload() {
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
-      <ExperimentProgress currentStep={1} />
-
       <div className="max-w-3xl mx-auto py-12 px-6">
+        <div className="mb-6">
+          <Link
+            to="/dashboard"
+            className="text-[#2563eb] hover:text-[#1d4ed8] text-sm font-medium transition-colors"
+          >
+            &larr; Voltar ao dashboard
+          </Link>
+        </div>
         {/* Phase 1: Upload */}
         {phase === 'upload' && (
           <div className="bg-white border border-gray-200 rounded-lg p-8">
@@ -361,7 +367,7 @@ export function CvUpload() {
             {/* Link to questionnaire */}
             <p className="text-center mt-6">
               <Link
-                to="/experiment/register"
+                to="/profile/setup"
                 className="text-sm text-[#2563eb] hover:text-[#1d4ed8] font-medium transition-colors"
               >
                 Prefere responder o questionário?
@@ -406,7 +412,7 @@ export function CvUpload() {
                     Tentar novamente
                   </button>
                   <Link
-                    to="/experiment/register"
+                    to="/profile/setup"
                     className="w-full py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors text-center"
                   >
                     Responder questionário

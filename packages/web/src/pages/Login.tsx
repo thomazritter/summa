@@ -49,6 +49,9 @@ export function Login() {
       const result = await authApi.login(code.trim().toUpperCase());
       sessionStorage.setItem('accessCode', result.code);
       sessionStorage.setItem('accessRole', result.role);
+      if (result.email) {
+        sessionStorage.setItem('userEmail', result.email);
+      }
       if (result.participantId) {
         sessionStorage.setItem('experimentParticipantId', String(result.participantId));
       }
@@ -56,11 +59,7 @@ export function Login() {
       if (result.role === 'manager') {
         navigate('/manager');
       } else {
-        if (result.participantId) {
-          navigate('/experiment/select-article');
-        } else {
-          navigate('/experiment');
-        }
+        navigate('/dashboard');
       }
     } catch {
       setCodeError('Codigo nao encontrado.');

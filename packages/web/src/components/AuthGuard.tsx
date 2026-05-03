@@ -20,7 +20,7 @@ export function AuthGuard({ children, requiredRole }: AuthGuardProps) {
       if (role === 'manager') {
         navigate('/manager', { replace: true });
       } else {
-        navigate('/experiment', { replace: true });
+        navigate('/dashboard', { replace: true });
       }
     }
   }, [code, role, requiredRole, navigate]);

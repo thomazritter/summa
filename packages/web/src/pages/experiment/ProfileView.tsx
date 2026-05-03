@@ -97,7 +97,7 @@ export function ProfileView() {
 
   useEffect(() => {
     if (!participantId) {
-      navigate('/experiment');
+      navigate('/dashboard');
     }
   }, [participantId, navigate]);
 
@@ -182,11 +182,11 @@ export function ProfileView() {
         <div className="mb-8">
           <button
             type="button"
-            onClick={() => navigate('/experiment/select-article')}
+            onClick={() => navigate('/dashboard')}
             className="text-[#2563eb] hover:text-[#1d4ed8] text-sm font-medium transition-colors"
-            aria-label="Voltar para seleção de artigos"
+            aria-label="Voltar ao dashboard"
           >
-            &larr; Voltar
+            &larr; Voltar ao dashboard
           </button>
         </div>
 

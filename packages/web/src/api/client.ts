@@ -197,6 +197,23 @@ export const managerApi = {
   },
 };
 
+export const userApi = {
+  getArticles: () =>
+    apiRequest<Array<{
+      id: number;
+      title: string;
+      authors: string | null;
+      createdAt: string;
+      summaries: Array<{
+        id: number;
+        content: string;
+        modelLabel: string | null;
+        factualityScore: number | null;
+        createdAt: string;
+      }>;
+    }>>('/user/articles'),
+};
+
 export const experimentApi = {
   uploadCv: async (file: File) => {
     const formData = new FormData();

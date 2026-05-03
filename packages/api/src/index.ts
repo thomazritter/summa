@@ -13,6 +13,8 @@ import { articleRoutes } from './routes/articles.js';
 import { experimentRoutes } from './routes/experiment.js';
 import { authRoutes } from './routes/auth.js';
 import { managerRoutes } from './routes/manager.js';
+import { userRoutes } from './routes/user.js';
+import { requireAuth } from './middleware/auth.js';
 import { closeDb } from './db/connection.js';
 import { runMigrations } from './db/auto-migrate.js';
 import { getGroqStatus } from './services/groqClient.js';
@@ -77,6 +79,7 @@ app.use('/api/articles', articleRoutes);
 app.use('/api/experiment', experimentRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/manager', managerRoutes);
+app.use('/api/user', requireAuth, userRoutes);
 
 // Legacy routes — disabled (no auth protection, not used by experiment)
 // app.use('/api/users', userRoutes);

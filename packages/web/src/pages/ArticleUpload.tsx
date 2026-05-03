@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { articleApi, summaryApi } from '../api/client';
 import type { ArticleUploadResponse } from '../api/client';
@@ -27,7 +27,7 @@ const LOADING_MESSAGES = [
 export function ArticleUpload() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const profileId = sessionStorage.getItem('selectedProfileId');
+  const participantId = sessionStorage.getItem('experimentParticipantId');
 
   const [phase, setPhase] = useState<Phase>('upload');
   const [file, setFile] = useState<File | null>(null);
@@ -36,12 +36,12 @@ export function ArticleUpload() {
   const [loadingMessageIndex, setLoadingMessageIndex] = useState(0);
   const [uploadResult, setUploadResult] = useState<ArticleUploadResponse | null>(null);
 
-  // Redirect if no profile selected
+  // Redirect if no profile configured
   useEffect(() => {
-    if (!profileId) {
-      navigate('/profiles');
+    if (!participantId) {
+      navigate('/dashboard');
     }
-  }, [profileId, navigate]);
+  }, [participantId, navigate]);
 
   // Cycle loading messages
   useEffect(() => {
@@ -136,7 +136,7 @@ export function ArticleUpload() {
 
   const generateMutation = useMutation({
     mutationFn: async (articleId: number) => {
-      const summary = await summaryApi.generate(articleId, Number(profileId)) as { id: number };
+      const summary = await summaryApi.generate(articleId, Number(participantId)) as { id: number };
       return summary;
     },
     onSuccess: (summary) => {
@@ -163,6 +163,15 @@ export function ArticleUpload() {
   return (
     <div className="min-h-screen bg-[#f9fafb]">
       <div className="max-w-3xl mx-auto py-12 px-6">
+        <div className="mb-6">
+          <Link
+            to="/dashboard"
+            className="text-[#2563eb] hover:text-[#1d4ed8] text-sm font-medium transition-colors"
+          >
+            &larr; Voltar ao dashboard
+          </Link>
+        </div>
+
         {/* Phase 1: Upload */}
         {phase === 'upload' && (
           <div className="bg-white border border-gray-200 rounded-lg p-8">
