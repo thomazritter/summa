@@ -212,6 +212,12 @@ export const userApi = {
         createdAt: string;
       }>;
     }>>('/user/articles'),
+
+  summarize: (articleId: number, modelId?: string) =>
+    apiRequest<{ id: number; content: string; modelId: string; factualityScore: number | null }>('/user/summarize', {
+      method: 'POST',
+      body: JSON.stringify({ articleId, modelId }),
+    }),
 };
 
 export const experimentApi = {

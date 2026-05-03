@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { articleApi, summaryApi } from '../api/client';
+import { articleApi, userApi } from '../api/client';
 import type { ArticleUploadResponse } from '../api/client';
 
 type Phase = 'upload' | 'loading' | 'results';
@@ -136,7 +136,7 @@ export function ArticleUpload() {
 
   const generateMutation = useMutation({
     mutationFn: async (articleId: number) => {
-      const summary = await summaryApi.generate(articleId, Number(participantId)) as { id: number };
+      const summary = await userApi.summarize(articleId) as { id: number };
       return summary;
     },
     onSuccess: (summary) => {
