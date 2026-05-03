@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { userApi } from '../api/client';
+import { ModelSwitcher } from '../components/ModelSwitcher';
+import type { SummaryResult } from '../api/client';
 
 interface UserArticle {
   id: number;
@@ -50,6 +52,7 @@ function formatDate(dateString: string): string {
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const participantId = sessionStorage.getItem('experimentParticipantId');
   const userEmail = sessionStorage.getItem('userEmail') || '';
   const [expandedArticleId, setExpandedArticleId] = useState<number | null>(null);
@@ -73,6 +76,10 @@ export function Dashboard() {
 
   const toggleArticle = (articleId: number) => {
     setExpandedArticleId((prev) => (prev === articleId ? null : articleId));
+  };
+
+  const handleDashboardNewSummary = (_summary: SummaryResult) => {
+    void queryClient.invalidateQueries({ queryKey: ['user-articles'] });
   };
 
   return (
@@ -192,8 +199,11 @@ export function Dashboard() {
               {articles.map((article) => {
                 const isExpanded = expandedArticleId === article.id;
                 const latestSummary = article.summaries[0];
-                const previewText = latestSummary
-                  ? latestSummary.content.slice(0, 200) + (latestSummary.content.length > 200 ? '...' : '')
+                const rawPreview = latestSummary
+                  ? latestSummary.content.replace(/[#*_~`>]/g, '').replace(/\n+/g, ' ').trim()
+                  : '';
+                const previewText = rawPreview
+                  ? rawPreview.slice(0, 200) + (rawPreview.length > 200 ? '...' : '')
                   : 'Sem resumo disponível';
 
                 return (
@@ -266,21 +276,36 @@ export function Dashboard() {
                           <ReactMarkdown>{latestSummary.content}</ReactMarkdown>
                         </div>
 
-                        <div className="flex flex-col sm:flex-row gap-3">
+                        <div className="flex items-center gap-3 mb-2">
                           <Link
                             to={`/summary/${latestSummary.id}`}
-                            className="py-2.5 px-5 bg-[#2563eb] text-white text-sm font-semibold rounded-lg hover:bg-[#1d4ed8] transition-colors text-center"
+                            className="inline-block py-2.5 px-5 bg-[#2563eb] text-white text-sm font-semibold rounded-lg hover:bg-[#1d4ed8] transition-colors text-center"
                           >
                             Ver detalhes
                           </Link>
                           <button
                             type="button"
-                            onClick={() => navigate(`/upload`)}
-                            className="py-2.5 px-5 border border-gray-300 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-50 transition-colors"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (!confirm('Tem certeza que deseja excluir este resumo?')) return;
+                              try {
+                                await userApi.deleteSummary(latestSummary.id);
+                                void queryClient.invalidateQueries({ queryKey: ['user-articles'] });
+                              } catch {
+                                alert('Erro ao excluir resumo');
+                              }
+                            }}
+                            className="py-2.5 px-5 border border-red-300 text-red-600 text-sm font-semibold rounded-lg hover:bg-red-50 transition-colors"
                           >
-                            Tentar outro modelo
+                            Excluir resumo
                           </button>
                         </div>
+
+                        <ModelSwitcher
+                          articleId={article.id}
+                          currentModelId={latestSummary.modelLabel}
+                          onNewSummary={handleDashboardNewSummary}
+                        />
                       </div>
                     )}
 

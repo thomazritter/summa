@@ -1,11 +1,21 @@
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { userApi } from '../api/client';
+import { ModelSwitcher } from '../components/ModelSwitcher';
+import type { SummaryResult } from '../api/client';
 
 export function SummaryView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [overrideSummary, setOverrideSummary] = useState<{
+    id: number;
+    content: string;
+    modelId: string;
+    factualityScore: number | null;
+  } | null>(null);
 
   const { data: articles, isLoading } = useQuery({
     queryKey: ['user-articles'],
@@ -15,7 +25,7 @@ export function SummaryView() {
   // Find the summary across all articles
   const summaryId = Number(id);
   let foundSummary: { id: number; content: string; factualityScore: number | null; modelLabel: string | null } | null = null;
-  let foundArticle: { title: string; authors: string | null } | null = null;
+  let foundArticle: { id: number; title: string; authors: string | null } | null = null;
 
   if (articles) {
     for (const article of articles) {
@@ -27,11 +37,27 @@ export function SummaryView() {
           factualityScore: match.factualityScore,
           modelLabel: match.modelLabel,
         };
-        foundArticle = { title: article.title, authors: article.authors };
+        foundArticle = { id: article.id, title: article.title, authors: article.authors };
         break;
       }
     }
   }
+
+  // If a new summary was generated via model switch, use it instead
+  const displaySummary = overrideSummary
+    ? {
+        id: overrideSummary.id,
+        content: overrideSummary.content,
+        factualityScore: overrideSummary.factualityScore,
+        modelLabel: overrideSummary.modelId,
+      }
+    : foundSummary;
+
+  const handleNewSummary = (summary: SummaryResult) => {
+    setOverrideSummary(summary);
+    void queryClient.invalidateQueries({ queryKey: ['user-articles'] });
+    navigate(`/summary/${summary.id}`, { replace: true });
+  };
 
   if (isLoading) {
     return (
@@ -44,13 +70,14 @@ export function SummaryView() {
     );
   }
 
-  if (!foundSummary || !foundArticle) {
+  if (!displaySummary || !foundArticle) {
     return (
       <div className="min-h-screen bg-[#f9fafb] py-12 px-6">
         <div className="max-w-3xl mx-auto text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Resumo não encontrado</h1>
           <p className="text-gray-600 mb-6">Este resumo pode ter sido removido ou o link está incorreto.</p>
           <button
+            type="button"
             onClick={() => navigate('/dashboard')}
             className="px-6 py-3 bg-[#2563eb] text-white font-semibold rounded-lg hover:bg-[#1d4ed8] transition-colors"
           >
@@ -86,29 +113,36 @@ export function SummaryView() {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-semibold text-gray-900">Resumo Personalizado</h2>
             <div className="flex items-center gap-3">
-              {foundSummary.modelLabel && (
+              {displaySummary.modelLabel && (
                 <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
-                  {foundSummary.modelLabel}
+                  {displaySummary.modelLabel}
                 </span>
               )}
-              {foundSummary.factualityScore !== null && (
+              {displaySummary.factualityScore !== null && (
                 <span className={`px-3 py-1 text-xs rounded-full ${
-                  foundSummary.factualityScore >= 0.8
+                  displaySummary.factualityScore >= 0.8
                     ? 'bg-green-100 text-green-700'
-                    : foundSummary.factualityScore >= 0.6
+                    : displaySummary.factualityScore >= 0.6
                     ? 'bg-amber-100 text-amber-700'
                     : 'bg-red-100 text-red-700'
                 }`}>
-                  Factualidade: {(foundSummary.factualityScore * 100).toFixed(0)}%
+                  Factualidade: {(displaySummary.factualityScore * 100).toFixed(0)}%
                 </span>
               )}
             </div>
           </div>
 
           <div className="prose prose-gray max-w-none">
-            <ReactMarkdown>{foundSummary.content}</ReactMarkdown>
+            <ReactMarkdown>{displaySummary.content}</ReactMarkdown>
           </div>
         </div>
+
+        {/* Model switcher */}
+        <ModelSwitcher
+          articleId={foundArticle.id}
+          currentModelId={displaySummary.modelLabel}
+          onNewSummary={handleNewSummary}
+        />
       </div>
     </div>
   );

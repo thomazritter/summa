@@ -195,3 +195,32 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
     throw error;
   }
 }));
+
+// ─── DELETE /api/user/summaries/:id ───────────────────────────────
+
+userRoutes.delete('/summaries/:id', asyncHandler(async (req: Request, res: Response) => {
+  const participantId = req.accessCode?.participantId;
+  if (!participantId) {
+    return res.status(400).json({ error: 'Perfil de participante nao configurado' });
+  }
+
+  const summaryId = Number(req.params.id);
+  if (!summaryId || summaryId <= 0) {
+    return res.status(400).json({ error: 'ID de resumo invalido' });
+  }
+
+  // Verify ownership: summary must belong to an article uploaded by this participant
+  const summary = await queryOne<{ id: number; article_id: number }>(
+    `SELECT s.id, s.article_id FROM summaries s
+     JOIN articles a ON a.id = s.article_id
+     WHERE s.id = $1 AND a.uploaded_by = $2`,
+    [summaryId, participantId],
+  );
+
+  if (!summary) {
+    return res.status(404).json({ error: 'Resumo nao encontrado ou voce nao tem permissao para deleta-lo' });
+  }
+
+  await queryOne('DELETE FROM summaries WHERE id = $1', [summaryId]);
+  res.json({ success: true });
+}));

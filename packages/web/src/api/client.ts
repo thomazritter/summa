@@ -197,6 +197,19 @@ export const managerApi = {
   },
 };
 
+export interface ModelOption {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface SummaryResult {
+  id: number;
+  content: string;
+  modelId: string;
+  factualityScore: number | null;
+}
+
 export const userApi = {
   getArticles: () =>
     apiRequest<Array<{
@@ -213,10 +226,18 @@ export const userApi = {
       }>;
     }>>('/user/articles'),
 
+  getModels: () =>
+    apiRequest<ModelOption[]>('/experiment/models'),
+
   summarize: (articleId: number, modelId?: string) =>
-    apiRequest<{ id: number; content: string; modelId: string; factualityScore: number | null }>('/user/summarize', {
+    apiRequest<SummaryResult>('/user/summarize', {
       method: 'POST',
       body: JSON.stringify({ articleId, modelId }),
+    }),
+
+  deleteSummary: (summaryId: number) =>
+    apiRequest<{ success: boolean }>(`/user/summaries/${summaryId}`, {
+      method: 'DELETE',
     }),
 };
 
