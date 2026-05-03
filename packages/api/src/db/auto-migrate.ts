@@ -56,6 +56,8 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
 
     ALTER TABLE articles ADD COLUMN IF NOT EXISTS uploaded_by INTEGER;
+
+    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;
   `;
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');

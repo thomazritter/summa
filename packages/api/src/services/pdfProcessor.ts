@@ -1,8 +1,7 @@
 import pdf from 'pdf-parse';
 import type { ArticleStructure, ArticleSection } from '@summarizer/shared';
 import { MAX_PDF_SIZE } from '../utils/validation.js';
-
-const PDF_SERVICE_URL = process.env.PDF_SERVICE_URL || 'http://127.0.0.1:5051';
+import { generateCompletion } from './groqClient.js';
 
 export class PDFProcessingError extends Error {
   constructor(message: string) {
@@ -19,80 +18,19 @@ export interface PDFProcessingResult {
 
 /**
  * Process a PDF buffer and extract structured text.
- * Tries PyMuPDF service first (better column handling), falls back to pdf-parse.
+ * Uses pdf-parse to extract raw text, then tries LLM-based structuring
+ * with regex-based fallback.
  */
 export const processPDF = async (buffer: Buffer): Promise<PDFProcessingResult> => {
   if (buffer.length > MAX_PDF_SIZE) {
     throw new PDFProcessingError(`PDF exceeds maximum size of ${MAX_PDF_SIZE / 1024 / 1024}MB`);
   }
 
-  // Try PyMuPDF service first
-  try {
-    const result = await extractViaPyMuPDF(buffer);
-    console.log('[PDF] Extracted via PyMuPDF service');
-    return result;
-  } catch (error) {
-    console.warn('[PDF] PyMuPDF service unavailable, falling back to pdf-parse:', (error as Error).message);
-  }
-
-  // Fallback to pdf-parse (JavaScript)
   return extractViaPdfParse(buffer);
 };
 
 /**
- * Extract via PyMuPDF Python service (port 5051).
- * Better handling of multi-column layouts.
- */
-const extractViaPyMuPDF = async (buffer: Buffer): Promise<PDFProcessingResult> => {
-  const formData = new FormData();
-  const blob = new Blob([new Uint8Array(buffer)], { type: 'application/pdf' });
-  formData.append('file', blob, 'article.pdf');
-
-  const response = await fetch(`${PDF_SERVICE_URL}/extract`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Unknown error' }));
-    throw new Error(error.error || `PDF service returned ${response.status}`);
-  }
-
-  const data = await response.json() as {
-    rawText: string;
-    structuredContent: {
-      abstract?: string;
-      introduction?: string;
-      methodology?: string;
-      results?: string;
-      discussion?: string;
-      conclusion?: string;
-      sections?: Array<{ title: string; content: string; level: number }>;
-    };
-    metadata: { title?: string; authors?: string; pageCount?: number };
-  };
-
-  return {
-    rawText: data.rawText,
-    structuredContent: {
-      abstract: data.structuredContent.abstract || undefined,
-      introduction: data.structuredContent.introduction || undefined,
-      methodology: data.structuredContent.methodology || undefined,
-      results: data.structuredContent.results || undefined,
-      discussion: data.structuredContent.discussion || undefined,
-      conclusion: data.structuredContent.conclusion || undefined,
-      sections: data.structuredContent.sections || [],
-    },
-    metadata: {
-      title: data.metadata.title || undefined,
-      authors: data.metadata.authors || undefined,
-    },
-  };
-};
-
-/**
- * Fallback extraction using pdf-parse (JavaScript).
- * Less accurate for multi-column PDFs.
+ * Extract text using pdf-parse, then structure via LLM with regex fallback.
  */
 const extractViaPdfParse = async (buffer: Buffer): Promise<PDFProcessingResult> => {
   let data;
@@ -108,10 +46,90 @@ const extractViaPdfParse = async (buffer: Buffer): Promise<PDFProcessingResult> 
     title: data.info?.Title || extractTitleFromText(rawText),
     authors: data.info?.Author || undefined,
   };
-  const structuredContent = structureArticleContent(rawText);
 
-  console.log('[PDF] Extracted via pdf-parse (fallback)');
+  // Try LLM-based structuring first, fall back to regex
+  const llmStructure = await structureWithLLM(rawText);
+  if (llmStructure) {
+    console.log('[PDF] Structured via LLM');
+    return { rawText, structuredContent: llmStructure, metadata };
+  }
+
+  const structuredContent = structureArticleContent(rawText);
+  console.log('[PDF] Structured via regex fallback');
   return { rawText, structuredContent, metadata };
+};
+
+/**
+ * Use the LLM to identify and extract article sections from raw text.
+ * More accurate than regex for non-standard headers and multilingual articles.
+ * Returns null on failure so the caller can fall back to regex.
+ */
+const structureWithLLM = async (rawText: string): Promise<ArticleStructure | null> => {
+  try {
+    const truncatedText = rawText.slice(0, 30000);
+    const prompt = `Analise este texto de artigo científico e identifique as seções.
+Retorne APENAS um JSON válido (sem markdown, sem \`\`\`, sem texto antes ou depois):
+{
+  "abstract": "texto completo da seção ou null",
+  "introduction": "texto completo da seção ou null",
+  "methodology": "texto completo da seção ou null",
+  "results": "texto completo da seção ou null",
+  "discussion": "texto completo da seção ou null",
+  "conclusion": "texto completo da seção ou null"
+}
+
+IMPORTANTE: COPIE o texto original de cada seção integralmente. NÃO resuma nem altere o conteúdo.
+Use null (sem aspas) para seções não encontradas no texto.
+
+TEXTO DO ARTIGO:
+${truncatedText}`;
+
+    const response = await generateCompletion({
+      prompt,
+      temperature: 0.1,
+      maxTokens: 8192,
+    });
+
+    // Strip markdown code fences if present
+    let cleaned = response.trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '');
+
+    // Find the JSON object boundaries
+    const startIdx = cleaned.indexOf('{');
+    const endIdx = cleaned.lastIndexOf('}');
+    if (startIdx === -1 || endIdx === -1 || endIdx <= startIdx) {
+      console.warn('[PDF] LLM structuring failed: no valid JSON object found in response');
+      return null;
+    }
+
+    const jsonStr = cleaned.slice(startIdx, endIdx + 1);
+    const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+
+    // Validate: each known field should be a string or null
+    const validKeys = ['abstract', 'introduction', 'methodology', 'results', 'discussion', 'conclusion'] as const;
+    const structure: ArticleStructure = { sections: [] };
+
+    for (const key of validKeys) {
+      const value = parsed[key];
+      if (typeof value === 'string' && value.trim().length > 0) {
+        structure[key] = value;
+      }
+      // null or missing values are left as undefined
+    }
+
+    // Check that at least one section was extracted
+    const hasContent = validKeys.some((key) => structure[key] !== undefined);
+    if (!hasContent) {
+      console.warn('[PDF] LLM structuring returned no sections');
+      return null;
+    }
+
+    return structure;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    console.warn('[PDF] LLM structuring failed, will use regex fallback:', message);
+    return null;
+  }
 };
 
 const extractTitleFromText = (text: string): string | undefined => {

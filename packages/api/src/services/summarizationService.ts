@@ -1,5 +1,5 @@
 import { queryOne, queryAll, execute } from '../db/connection.js';
-import { generateCompletion, LLMError } from './groqClient.js';
+import { generateCompletion, getActiveModel, LLMError } from './groqClient.js';
 import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxTokensForDepth } from './promptBuilder.js';
 import type { ParticipantPreferences } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
@@ -23,7 +23,7 @@ export class NotFoundError extends Error {
   }
 }
 
-export const generateSummary = async (articleId: number, profileId: number): Promise<Summary> => {
+export const generateSummary = async (articleId: number, profileId: number, modelId?: string): Promise<Summary> => {
   // Get article
   const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
   if (!article) {
@@ -41,12 +41,14 @@ export const generateSummary = async (articleId: number, profileId: number): Pro
   // Build prompt and generate
   const prompt = buildSummarizationPrompt(profile, structuredContent, article.raw_text);
 
+  const effectiveModel = modelId || getActiveModel();
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
       maxTokens: getMaxTokensForDepth(profile.depth),
+      model: effectiveModel,
     });
   } catch (error) {
     if (error instanceof LLMError) {
@@ -57,10 +59,10 @@ export const generateSummary = async (articleId: number, profileId: number): Pro
 
   // Save summary
   const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content)
-     VALUES ($1, $2, $3)
+    `INSERT INTO summaries (article_id, profile_id, content, model_id)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [articleId, profileId, summaryContent],
+    [articleId, profileId, summaryContent, effectiveModel],
   );
 
   if (!row) {
@@ -69,7 +71,7 @@ export const generateSummary = async (articleId: number, profileId: number): Pro
   return mapRowToSummary(row);
 };
 
-export const generateSummaryWithFactuality = async (articleId: number, profileId: number): Promise<Summary> => {
+export const generateSummaryWithFactuality = async (articleId: number, profileId: number, modelId?: string): Promise<Summary> => {
   const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
   if (!article) throw new NotFoundError('Article not found');
 
@@ -79,12 +81,14 @@ export const generateSummaryWithFactuality = async (articleId: number, profileId
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
   const prompt = buildSummarizationPrompt(profile, structuredContent, article.raw_text);
 
+  const effectiveModel = modelId || getActiveModel();
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
       maxTokens: getMaxTokensForDepth(profile.depth),
+      model: effectiveModel,
     });
   } catch (error) {
     if (error instanceof LLMError) throw new SummarizationError(`Failed to generate summary: ${error.message}`);
@@ -94,10 +98,10 @@ export const generateSummaryWithFactuality = async (articleId: number, profileId
   const { score, results } = await checkFactuality(summaryContent, structuredContent, article.raw_text);
 
   const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content, factuality_score, factuality_details)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO summaries (article_id, profile_id, content, factuality_score, factuality_details, model_id)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [articleId, profileId, summaryContent, score, JSON.stringify(results)],
+    [articleId, profileId, summaryContent, score, JSON.stringify(results), effectiveModel],
   );
 
   if (!row) throw new SummarizationError('Failed to save summary');
@@ -194,6 +198,7 @@ export const generateGenericSummary = async (
   articleId: number,
   englishComfort?: 'keep_english' | 'translate',
   profileId: number = GENERIC_PROFILE_ID,
+  modelId?: string,
 ): Promise<Summary> => {
   const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
   if (!article) {
@@ -203,12 +208,14 @@ export const generateGenericSummary = async (
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
   const prompt = buildGenericSummarizationPrompt(structuredContent, article.raw_text, englishComfort);
 
+  const effectiveModel = modelId || getActiveModel();
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
       maxTokens: 8192,
+      model: effectiveModel,
     });
   } catch (error) {
     if (error instanceof LLMError) {
@@ -218,10 +225,10 @@ export const generateGenericSummary = async (
   }
 
   const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content)
-     VALUES ($1, $2, $3)
+    `INSERT INTO summaries (article_id, profile_id, content, model_id)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [articleId, profileId, summaryContent],
+    [articleId, profileId, summaryContent, effectiveModel],
   );
 
   if (!row) {
@@ -270,7 +277,8 @@ export const generatePersonalizedSummary = async (
   articleId: number,
   baseProfileId: number,
   profileDimensions: ProfileDimensions,
-  participantPreferences?: ParticipantPreferences
+  participantPreferences?: ParticipantPreferences,
+  modelId?: string,
 ): Promise<Summary> => {
   const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
   if (!article) {
@@ -294,12 +302,14 @@ export const generatePersonalizedSummary = async (
 
   const prompt = buildSummarizationPrompt(profileForPrompt, structuredContent, article.raw_text, participantPreferences);
 
+  const effectiveModel = modelId || getActiveModel();
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
       maxTokens: getMaxTokensForDepth(profileDimensions.depth),
+      model: effectiveModel,
     });
   } catch (error) {
     if (error instanceof LLMError) {
@@ -309,10 +319,10 @@ export const generatePersonalizedSummary = async (
   }
 
   const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content)
-     VALUES ($1, $2, $3)
+    `INSERT INTO summaries (article_id, profile_id, content, model_id)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [articleId, baseProfileId, summaryContent],
+    [articleId, baseProfileId, summaryContent, effectiveModel],
   );
 
   if (!row) {
@@ -345,7 +355,8 @@ export const generatePersonalizedSummary = async (
  */
 export const regenerateSummaryWithFeedback = async (
   summaryId: number,
-  feedbackText: string
+  feedbackText: string,
+  modelId?: string,
 ): Promise<Summary> => {
   const existing = await getSummaryById(summaryId);
   if (!existing) {
@@ -373,12 +384,14 @@ FEEDBACK DO LEITOR: "${feedbackText}"
 
 Gere o resumo melhorado agora:`;
 
+  const effectiveModel = modelId || getActiveModel();
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
       prompt: feedbackPrompt,
       temperature: 0.3,
       maxTokens: getMaxTokensForDepth(profile.depth),
+      model: effectiveModel,
     });
   } catch (error) {
     if (error instanceof LLMError) {
@@ -388,10 +401,10 @@ Gere o resumo melhorado agora:`;
   }
 
   const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content)
-     VALUES ($1, $2, $3)
+    `INSERT INTO summaries (article_id, profile_id, content, model_id)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [existing.articleId, existing.profileId, summaryContent],
+    [existing.articleId, existing.profileId, summaryContent, effectiveModel],
   );
 
   if (!row) {
@@ -420,6 +433,7 @@ interface SummaryRow {
   content: string;
   factuality_score: number | null;
   factuality_details: string | null;
+  model_id: string | null;
   generated_at: string;
 }
 
@@ -431,6 +445,7 @@ const mapRowToSummary = (row: SummaryRow): Summary => {
     content: row.content,
     factualityScore: row.factuality_score,
     factualityDetails: safeJsonParse(row.factuality_details) || null,
+    modelId: row.model_id,
     generatedAt: new Date(row.generated_at),
   };
 };

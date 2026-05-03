@@ -64,6 +64,7 @@ export interface Summary {
   content: string;
   factualityScore: number | null;
   factualityDetails: FactualityResult[] | null;
+  modelId: string | null;
   generatedAt: Date;
 }
 

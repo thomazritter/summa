@@ -4,8 +4,10 @@ import multer, { MulterError } from 'multer';
 import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
 import { parseId, safeJsonParse } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { regenerateSummaryWithFeedback, getSummaryById } from '../services/summarizationService.js';
+import { regenerateSummaryWithFeedback, getSummaryById, generatePersonalizedSummary } from '../services/summarizationService.js';
+import type { ProfileDimensions } from '../services/summarizationService.js';
 import { createExperimentSession, SessionCreationError, computeProfileDimensions, computeProfileSources, EXPERIENCE_CONFIG } from '../services/sessionService.js';
+import { AVAILABLE_MODELS, getActiveModel } from '../services/groqClient.js';
 import { inferProfileFromCv } from '../services/cvProfileMapper.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ExperimentSession, Participant, Regeneration } from '@summarizer/shared';
@@ -96,6 +98,10 @@ const registerFromCvSchema = z.object({
   experienceLevel: z.enum(['junior', 'pleno', 'senior']),
   englishComfort: z.enum(['keep_english', 'translate']).optional(),
   structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
+});
+
+const tryModelSchema = z.object({
+  modelId: z.string().min(1).max(100),
 });
 
 // ─── CV Upload (Multer) ────────────────────────────────────────────
@@ -714,6 +720,90 @@ experimentRoutes.post('/profile/reset', asyncHandler(async (req: Request, res: R
 experimentRoutes.get('/articles', asyncHandler(async (_req: Request, res: Response) => {
   const rows = await queryAll('SELECT id, title, authors, year, url FROM articles ORDER BY id ASC');
   res.json(rows);
+}));
+
+// ─── Model Exploration ────────────────────────────────────────────────
+
+// GET /api/experiment/models — list available models
+experimentRoutes.get('/models', asyncHandler(async (_req: Request, res: Response) => {
+  res.json(AVAILABLE_MODELS);
+}));
+
+// POST /api/experiment/sessions/:id/try-model — regenerate summary with a different model
+experimentRoutes.post('/sessions/:id/try-model', asyncHandler(async (req: Request, res: Response) => {
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
+
+  // IDOR check
+  const sessionCheck = await verifySessionOwnership(req, res, id);
+  if (!sessionCheck) return;
+
+  const validation = tryModelSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.errors });
+  }
+
+  const { modelId } = validation.data;
+
+  // Validate modelId is in AVAILABLE_MODELS
+  const validModel = AVAILABLE_MODELS.find(m => m.id === modelId);
+  if (!validModel) {
+    return res.status(400).json({
+      error: `Modelo invalido: ${modelId}. Modelos disponiveis: ${AVAILABLE_MODELS.map(m => m.id).join(', ')}`,
+    });
+  }
+
+  // Session must be in 'complete' phase (user already evaluated)
+  if (sessionCheck.phase !== 'complete') {
+    return res.status(400).json({
+      error: 'A avaliacao deve ser concluida antes de explorar outros modelos',
+    });
+  }
+
+  // Load the participant to rebuild profile dimensions
+  const participant = await queryOne<ParticipantRow>(
+    'SELECT * FROM participants WHERE id = $1',
+    [sessionCheck.participant_id],
+  );
+  if (!participant) {
+    return res.status(404).json({ error: 'Participante nao encontrado' });
+  }
+
+  const dimensions: ProfileDimensions = computeProfileDimensions(participant);
+
+  // Build participant preferences
+  const participantPreferences = {
+    structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
+    englishComfort: participant.english_comfort as 'keep_english' | 'translate' | undefined,
+  };
+  const hasPreferences = participantPreferences.structurePreference || participantPreferences.englishComfort;
+
+  // Determine the model used by the original personalized summary
+  const originalSummary = await getSummaryById(sessionCheck.personalized_summary_id);
+  const previousModel = originalSummary?.modelId || getActiveModel();
+
+  // Determine the base profile ID from experience config
+  const config = EXPERIENCE_CONFIG[participant.experience_level];
+  const baseProfileId = config ? config.profileId : 101; // fallback to pleno
+
+  // Generate a new personalized summary with the specified model
+  const newSummary = await generatePersonalizedSummary(
+    sessionCheck.article_id,
+    baseProfileId,
+    dimensions,
+    hasPreferences ? participantPreferences : undefined,
+    modelId,
+  );
+
+  res.status(201).json({
+    summary: {
+      id: newSummary.id,
+      content: newSummary.content,
+      modelId: newSummary.modelId,
+      factualityScore: newSummary.factualityScore,
+    },
+    previousModel,
+  });
 }));
 
 // ─── Mappers ────────────────────────────────────────────────────────

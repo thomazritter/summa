@@ -215,6 +215,10 @@ ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_context TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
 ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
 
+-- ─── Model Tracking ───────────────────────────────────────────────
+
+ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;
+
 -- ─── P-Accuracy Scores ──────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS p_accuracy_scores (

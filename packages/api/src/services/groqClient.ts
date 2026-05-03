@@ -24,6 +24,7 @@ export interface GenerateRequest {
   prompt: string;
   maxTokens?: number;
   temperature?: number;
+  model?: string;  // per-request override, falls back to activeModel
 }
 
 export interface GenerateResponse {
@@ -55,7 +56,7 @@ export const generateCompletion = async (request: GenerateRequest): Promise<stri
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: activeModel,
+        model: request.model || activeModel,
         messages: [{ role: 'user', content: request.prompt }],
         temperature: request.temperature ?? 0.3,
         max_tokens: request.maxTokens ?? 2000,

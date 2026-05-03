@@ -134,10 +134,20 @@ export function ArticleUpload() {
     }
   }, []);
 
+  const generateMutation = useMutation({
+    mutationFn: async (articleId: number) => {
+      const summary = await summaryApi.generate(articleId, Number(profileId)) as { id: number };
+      return summary;
+    },
+    onSuccess: (summary) => {
+      navigate(`/summary/${summary.id}`);
+    },
+  });
+
   const handleGenerateSummary = useCallback(() => {
     if (!uploadResult) return;
-    navigate(`/summary/${uploadResult.article.id}`);
-  }, [uploadResult, navigate]);
+    generateMutation.mutate(uploadResult.article.id);
+  }, [uploadResult, generateMutation]);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -514,16 +524,41 @@ export function ArticleUpload() {
               </div>
             )}
 
+            {/* Generation error */}
+            {generateMutation.error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4" role="alert">
+                <div className="flex items-center gap-2 mb-1">
+                  <svg
+                    className="h-5 w-5 text-red-600 shrink-0"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <p className="text-sm text-red-700">
+                    Erro ao gerar resumo: {(generateMutation.error as Error).message}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Action buttons */}
             <div className="space-y-3">
               <button
                 type="button"
                 onClick={handleGenerateSummary}
-                disabled={hasErrors}
+                disabled={hasErrors || generateMutation.isPending}
                 className="w-full py-4 bg-[#2563eb] text-white font-semibold rounded-lg hover:bg-[#1d4ed8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 aria-describedby={hasErrors ? 'errors-tooltip' : undefined}
               >
-                Gerar resumo
+                {generateMutation.isPending ? 'Gerando resumo...' : 'Gerar resumo'}
               </button>
               {hasErrors && (
                 <p id="errors-tooltip" className="text-sm text-red-600 text-center">
@@ -533,7 +568,8 @@ export function ArticleUpload() {
               <button
                 type="button"
                 onClick={handleReset}
-                className="w-full py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors text-center"
+                disabled={generateMutation.isPending}
+                className="w-full py-3 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors text-center"
               >
                 Enviar outro artigo
               </button>

@@ -81,6 +81,7 @@ export interface SummaryRow {
   content: string;
   factuality_score: number | null;
   factuality_details: string | null;
+  model_id: string | null;
   generated_at: string;
 }
 
