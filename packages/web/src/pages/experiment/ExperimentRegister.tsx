@@ -74,8 +74,16 @@ export function ExperimentRegister() {
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="Seu nome (pode ser anônimo)"
+                maxLength={255}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
               />
+              {form.name.length > 200 && (
+                <div className="flex justify-end mt-1">
+                  <span className={`text-xs ${form.name.length > 229 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    {form.name.length}/255
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Experience Level */}

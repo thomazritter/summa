@@ -125,9 +125,17 @@ export function ExperimentPostTest() {
                   value={differenceType}
                   onChange={(e) => setDifferenceType(e.target.value)}
                   rows={4}
+                  maxLength={5000}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-vertical"
                   placeholder="Descreva as diferenças que você percebeu..."
                 />
+                {differenceType.length > 0 && (
+                  <div className="flex justify-end mt-1">
+                    <span className={`text-xs ${differenceType.length >= 5000 ? 'text-red-600' : differenceType.length > 4500 ? 'text-amber-600' : 'text-gray-400'}`}>
+                      {differenceType.length}/5000
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -169,9 +177,17 @@ export function ExperimentPostTest() {
                 value={improvements}
                 onChange={(e) => setImprovements(e.target.value)}
                 rows={4}
+                maxLength={5000}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-vertical"
                 placeholder="Sugestões de melhoria para o sistema..."
               />
+              {improvements.length > 0 && (
+                <div className="flex justify-end mt-1">
+                  <span className={`text-xs ${improvements.length >= 5000 ? 'text-red-600' : improvements.length > 4500 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    {improvements.length}/5000
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Question 5: Additional comments — textarea */}
@@ -183,9 +199,17 @@ export function ExperimentPostTest() {
                 value={comments}
                 onChange={(e) => setComments(e.target.value)}
                 rows={4}
+                maxLength={5000}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-vertical"
                 placeholder="Compartilhe suas impressões sobre os resumos, a interface ou qualquer outro aspecto..."
               />
+              {comments.length > 0 && (
+                <div className="flex justify-end mt-1">
+                  <span className={`text-xs ${comments.length >= 5000 ? 'text-red-600' : comments.length > 4500 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    {comments.length}/5000
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

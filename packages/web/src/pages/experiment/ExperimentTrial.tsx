@@ -268,9 +268,17 @@ export function ExperimentTrial() {
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={4}
+                maxLength={5000}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-vertical"
                 placeholder="Compartilhe suas observações sobre os resumos..."
               />
+              {comment.length > 0 && (
+                <div className="flex justify-end mt-1">
+                  <span className={`text-xs ${comment.length >= 5000 ? 'text-red-600' : comment.length > 4500 ? 'text-amber-600' : 'text-gray-400'}`}>
+                    {comment.length}/5000
+                  </span>
+                </div>
+              )}
             </div>
           )}
 

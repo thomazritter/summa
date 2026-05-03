@@ -16,7 +16,7 @@ export const authRoutes = Router();
 
 // Login — validate code (supports both admin-created codes and magic links)
 authRoutes.post('/login', asyncHandler(async (req: Request, res: Response) => {
-  const schema = z.object({ code: z.string().min(1) });
+  const schema = z.object({ code: z.string().min(1).max(256) });
   const validation = schema.safeParse(req.body);
   if (!validation.success) return res.status(400).json({ error: 'Codigo invalido' });
 

@@ -145,6 +145,7 @@ export function Login() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="Digite seu email"
                     required
+                    maxLength={320}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
                     autoFocus
                   />
@@ -188,6 +189,7 @@ export function Login() {
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   placeholder="Digite seu codigo (ex: SUMMA-XXXX)"
+                  maxLength={20}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-lg font-mono tracking-wider uppercase focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
                   autoFocus
                 />
