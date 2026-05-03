@@ -1,83 +1,114 @@
-import { useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { summaryApi, feedbackApi } from '../api/client';
-
-interface Summary { id: number; content: string; factualityScore: number | null; }
+import { userApi } from '../api/client';
 
 export function SummaryView() {
   const { id } = useParams<{ id: string }>();
-  const queryClient = useQueryClient();
-  const [feedback, setFeedback] = useState({ utilityRating: 3, technicalLevelRating: 3, depthRating: 3, comments: '' });
+  const navigate = useNavigate();
 
-  const { data: summary, isLoading } = useQuery({ queryKey: ['summary', id], queryFn: () => summaryApi.get(Number(id)) as Promise<Summary> });
-
-  const feedbackMutation = useMutation({
-    mutationFn: (data: typeof feedback) => feedbackApi.submit({ summaryId: Number(id), ...data }),
-    onSuccess: () => alert('Thank you for your feedback!'),
+  const { data: articles, isLoading } = useQuery({
+    queryKey: ['user-articles'],
+    queryFn: () => userApi.getArticles(),
   });
 
-  const regenerateMutation = useMutation({
-    mutationFn: () => summaryApi.regenerate(Number(id)),
-    onSuccess: (newSummary) => queryClient.setQueryData(['summary', id], newSummary),
-  });
+  // Find the summary across all articles
+  const summaryId = Number(id);
+  let foundSummary: { id: number; content: string; factualityScore: number | null; modelLabel: string | null } | null = null;
+  let foundArticle: { title: string; authors: string | null } | null = null;
 
-  if (isLoading) return <div className="text-center py-8">Loading summary...</div>;
-  if (!summary) return <div className="text-center py-8">Summary not found</div>;
+  if (articles) {
+    for (const article of articles) {
+      const match = article.summaries.find((s) => s.id === summaryId);
+      if (match) {
+        foundSummary = {
+          id: match.id,
+          content: match.content,
+          factualityScore: match.factualityScore,
+          modelLabel: match.modelLabel,
+        };
+        foundArticle = { title: article.title, authors: article.authors };
+        break;
+      }
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
+          <p className="text-gray-600">Carregando resumo...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!foundSummary || !foundArticle) {
+    return (
+      <div className="min-h-screen bg-[#f9fafb] py-12 px-6">
+        <div className="max-w-3xl mx-auto text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Resumo não encontrado</h1>
+          <p className="text-gray-600 mb-6">Este resumo pode ter sido removido ou o link está incorreto.</p>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="px-6 py-3 bg-[#2563eb] text-white font-semibold rounded-lg hover:bg-[#1d4ed8] transition-colors"
+          >
+            Voltar ao dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold">Your Personalized Summary</h2>
-        <Link to="/dashboard" className="text-[#2563eb] hover:text-[#1d4ed8] font-medium transition-colors">&larr; Voltar ao dashboard</Link>
-      </div>
-
-      <div className="bg-white p-6 rounded-lg border">
-        <div className="prose max-w-none">
-          <ReactMarkdown>{summary.content}</ReactMarkdown>
+    <div className="min-h-screen bg-[#f9fafb] py-12 px-6">
+      <div className="max-w-3xl mx-auto">
+        <div className="mb-8">
+          <Link
+            to="/dashboard"
+            className="text-[#2563eb] hover:text-[#1d4ed8] text-sm font-medium transition-colors"
+          >
+            &larr; Voltar ao dashboard
+          </Link>
         </div>
-        {summary.factualityScore !== null && (
-          <div className="mt-4 pt-4 border-t">
-            <p className="text-sm text-gray-600">Factuality Score: {(summary.factualityScore * 100).toFixed(0)}%</p>
-          </div>
-        )}
-      </div>
 
-      <div className="bg-white p-6 rounded-lg border">
-        <h3 className="font-semibold text-lg mb-4">Rate This Summary</h3>
-        <div className="space-y-4">
-          <RatingInput label="How useful?" value={feedback.utilityRating} onChange={(v) => setFeedback({ ...feedback, utilityRating: v })} low="Not useful" high="Very useful" />
-          <RatingInput label="Technical level?" value={feedback.technicalLevelRating} onChange={(v) => setFeedback({ ...feedback, technicalLevelRating: v })} low="Too simple" high="Too complex" />
-          <RatingInput label="Depth?" value={feedback.depthRating} onChange={(v) => setFeedback({ ...feedback, depthRating: v })} low="Too brief" high="Too detailed" />
-          <div>
-            <label className="block text-sm font-medium mb-1">Comments (optional)</label>
-            <textarea value={feedback.comments} onChange={(e) => setFeedback({ ...feedback, comments: e.target.value })} className="w-full border rounded-lg p-2 h-24" placeholder="What could be improved?" />
+        {/* Article info */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-1">{foundArticle.title}</h1>
+          {foundArticle.authors && (
+            <p className="text-gray-500 text-sm">{foundArticle.authors}</p>
+          )}
+        </div>
+
+        {/* Summary content */}
+        <div className="bg-white border border-gray-200 rounded-lg p-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg font-semibold text-gray-900">Resumo Personalizado</h2>
+            <div className="flex items-center gap-3">
+              {foundSummary.modelLabel && (
+                <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
+                  {foundSummary.modelLabel}
+                </span>
+              )}
+              {foundSummary.factualityScore !== null && (
+                <span className={`px-3 py-1 text-xs rounded-full ${
+                  foundSummary.factualityScore >= 0.8
+                    ? 'bg-green-100 text-green-700'
+                    : foundSummary.factualityScore >= 0.6
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-red-100 text-red-700'
+                }`}>
+                  Factualidade: {(foundSummary.factualityScore * 100).toFixed(0)}%
+                </span>
+              )}
+            </div>
           </div>
-          <div className="flex gap-3">
-            <button onClick={() => feedbackMutation.mutate(feedback)} disabled={feedbackMutation.isPending} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50">Submit Feedback</button>
-            <button onClick={() => regenerateMutation.mutate()} disabled={regenerateMutation.isPending} className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 disabled:opacity-50">
-              {regenerateMutation.isPending ? 'Regenerating...' : 'Regenerate Summary'}
-            </button>
+
+          <div className="prose prose-gray max-w-none">
+            <ReactMarkdown>{foundSummary.content}</ReactMarkdown>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function RatingInput({ label, value, onChange, low, high }: { label: string; value: number; onChange: (v: number) => void; low: string; high: string }) {
-  return (
-    <div>
-      <label className="block text-sm font-medium mb-2">{label}</label>
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-gray-500 w-20">{low}</span>
-        <div className="flex gap-1">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button key={n} onClick={() => onChange(n)} className={`w-8 h-8 rounded-full border ${value === n ? 'bg-blue-600 text-white border-blue-600' : 'hover:border-blue-400'}`}>{n}</button>
-          ))}
-        </div>
-        <span className="text-xs text-gray-500 w-20 text-right">{high}</span>
       </div>
     </div>
   );
