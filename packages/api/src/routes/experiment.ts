@@ -1,10 +1,12 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import multer, { MulterError } from 'multer';
 import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
 import { parseId, safeJsonParse } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { regenerateSummaryWithFeedback, getSummaryById } from '../services/summarizationService.js';
 import { createExperimentSession, SessionCreationError, computeProfileDimensions, computeProfileSources, EXPERIENCE_CONFIG } from '../services/sessionService.js';
+import { inferProfileFromCv } from '../services/cvProfileMapper.js';
 import { requireAuth } from '../middleware/auth.js';
 import type { ExperimentSession, Participant, Regeneration } from '@summarizer/shared';
 import type { ParticipantRow, SessionRow, RegenerationRow } from '../types/rows.js';
@@ -82,6 +84,55 @@ const updateProfileSchema = z.object({
     englishComfort: z.enum(['keep_english', 'translate']).optional(),
   }),
 });
+
+const registerFromCvSchema = z.object({
+  name: z.string().min(1).max(255),
+  dimensions: z.object({
+    expertise: z.enum(['beginner', 'intermediate', 'advanced', 'expert']),
+    focus: z.enum(['concepts', 'methodology', 'results', 'applications', 'all']),
+    depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']),
+    context: z.enum(['quick_review', 'learning', 'research', 'teaching']),
+  }),
+  experienceLevel: z.enum(['junior', 'pleno', 'senior']),
+  englishComfort: z.enum(['keep_english', 'translate']).optional(),
+  structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
+});
+
+// ─── CV Upload (Multer) ────────────────────────────────────────────
+
+const MAX_CV_SIZE = 5 * 1024 * 1024; // 5MB
+
+class FileTypeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FileTypeError';
+  }
+}
+
+const cvUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_CV_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new FileTypeError('Apenas arquivos PDF sao permitidos'));
+    }
+  },
+});
+
+const handleCvMulterError = (err: Error, _req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: `Arquivo muito grande. Tamanho maximo: ${MAX_CV_SIZE / 1024 / 1024}MB` });
+    }
+    return res.status(400).json({ error: err.message });
+  }
+  if (err instanceof FileTypeError) {
+    return res.status(400).json({ error: err.message });
+  }
+  next(err);
+};
 
 // ─── IDOR Ownership Helpers ─────────────────────────────────────────
 
@@ -476,6 +527,68 @@ experimentRoutes.post('/post-test', asyncHandler(async (req: Request, res: Respo
   );
 
   res.json({ success: true });
+}));
+
+// ─── CV-Based Cold Start ───────────────────────────────────────────
+
+// POST /api/experiment/cv-profile — upload CV PDF, infer profile (does NOT save to DB)
+experimentRoutes.post('/cv-profile', cvUpload.single('file'), handleCvMulterError, asyncHandler(async (req: Request, res: Response) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Nenhum arquivo PDF enviado' });
+  }
+
+  const result = await inferProfileFromCv(req.file.buffer);
+
+  if (!result) {
+    return res.status(422).json({
+      error: 'Nao foi possivel inferir o perfil a partir do curriculo. O PDF pode conter texto insuficiente ou estar em formato nao reconhecido.',
+    });
+  }
+
+  res.json(result);
+}));
+
+// POST /api/experiment/participants/from-cv — create participant from CV-inferred profile
+experimentRoutes.post('/participants/from-cv', asyncHandler(async (req: Request, res: Response) => {
+  const validation = registerFromCvSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({ error: validation.error.errors });
+  }
+
+  const { name, dimensions, experienceLevel, englishComfort, structurePreference } = validation.data;
+
+  const row = await queryOne<ParticipantRow>(`
+    INSERT INTO participants (
+      name, experience_level, years_experience, reading_frequency, topic_familiarity,
+      override_expertise, override_focus, override_depth, override_context,
+      structure_preference, english_comfort, profile_source
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    RETURNING *
+  `, [
+    name,
+    experienceLevel,
+    0,            // years_experience: not available from CV, default to 0
+    'sometimes',  // reading_frequency: sensible default for CV-based registration
+    'moderate',   // topic_familiarity: sensible default for CV-based registration
+    dimensions.expertise,
+    dimensions.focus,
+    dimensions.depth,
+    dimensions.context,
+    structurePreference || null,
+    englishComfort || null,
+    'cv',
+  ]);
+
+  if (!row) return res.status(500).json({ error: 'Falha ao criar registro' });
+
+  // Link participant to access code (same pattern as questionnaire registration)
+  const accessCode = req.headers['x-access-code'] as string;
+  if (accessCode) {
+    await execute('UPDATE access_codes SET participant_id = $1 WHERE code = $2', [row.id, accessCode]);
+  }
+
+  res.status(201).json(mapParticipantRow(row));
 }));
 
 // ─── Profile Endpoints ─────────────────────────────────────────────

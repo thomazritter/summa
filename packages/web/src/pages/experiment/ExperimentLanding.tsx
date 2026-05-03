@@ -67,13 +67,35 @@ export function ExperimentLanding() {
             </ul>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate('/experiment/register')}
-            className="w-full bg-[#2563eb] text-white py-4 rounded-lg hover:bg-[#1d4ed8] transition-colors text-lg font-semibold"
-          >
-            Iniciar Experimento
-          </button>
+          {!participantId ? (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => navigate('/experiment/register')}
+                className="w-full bg-[#2563eb] text-white py-4 rounded-lg hover:bg-[#1d4ed8] transition-colors text-lg font-semibold"
+              >
+                Responder questionário
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/experiment/cv-upload')}
+                className="w-full py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-semibold"
+              >
+                Enviar currículo (PDF)
+              </button>
+              <p className="text-center text-xs text-gray-500">
+                Análise automática do seu perfil a partir do currículo
+              </p>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => navigate('/experiment/select-article')}
+              className="w-full bg-[#2563eb] text-white py-4 rounded-lg hover:bg-[#1d4ed8] transition-colors text-lg font-semibold"
+            >
+              Continuar Experimento
+            </button>
+          )}
         </div>
 
         {participantId && (

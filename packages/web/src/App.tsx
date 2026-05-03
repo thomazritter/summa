@@ -13,6 +13,7 @@ import { ExperimentTrial } from './pages/experiment/ExperimentTrial';
 import { ExperimentComplete } from './pages/experiment/ExperimentComplete';
 import { ExperimentPostTest } from './pages/experiment/ExperimentPostTest';
 import { ProfileView } from './pages/experiment/ProfileView';
+import { CvUpload } from './pages/experiment/CvUpload';
 
 const queryClient = new QueryClient();
 const USER_ID = 1; // MVP: hardcoded user
@@ -72,6 +73,14 @@ export default function App() {
                 element={
                   <AuthGuard requiredRole="participant">
                     <ExperimentRegister />
+                  </AuthGuard>
+                }
+              />
+              <Route
+                path="/experiment/cv-upload"
+                element={
+                  <AuthGuard requiredRole="participant">
+                    <CvUpload />
                   </AuthGuard>
                 }
               />

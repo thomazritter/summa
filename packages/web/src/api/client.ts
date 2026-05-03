@@ -166,6 +166,26 @@ export const managerApi = {
 };
 
 export const experimentApi = {
+  uploadCv: async (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const headers: Record<string, string> = {};
+    const code = sessionStorage.getItem('accessCode');
+    if (code) {
+      headers['x-access-code'] = code;
+    }
+    const response = await fetch(`${API_BASE}/experiment/cv-profile`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'CV processing failed' }));
+      throw new Error(error.error || 'CV processing failed');
+    }
+    return response.json();
+  },
+
   registerParticipant: (data: {
     name: string;
     experienceLevel: string;
@@ -176,8 +196,21 @@ export const experimentApi = {
     readingGoal?: string;
     preferredLength?: string;
     englishComfort?: string;
+    profileSource?: string;
   }) =>
     apiRequest<{ id: number; name: string; experienceLevel: string }>('/experiment/participants', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  registerFromCv: (data: {
+    name: string;
+    experienceLevel: string;
+    dimensions: Record<string, string>;
+    structurePreference: string;
+    englishComfort: string;
+  }) =>
+    apiRequest<{ id: number; name: string; experienceLevel: string }>('/experiment/participants/from-cv', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
