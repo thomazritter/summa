@@ -75,7 +75,7 @@ const magicLinkLimiter = rateLimit({
 app.use('/api/auth/magic-link', magicLinkLimiter);
 
 // Routes
-app.use('/api/articles', articleRoutes);
+app.use('/api/articles', requireAuth, articleRoutes);
 app.use('/api/experiment', experimentRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/manager', managerRoutes);
