@@ -35,6 +35,7 @@ interface UserSummaryRow {
   factuality_score: number | null;
   model_id: string | null;
   generated_at: string;
+  profile_snapshot: string | null;
 }
 
 // ─── Response interfaces ───────────────────────────────────────────
@@ -89,8 +90,10 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
   const articles: UserArticle[] = [];
   for (const article of articleRows) {
     const summaryRows = await queryAll<UserSummaryRow>(
-      `SELECT DISTINCT s.id, s.article_id, s.content, s.factuality_score, s.model_id, s.generated_at
+      `SELECT DISTINCT s.id, s.article_id, s.content, s.factuality_score, s.model_id, s.generated_at,
+              es.profile_snapshot
        FROM summaries s
+       LEFT JOIN experiment_sessions es ON es.personalized_summary_id = s.id
        WHERE s.article_id = $1
          AND s.profile_id NOT IN (99, 98)
          AND (
@@ -110,13 +113,24 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
       title: article.title,
       authors: article.authors,
       createdAt: article.created_at,
-      summaries: summaryRows.map((s) => ({
-        id: s.id,
-        content: s.content,
-        factualityScore: s.factuality_score,
-        modelId: s.model_id,
-        generatedAt: s.generated_at,
-      })),
+      summaries: summaryRows.map((s) => {
+        const modelInfo = AVAILABLE_MODELS.find((m) => m.id === s.model_id);
+        const profile = s.profile_snapshot ? JSON.parse(s.profile_snapshot) : null;
+        return {
+          id: s.id,
+          content: s.content,
+          factualityScore: s.factuality_score,
+          modelId: s.model_id,
+          modelLabel: modelInfo?.name || s.model_id || 'Desconhecido',
+          profile: profile ? {
+            expertise: profile.expertise,
+            focus: profile.focus,
+            depth: profile.depth,
+            context: profile.context,
+          } : null,
+          generatedAt: s.generated_at,
+        };
+      }),
     });
   }
 

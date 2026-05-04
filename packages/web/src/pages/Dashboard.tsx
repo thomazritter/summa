@@ -14,9 +14,16 @@ interface UserArticle {
   summaries: Array<{
     id: number;
     content: string;
+    modelId: string | null;
     modelLabel: string | null;
     factualityScore: number | null;
-    createdAt: string;
+    profile: {
+      expertise: string;
+      focus: string;
+      depth: string;
+      context: string;
+    } | null;
+    generatedAt: string;
   }>;
 }
 
@@ -234,7 +241,12 @@ export function Dashboard() {
                             </p>
                           )}
                         </div>
-                        <div className="flex items-center gap-3 shrink-0">
+                        <div className="flex items-center gap-2 shrink-0">
+                          {latestSummary?.modelLabel && (
+                            <span className="hidden sm:inline bg-gray-100 text-gray-500 text-xs rounded-full px-2 py-0.5">
+                              {latestSummary.modelLabel}
+                            </span>
+                          )}
                           {latestSummary && (
                             <FactualityBadge score={latestSummary.factualityScore} />
                           )}
@@ -264,13 +276,26 @@ export function Dashboard() {
                         id={`article-detail-${article.id}`}
                         className="border-t border-gray-200 p-6"
                       >
-                        {latestSummary.modelLabel && (
-                          <div className="mb-4">
+                        <div className="flex flex-wrap items-center gap-2 mb-4">
+                          {latestSummary.modelLabel && (
                             <span className="bg-gray-100 text-gray-600 text-xs font-medium rounded-full px-2.5 py-0.5">
-                              Modelo: {latestSummary.modelLabel}
+                              {latestSummary.modelLabel}
                             </span>
-                          </div>
-                        )}
+                          )}
+                          {latestSummary.profile && (
+                            <>
+                              <span className="bg-blue-50 text-[#2563eb] text-xs font-medium rounded-full px-2.5 py-0.5">
+                                {latestSummary.profile.expertise}
+                              </span>
+                              <span className="bg-blue-50 text-[#2563eb] text-xs font-medium rounded-full px-2.5 py-0.5">
+                                {latestSummary.profile.focus}
+                              </span>
+                              <span className="bg-blue-50 text-[#2563eb] text-xs font-medium rounded-full px-2.5 py-0.5">
+                                {latestSummary.profile.depth}
+                              </span>
+                            </>
+                          )}
+                        </div>
 
                         <div className="prose prose-sm max-w-none text-gray-700 mb-6">
                           <ReactMarkdown>{latestSummary.content}</ReactMarkdown>

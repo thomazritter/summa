@@ -204,9 +204,16 @@ export const userApi = {
       summaries: Array<{
         id: number;
         content: string;
+        modelId: string | null;
         modelLabel: string | null;
         factualityScore: number | null;
-        createdAt: string;
+        profile: {
+          expertise: string;
+          focus: string;
+          depth: string;
+          context: string;
+        } | null;
+        generatedAt: string;
       }>;
     }>>('/user/articles'),
 
