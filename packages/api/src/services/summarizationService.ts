@@ -1,12 +1,13 @@
 import { queryOne, queryAll, execute } from '../db/connection.js';
 import { generateCompletion, getActiveModel, LLMError } from './groqClient.js';
-import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxTokensForDepth } from './promptBuilder.js';
+import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxOutputTokens } from './promptBuilder.js';
 import type { ParticipantPreferences } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
 import { checkFactuality, checkNliServiceHealth } from './factualityChecker.js';
 import { computeRouge } from './metricsService.js';
 import { safeJsonParse } from '../utils/validation.js';
 import { GENERIC_PROFILE_ID } from '../types/rows.js';
+import type { ArticleRow, SummaryRow } from '../types/rows.js';
 import type { Summary, ArticleStructure, Profile } from '@summarizer/shared';
 
 export class SummarizationError extends Error {
@@ -47,7 +48,7 @@ export const generateSummary = async (articleId: number, profileId: number, mode
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
-      maxTokens: getMaxTokensForDepth(profile.depth),
+      maxTokens: getMaxOutputTokens(),
       model: effectiveModel,
     });
   } catch (error) {
@@ -87,7 +88,7 @@ export const generateSummaryWithFactuality = async (articleId: number, profileId
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
-      maxTokens: getMaxTokensForDepth(profile.depth),
+      maxTokens: getMaxOutputTokens(),
       model: effectiveModel,
     });
   } catch (error) {
@@ -308,7 +309,7 @@ export const generatePersonalizedSummary = async (
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
-      maxTokens: getMaxTokensForDepth(profileDimensions.depth),
+      maxTokens: getMaxOutputTokens(),
       model: effectiveModel,
     });
   } catch (error) {
@@ -390,7 +391,7 @@ Gere o resumo melhorado agora:`;
     summaryContent = await generateCompletion({
       prompt: feedbackPrompt,
       temperature: 0.3,
-      maxTokens: getMaxTokensForDepth(profile.depth),
+      maxTokens: getMaxOutputTokens(),
       model: effectiveModel,
     });
   } catch (error) {
@@ -412,30 +413,6 @@ Gere o resumo melhorado agora:`;
   }
   return mapRowToSummary(row);
 };
-
-// Internal types
-interface ArticleRow {
-  id: number;
-  title: string;
-  authors: string | null;
-  year: number | null;
-  doi: string | null;
-  url: string | null;
-  raw_text: string;
-  structured_content: string;
-  created_at: string;
-}
-
-interface SummaryRow {
-  id: number;
-  article_id: number;
-  profile_id: number;
-  content: string;
-  factuality_score: number | null;
-  factuality_details: string | null;
-  model_id: string | null;
-  generated_at: string;
-}
 
 const mapRowToSummary = (row: SummaryRow): Summary => {
   return {

@@ -141,7 +141,7 @@ const buildContentSection = (structure: ArticleStructure, rawText: string): stri
  * by the prompt instructions (e.g. "2-3 parágrafos"). This is just a
  * hard limit to prevent runaway generation — same for all depths.
  */
-export const getMaxTokensForDepth = (_depth: Profile['depth']): number => {
+export const getMaxOutputTokens = (): number => {
   return 8192;
 };
 

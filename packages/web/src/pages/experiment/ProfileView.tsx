@@ -2,73 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
+import { PROFILE_DIMENSIONS, FORMAT_DIMENSIONS } from '../../constants/profileDimensions';
 
-interface DimensionConfig {
-  key: string;
-  label: string;
-  options: Array<{ value: string; label: string }>;
-}
-
-const DIMENSIONS: DimensionConfig[] = [
-  {
-    key: 'expertise',
-    label: 'Nível de expertise',
-    options: [
-      { value: 'beginner', label: 'Iniciante' },
-      { value: 'intermediate', label: 'Intermediário' },
-      { value: 'advanced', label: 'Avançado' },
-      { value: 'expert', label: 'Especialista' },
-    ],
-  },
-  {
-    key: 'focus',
-    label: 'Foco de leitura',
-    options: [
-      { value: 'concepts', label: 'Conceitos' },
-      { value: 'methodology', label: 'Metodologia' },
-      { value: 'results', label: 'Resultados' },
-      { value: 'applications', label: 'Aplicações' },
-      { value: 'all', label: 'Todos' },
-    ],
-  },
-  {
-    key: 'depth',
-    label: 'Profundidade',
-    options: [
-      { value: 'brief', label: 'Breve' },
-      { value: 'moderate', label: 'Moderado' },
-      { value: 'detailed', label: 'Detalhado' },
-      { value: 'comprehensive', label: 'Abrangente' },
-    ],
-  },
-  {
-    key: 'context',
-    label: 'Contexto de uso',
-    options: [
-      { value: 'quick_review', label: 'Revisão rápida' },
-      { value: 'learning', label: 'Aprendizado' },
-      { value: 'research', label: 'Pesquisa' },
-      { value: 'teaching', label: 'Ensino' },
-    ],
-  },
-  {
-    key: 'structure',
-    label: 'Estrutura preferida',
-    options: [
-      { value: 'prose', label: 'Prosa corrida' },
-      { value: 'bullets', label: 'Tópicos' },
-      { value: 'mixed', label: 'Misto' },
-    ],
-  },
-  {
-    key: 'english_comfort',
-    label: 'Termos em inglês',
-    options: [
-      { value: 'keep_english', label: 'Manter em inglês' },
-      { value: 'translate', label: 'Traduzir' },
-    ],
-  },
-];
+const DIMENSIONS = [...PROFILE_DIMENSIONS, ...FORMAT_DIMENSIONS];
 
 const SOURCE_BADGES: Record<string, { label: string; classes: string }> = {
   questionnaire: {

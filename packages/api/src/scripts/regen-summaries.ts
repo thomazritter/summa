@@ -1,4 +1,4 @@
-import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxTokensForDepth } from '../services/promptBuilder.js';
+import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxOutputTokens } from '../services/promptBuilder.js';
 import { generateCompletion } from '../services/groqClient.js';
 import { query, queryOne, queryAll, closeDb } from '../db/connection.js';
 
@@ -24,7 +24,7 @@ async function main() {
         prompt = buildSummarizationPrompt(profile as any, sc, article.raw_text);
       }
       
-      const maxTokens = getMaxTokensForDepth(profile.depth);
+      const maxTokens = getMaxOutputTokens();
       
       console.log('  Generating for', profile.name, '(maxTokens:', maxTokens, ')...');
 

@@ -153,30 +153,9 @@ export async function createExperimentSession(
     genericSummary = { id: generated.id };
   }
 
-  // Build profile dimensions from experience level as defaults,
-  // then override with participant's explicit choices.
-  // Principle: manual overrides > questionnaire answers > level-derived defaults.
-
-  // depth: participant's preferred_length overrides level default
-  const depth = (participant.preferred_length as ProfileDimensions['depth']) || config.dimensions.depth;
-
-  // focus: participant's readingGoal overrides level default
-  const goalToFocus: Record<string, ProfileDimensions['focus']> = {
-    overview: 'all',
-    methodology: 'methodology',
-    results: 'results',
-    practical: 'applications',
-  };
-  const focus = (participant.reading_goal && goalToFocus[participant.reading_goal])
-    || config.dimensions.focus;
-
-  // Apply manual overrides if the participant has set them (profile editor)
-  const dimensions: ProfileDimensions = {
-    expertise: (participant.override_expertise as ProfileDimensions['expertise']) || config.dimensions.expertise,
-    focus: (participant.override_focus as ProfileDimensions['focus']) || focus,
-    depth: (participant.override_depth as ProfileDimensions['depth']) || depth,
-    context: (participant.override_context as ProfileDimensions['context']) || config.dimensions.context,
-  };
+  // Build profile dimensions using the shared computation function.
+  // Applies: manual overrides > questionnaire answers > level-derived defaults.
+  const dimensions = computeProfileDimensions(participant);
 
   // Remaining preferences that don't map to profile dimensions
   const participantPreferences = {

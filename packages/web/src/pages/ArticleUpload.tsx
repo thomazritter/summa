@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { articleApi, userApi } from '../api/client';
 import type { ArticleUploadResponse } from '../api/client';
+import { formatFileSize } from '../utils/format';
 
 type Phase = 'upload' | 'loading' | 'results';
 
@@ -148,12 +149,6 @@ export function ArticleUpload() {
     if (!uploadResult) return;
     generateMutation.mutate(uploadResult.article.id);
   }, [uploadResult, generateMutation]);
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   const hasErrors = (uploadResult?.validation.errors?.length ?? 0) > 0;
   const hasWarnings = (uploadResult?.validation.warnings?.length ?? 0) > 0;

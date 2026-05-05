@@ -1,6 +1,5 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import multer, { MulterError } from 'multer';
 import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
 import { parseId, safeJsonParse } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -10,6 +9,7 @@ import { createExperimentSession, SessionCreationError, computeProfileDimensions
 import { AVAILABLE_MODELS, getActiveModel } from '../services/groqClient.js';
 import { inferProfileFromCv } from '../services/cvProfileMapper.js';
 import { requireAuth } from '../middleware/auth.js';
+import { createPdfUpload, createMulterErrorHandler } from '../utils/multerHelpers.js';
 import type { ExperimentSession, Participant, Regeneration } from '@summarizer/shared';
 import type { ParticipantRow, SessionRow, RegenerationRow } from '../types/rows.js';
 
@@ -110,37 +110,8 @@ const tryModelSchema = z.object({
 
 const MAX_CV_SIZE = 5 * 1024 * 1024; // 5MB
 
-class FileTypeError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'FileTypeError';
-  }
-}
-
-const cvUpload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: MAX_CV_SIZE },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new FileTypeError('Apenas arquivos PDF sao permitidos'));
-    }
-  },
-});
-
-const handleCvMulterError = (err: Error, _req: Request, res: Response, next: NextFunction) => {
-  if (err instanceof MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: `Arquivo muito grande. Tamanho maximo: ${MAX_CV_SIZE / 1024 / 1024}MB` });
-    }
-    return res.status(400).json({ error: err.message });
-  }
-  if (err instanceof FileTypeError) {
-    return res.status(400).json({ error: err.message });
-  }
-  next(err);
-};
+const cvUpload = createPdfUpload(MAX_CV_SIZE, 'Apenas arquivos PDF sao permitidos');
+const handleCvMulterError = createMulterErrorHandler(MAX_CV_SIZE);
 
 // ─── IDOR Ownership Helpers ─────────────────────────────────────────
 

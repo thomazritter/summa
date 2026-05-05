@@ -1,50 +1,18 @@
-import { Router, Request, Response, NextFunction } from 'express';
-import multer, { MulterError } from 'multer';
+import { Router, Request, Response } from 'express';
 import { queryOne, queryAll } from '../db/connection.js';
 import { processPDF, PDFProcessingError } from '../services/pdfProcessor.js';
 import { validatePreStructuring, validatePostStructuring } from '../services/articleValidator.js';
 import { parseId, safeJsonParse, MAX_PDF_SIZE } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { createPdfUpload, createMulterErrorHandler } from '../utils/multerHelpers.js';
+import type { ArticleRow } from '../types/rows.js';
 import type { ArticleStructure } from '@summarizer/shared';
 
 export const articleRoutes = Router();
 
-// Custom error for file type validation
-class FileTypeError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'FileTypeError';
-  }
-}
-
 // Configure multer for PDF uploads
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: {
-    fileSize: MAX_PDF_SIZE,
-  },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
-      cb(null, true);
-    } else {
-      cb(new FileTypeError('Only PDF files are allowed'));
-    }
-  },
-});
-
-// Multer error handling middleware
-const handleMulterError = (err: Error, _req: Request, res: Response, next: NextFunction) => {
-  if (err instanceof MulterError) {
-    if (err.code === 'LIMIT_FILE_SIZE') {
-      return res.status(400).json({ error: `File too large. Maximum size is ${MAX_PDF_SIZE / 1024 / 1024}MB` });
-    }
-    return res.status(400).json({ error: err.message });
-  }
-  if (err instanceof FileTypeError) {
-    return res.status(400).json({ error: err.message });
-  }
-  next(err);
-};
+const upload = createPdfUpload(MAX_PDF_SIZE);
+const handleMulterError = createMulterErrorHandler(MAX_PDF_SIZE);
 
 // Upload and process PDF
 articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHandler(async (req: Request, res: Response) => {
@@ -155,19 +123,6 @@ articleRoutes.get('/', asyncHandler(async (_req: Request, res: Response) => {
 }));
 
 // Internal types
-interface ArticleRow {
-  id: number;
-  title: string;
-  authors: string | null;
-  year: number | null;
-  doi: string | null;
-  url: string | null;
-  raw_text: string;
-  structured_content: string;
-  uploaded_by: number | null;
-  created_at: string;
-}
-
 interface ArticleListRow {
   id: number;
   title: string;

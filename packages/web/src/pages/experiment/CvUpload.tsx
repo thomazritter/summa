@@ -2,57 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
+import { PROFILE_DIMENSIONS } from '../../constants/profileDimensions';
+import { formatFileSize } from '../../utils/format';
 
-
-interface DimensionConfig {
-  key: string;
-  label: string;
-  options: Array<{ value: string; label: string }>;
-}
-
-const DIMENSIONS: DimensionConfig[] = [
-  {
-    key: 'expertise',
-    label: 'Nível de expertise',
-    options: [
-      { value: 'beginner', label: 'Iniciante' },
-      { value: 'intermediate', label: 'Intermediário' },
-      { value: 'advanced', label: 'Avançado' },
-      { value: 'expert', label: 'Especialista' },
-    ],
-  },
-  {
-    key: 'focus',
-    label: 'Foco de leitura',
-    options: [
-      { value: 'concepts', label: 'Conceitos' },
-      { value: 'methodology', label: 'Metodologia' },
-      { value: 'results', label: 'Resultados' },
-      { value: 'applications', label: 'Aplicações' },
-      { value: 'all', label: 'Todos' },
-    ],
-  },
-  {
-    key: 'depth',
-    label: 'Profundidade',
-    options: [
-      { value: 'brief', label: 'Breve' },
-      { value: 'moderate', label: 'Moderado' },
-      { value: 'detailed', label: 'Detalhado' },
-      { value: 'comprehensive', label: 'Abrangente' },
-    ],
-  },
-  {
-    key: 'context',
-    label: 'Contexto de uso',
-    options: [
-      { value: 'quick_review', label: 'Revisão rápida' },
-      { value: 'learning', label: 'Aprendizado' },
-      { value: 'research', label: 'Pesquisa' },
-      { value: 'teaching', label: 'Ensino' },
-    ],
-  },
-];
+const DIMENSIONS = PROFILE_DIMENSIONS;
 
 interface CvProfileResponse {
   dimensions: Record<string, string>;
@@ -218,12 +171,6 @@ export function CvUpload() {
       ...(inferredDomain.trim() ? { domain: inferredDomain.trim() } : {}),
     });
   }, [name, structurePreference, englishComfort, selections, inferredDomain, registerMutation]);
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   const isResultsValid =
     name.trim().length > 0 &&
