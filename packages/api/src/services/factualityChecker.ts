@@ -138,12 +138,6 @@ const findRelevantContexts = (sentence: string, structure: ArticleStructure, raw
   return scored.slice(0, 3).filter(s => s.score > 0).map(s => s.para.slice(0, 1000));
 };
 
-// Keep old function for backward compatibility
-const findRelevantContext = (sentence: string, structure: ArticleStructure, rawText: string): string => {
-  const contexts = findRelevantContexts(sentence, structure, rawText);
-  return contexts[0] || rawText.slice(0, 1000);
-};
-
 const calculateFactualityScore = (results: FactualityResult[]): number => {
   if (results.length === 0) return 1.0;
   const weights = { supported: 1, neutral: 0.5, contradicted: 0 };

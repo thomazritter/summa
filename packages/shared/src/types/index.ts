@@ -145,6 +145,8 @@ export interface Participant {
   readingGoal: ReadingGoal | null;
   preferredLength: PreferredLength | null;
   englishComfort: EnglishComfort | null;
+  domain: string | null;
+  currentProject: string | null;
   createdAt: string;
 }
 
@@ -246,6 +248,8 @@ export interface ProfileResponse {
     context: ReadingContext;
     structurePreference: StructurePreference | null;
     englishComfort: EnglishComfort | null;
+    domain: string | null;
+    currentProject: string | null;
   };
   sources: Record<string, string>;
   profileSource: string;
@@ -259,6 +263,8 @@ export interface UpdateProfileRequest {
     context?: ReadingContext;
     structurePreference?: StructurePreference;
     englishComfort?: EnglishComfort;
+    domain?: string;
+    currentProject?: string;
   };
 }
 

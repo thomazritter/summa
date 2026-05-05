@@ -10,6 +10,7 @@ const cvProfileSchema = z.object({
   depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']),
   context: z.enum(['quick_review', 'learning', 'research', 'teaching']),
   experienceLevel: z.enum(['junior', 'pleno', 'senior']),
+  domain: z.string().max(500).optional(),
   reasoning: z.record(z.string(), z.string()),
 });
 
@@ -23,6 +24,7 @@ export interface CvProfileResult {
     context: 'quick_review' | 'learning' | 'research' | 'teaching';
   };
   experienceLevel: 'junior' | 'pleno' | 'senior';
+  domain: string | null;
   reasoning: Record<string, string>;
 }
 
@@ -37,6 +39,7 @@ Retorne APENAS um JSON válido (sem markdown, sem \`\`\`, sem explicação antes
   "depth": "brief|moderate|detailed|comprehensive",
   "context": "quick_review|learning|research|teaching",
   "experienceLevel": "junior|pleno|senior",
+  "domain": "domínio profissional inferido (ex: backend engineering, data science, machine learning)",
   "reasoning": {
     "expertise": "explicação breve de por que escolheu este nível",
     "focus": "explicação breve",
@@ -52,6 +55,7 @@ Regras para inferir:
 - depth: baseie-se no cargo. Cargo executivo/gestão = brief. Operacional = moderate. Técnico especializado = detailed. Pesquisador = comprehensive.
 - context: Estudante = learning. Pesquisador/professor = research ou teaching. Profissional = quick_review.
 - experienceLevel: 0-2 anos = junior. 3-7 anos = pleno. 8+ anos = senior.
+- domain: infira o domínio profissional principal com base no cargo, área de atuação e habilidades. Use termos curtos em inglês (ex: "backend engineering", "data science", "frontend development", "machine learning", "devops", "product management"). Se não for possível inferir, omita o campo.
 
 CURRÍCULO:
 `;
@@ -59,7 +63,7 @@ CURRÍCULO:
 const STRICT_RETRY_PROMPT = `Sua resposta anterior não era um JSON válido. Tente novamente.
 
 Retorne SOMENTE o JSON, sem nenhum texto antes ou depois, sem markdown:
-{"expertise":"...","focus":"...","depth":"...","context":"...","experienceLevel":"...","reasoning":{"expertise":"...","focus":"...","depth":"...","context":"...","experienceLevel":"..."}}
+{"expertise":"...","focus":"...","depth":"...","context":"...","experienceLevel":"...","domain":"...","reasoning":{"expertise":"...","focus":"...","depth":"...","context":"...","experienceLevel":"..."}}
 
 Valores permitidos:
 - expertise: beginner, intermediate, advanced, expert
@@ -123,6 +127,7 @@ function parseLlmProfileResponse(raw: string): CvProfileResult | null {
       context: data.context,
     },
     experienceLevel: data.experienceLevel,
+    domain: data.domain || null,
     reasoning: data.reasoning,
   };
 }

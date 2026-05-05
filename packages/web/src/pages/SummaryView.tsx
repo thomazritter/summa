@@ -24,7 +24,7 @@ export function SummaryView() {
 
   // Find the summary across all articles
   const summaryId = Number(id);
-  let foundSummary: { id: number; content: string; factualityScore: number | null; modelLabel: string | null } | null = null;
+  let foundSummary: { id: number; content: string; factualityScore: number | null; modelId: string | null; modelLabel: string | null } | null = null;
   let foundArticle: { id: number; title: string; authors: string | null } | null = null;
 
   if (articles) {
@@ -35,6 +35,7 @@ export function SummaryView() {
           id: match.id,
           content: match.content,
           factualityScore: match.factualityScore,
+          modelId: match.modelId,
           modelLabel: match.modelLabel,
         };
         foundArticle = { id: article.id, title: article.title, authors: article.authors };
@@ -140,7 +141,7 @@ export function SummaryView() {
         {/* Model switcher */}
         <ModelSwitcher
           articleId={foundArticle.id}
-          currentModelId={displaySummary.modelLabel}
+          currentModelId={overrideSummary?.modelId || foundSummary?.modelId || null}
           onNewSummary={handleNewSummary}
         />
       </div>

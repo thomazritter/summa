@@ -182,10 +182,14 @@ export async function createExperimentSession(
   const participantPreferences = {
     structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
     englishComfort: participant.english_comfort as 'keep_english' | 'translate' | undefined,
+    domain: participant.domain || undefined,
+    currentProject: participant.current_project || undefined,
   };
 
   const hasPreferences = participantPreferences.structurePreference
-    || participantPreferences.englishComfort;
+    || participantPreferences.englishComfort
+    || participantPreferences.domain
+    || participantPreferences.currentProject;
 
   const personalizedSummary = await generatePersonalizedSummary(
     articleId,

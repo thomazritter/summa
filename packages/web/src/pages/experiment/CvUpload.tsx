@@ -58,6 +58,7 @@ interface CvProfileResponse {
   dimensions: Record<string, string>;
   experienceLevel: string;
   reasoning: Record<string, string>;
+  domain?: string;
 }
 
 type Phase = 'upload' | 'loading' | 'results';
@@ -87,6 +88,7 @@ export function CvUpload() {
   const [structurePreference, setStructurePreference] = useState('');
   const [englishComfort, setEnglishComfort] = useState('');
   const [name, setName] = useState('');
+  const [inferredDomain, setInferredDomain] = useState('');
 
   // Cycle loading messages every 2 seconds
   useEffect(() => {
@@ -102,6 +104,7 @@ export function CvUpload() {
     onSuccess: (data: CvProfileResponse) => {
       setCvResult(data);
       setSelections(data.dimensions || {});
+      setInferredDomain(data.domain || data.dimensions?.domain || '');
       setPhase('results');
     },
     onError: () => {
@@ -212,8 +215,9 @@ export function CvUpload() {
       structurePreference,
       englishComfort,
       dimensions: selections,
+      ...(inferredDomain.trim() ? { domain: inferredDomain.trim() } : {}),
     });
-  }, [name, structurePreference, englishComfort, selections, registerMutation]);
+  }, [name, structurePreference, englishComfort, selections, inferredDomain, registerMutation]);
 
   const formatFileSize = (bytes: number): string => {
     if (bytes < 1024) return `${bytes} B`;
@@ -477,6 +481,37 @@ export function CvUpload() {
                 );
               })}
             </div>
+
+            {/* Inferred domain */}
+            {inferredDomain !== undefined && (
+              <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+                <div className="flex items-center justify-between mb-1">
+                  <label
+                    htmlFor="cv-domain"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Domínio Profissional
+                  </label>
+                  <span className="bg-purple-100 text-purple-700 text-xs rounded-full px-3 py-1">
+                    Inferido do currículo
+                  </span>
+                </div>
+                {cvResult?.reasoning?.domain && (
+                  <p className="text-xs text-gray-500 mb-3 italic">
+                    {cvResult.reasoning.domain}
+                  </p>
+                )}
+                <input
+                  id="cv-domain"
+                  type="text"
+                  value={inferredDomain}
+                  onChange={(e) => setInferredDomain(e.target.value)}
+                  placeholder="Ex: Backend Engineering, Data Science, DevOps..."
+                  maxLength={500}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+                />
+              </div>
+            )}
 
             {/* Separator */}
             <div className="border-t border-gray-200 my-8" />

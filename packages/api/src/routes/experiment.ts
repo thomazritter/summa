@@ -84,6 +84,8 @@ const updateProfileSchema = z.object({
     context: z.enum(['quick_review', 'learning', 'research', 'teaching']).optional(),
     structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
     englishComfort: z.enum(['keep_english', 'translate']).optional(),
+    domain: z.string().max(500).optional(),
+    currentProject: z.string().max(2000).optional(),
   }),
 });
 
@@ -651,6 +653,8 @@ experimentRoutes.get('/profile', asyncHandler(async (req: Request, res: Response
       ...dimensions,
       structurePreference: participant.structure_preference || null,
       englishComfort: participant.english_comfort || null,
+      domain: participant.domain || null,
+      currentProject: participant.current_project || null,
     },
     sources,
     profileSource: participant.profile_source || 'questionnaire',
@@ -680,8 +684,10 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
          override_depth     = COALESCE($3, override_depth),
          override_context   = COALESCE($4, override_context),
          structure_preference = COALESCE($5, structure_preference),
-         english_comfort    = COALESCE($6, english_comfort)
-     WHERE id = $7`,
+         english_comfort    = COALESCE($6, english_comfort),
+         domain             = COALESCE($7, domain),
+         current_project    = COALESCE($8, current_project)
+     WHERE id = $9`,
     [
       overrides.expertise || null,
       overrides.focus || null,
@@ -689,6 +695,8 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
       overrides.context || null,
       overrides.structurePreference || null,
       overrides.englishComfort || null,
+      overrides.domain || null,
+      overrides.currentProject || null,
       participantId,
     ],
   );
@@ -707,6 +715,8 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
       ...dimensions,
       structurePreference: participant.structure_preference || null,
       englishComfort: participant.english_comfort || null,
+      domain: participant.domain || null,
+      currentProject: participant.current_project || null,
     },
     sources,
     profileSource: participant.profile_source || 'questionnaire',
@@ -725,7 +735,9 @@ experimentRoutes.post('/profile/reset', asyncHandler(async (req: Request, res: R
      SET override_expertise = NULL,
          override_focus     = NULL,
          override_depth     = NULL,
-         override_context   = NULL
+         override_context   = NULL,
+         domain             = NULL,
+         current_project    = NULL
      WHERE id = $1`,
     [participantId],
   );
@@ -743,6 +755,8 @@ experimentRoutes.post('/profile/reset', asyncHandler(async (req: Request, res: R
       ...dimensions,
       structurePreference: participant.structure_preference || null,
       englishComfort: participant.english_comfort || null,
+      domain: participant.domain || null,
+      currentProject: participant.current_project || null,
     },
     sources,
     profileSource: participant.profile_source || 'questionnaire',
@@ -809,8 +823,13 @@ experimentRoutes.post('/sessions/:id/try-model', asyncHandler(async (req: Reques
   const participantPreferences = {
     structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
     englishComfort: participant.english_comfort as 'keep_english' | 'translate' | undefined,
+    domain: participant.domain || undefined,
+    currentProject: participant.current_project || undefined,
   };
-  const hasPreferences = participantPreferences.structurePreference || participantPreferences.englishComfort;
+  const hasPreferences = participantPreferences.structurePreference
+    || participantPreferences.englishComfort
+    || participantPreferences.domain
+    || participantPreferences.currentProject;
 
   // Determine the model used by the original personalized summary
   const originalSummary = await getSummaryById(sessionCheck.personalized_summary_id);
@@ -853,6 +872,8 @@ const mapParticipantRow = (row: ParticipantRow): Participant => ({
   readingGoal: row.reading_goal as Participant['readingGoal'],
   preferredLength: row.preferred_length as Participant['preferredLength'],
   englishComfort: row.english_comfort as Participant['englishComfort'],
+  domain: row.domain,
+  currentProject: row.current_project,
   createdAt: row.created_at,
 });
 

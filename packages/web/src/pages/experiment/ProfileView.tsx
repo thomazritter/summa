@@ -92,6 +92,10 @@ export function ProfileView() {
 
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [originalValues, setOriginalValues] = useState<Record<string, string>>({});
+  const [domain, setDomain] = useState('');
+  const [originalDomain, setOriginalDomain] = useState('');
+  const [currentProject, setCurrentProject] = useState('');
+  const [originalCurrentProject, setOriginalCurrentProject] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -111,10 +115,18 @@ export function ProfileView() {
     if (profile?.dimensions) {
       const values: Record<string, string> = {};
       for (const [key, val] of Object.entries(profile.dimensions)) {
-        if (val) values[key] = val;
+        if (val && key !== 'domain' && key !== 'currentProject') values[key] = val;
       }
       setSelections(values);
       setOriginalValues(values);
+
+      const profileDomain = profile.dimensions.domain || '';
+      setDomain(profileDomain);
+      setOriginalDomain(profileDomain);
+
+      const profileCurrentProject = profile.dimensions.currentProject || '';
+      setCurrentProject(profileCurrentProject);
+      setOriginalCurrentProject(profileCurrentProject);
     }
   }, [profile]);
 
@@ -142,9 +154,13 @@ export function ProfileView() {
     return null;
   }
 
-  const hasChanges = Object.keys(selections).some(
+  const hasDimensionChanges = Object.keys(selections).some(
     (key) => selections[key] !== originalValues[key]
   );
+  const hasChanges =
+    hasDimensionChanges ||
+    domain !== originalDomain ||
+    currentProject !== originalCurrentProject;
 
   const hasOverrides = profile?.sources
     ? Object.values(profile.sources).some((source) => source === 'manual')
@@ -156,6 +172,12 @@ export function ProfileView() {
       if (selections[key] !== originalValues[key]) {
         overrides[key] = selections[key];
       }
+    }
+    if (domain !== originalDomain) {
+      overrides.domain = domain;
+    }
+    if (currentProject !== originalCurrentProject) {
+      overrides.currentProject = currentProject;
     }
     if (Object.keys(overrides).length > 0) {
       updateMutation.mutate(overrides);
@@ -271,6 +293,70 @@ export function ProfileView() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Free-text profile fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              {/* Domain card */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <label
+                    htmlFor="profile-domain"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Domínio Profissional
+                  </label>
+                  {getSourceBadge(
+                    domain !== originalDomain
+                      ? 'manual'
+                      : (profile.sources.domain || 'questionnaire')
+                  )}
+                </div>
+                <input
+                  id="profile-domain"
+                  type="text"
+                  value={domain}
+                  onChange={(e) => {
+                    setDomain(e.target.value);
+                    setShowSuccess(false);
+                  }}
+                  placeholder="Ex: Backend Engineering, Data Science, DevOps..."
+                  maxLength={500}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+                />
+              </div>
+
+              {/* Current Project card */}
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <label
+                    htmlFor="profile-current-project"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Projeto Atual
+                  </label>
+                  {getSourceBadge(
+                    currentProject !== originalCurrentProject
+                      ? 'manual'
+                      : (profile.sources.currentProject || 'questionnaire')
+                  )}
+                </div>
+                <textarea
+                  id="profile-current-project"
+                  value={currentProject}
+                  onChange={(e) => {
+                    setCurrentProject(e.target.value);
+                    setShowSuccess(false);
+                  }}
+                  placeholder="Descreva brevemente o que você está trabalhando..."
+                  maxLength={2000}
+                  rows={3}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-none"
+                />
+                <p className="text-xs text-gray-400 text-right mt-1">
+                  {currentProject.length}/2000
+                </p>
+              </div>
             </div>
 
             <div className="flex items-center gap-4">

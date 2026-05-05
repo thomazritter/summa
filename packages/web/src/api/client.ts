@@ -212,6 +212,8 @@ export const userApi = {
           focus: string;
           depth: string;
           context: string;
+          domain?: string | null;
+          currentProject?: string | null;
         } | null;
         generatedAt: string;
       }>;
@@ -276,6 +278,7 @@ export const experimentApi = {
     dimensions: Record<string, string>;
     structurePreference: string;
     englishComfort: string;
+    domain?: string;
   }) =>
     apiRequest<{ id: number; name: string; experienceLevel: string }>('/experiment/participants/from-cv', {
       method: 'POST',

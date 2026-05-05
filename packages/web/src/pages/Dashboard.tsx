@@ -22,6 +22,8 @@ interface UserArticle {
       focus: string;
       depth: string;
       context: string;
+      domain?: string | null;
+      currentProject?: string | null;
     } | null;
     generatedAt: string;
   }>;
@@ -293,6 +295,11 @@ export function Dashboard() {
                               <span className="bg-blue-50 text-[#2563eb] text-xs font-medium rounded-full px-2.5 py-0.5">
                                 {latestSummary.profile.depth}
                               </span>
+                              {latestSummary.profile.domain && (
+                                <span className="bg-purple-50 text-purple-700 text-xs font-medium rounded-full px-2.5 py-0.5">
+                                  {latestSummary.profile.domain}
+                                </span>
+                              )}
                             </>
                           )}
                         </div>
@@ -328,7 +335,7 @@ export function Dashboard() {
 
                         <ModelSwitcher
                           articleId={article.id}
-                          currentModelId={latestSummary.modelLabel}
+                          currentModelId={latestSummary.modelId}
                           onNewSummary={handleDashboardNewSummary}
                         />
                       </div>

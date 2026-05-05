@@ -27,6 +27,8 @@ export interface ParticipantRow {
   override_focus: string | null;
   override_depth: string | null;
   override_context: string | null;
+  domain: string | null;
+  current_project: string | null;
   profile_source: string;
   created_at: string;
 }

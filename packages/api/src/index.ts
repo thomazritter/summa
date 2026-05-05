@@ -4,11 +4,6 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
-// Legacy routes — disabled (no auth, not used by experiment)
-// import { userRoutes } from './routes/users.js';
-// import { profileRoutes } from './routes/profiles.js';
-// import { summaryRoutes } from './routes/summaries.js';
-// import { feedbackRoutes } from './routes/feedback.js';
 import { articleRoutes } from './routes/articles.js';
 import { experimentRoutes } from './routes/experiment.js';
 import { authRoutes } from './routes/auth.js';

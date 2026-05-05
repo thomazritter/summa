@@ -178,8 +178,13 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
   const participantPreferences = {
     structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
     englishComfort: participant.english_comfort as 'keep_english' | 'translate' | undefined,
+    domain: participant.domain || undefined,
+    currentProject: participant.current_project || undefined,
   };
-  const hasPreferences = participantPreferences.structurePreference || participantPreferences.englishComfort;
+  const hasPreferences = participantPreferences.structurePreference
+    || participantPreferences.englishComfort
+    || participantPreferences.domain
+    || participantPreferences.currentProject;
 
   // Determine the base profile ID from experience config
   const config = EXPERIENCE_CONFIG[participant.experience_level];

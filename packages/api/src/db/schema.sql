@@ -217,6 +217,11 @@ ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_context TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
 ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
 
+-- ─── Domain & Current Project ─────────────────────────────────────
+
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
+
 -- ─── Model Tracking ───────────────────────────────────────────────
 
 ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;

@@ -60,6 +60,9 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;
 
     ALTER TABLE access_codes ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
   `;
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');

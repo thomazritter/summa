@@ -3,6 +3,8 @@ import type { Profile, ArticleStructure } from '@summarizer/shared';
 export interface ParticipantPreferences {
   structurePreference?: 'prose' | 'bullets' | 'mixed';
   englishComfort?: 'keep_english' | 'translate';
+  domain?: string;
+  currentProject?: string;
 }
 
 export const buildSummarizationPrompt = (
@@ -88,6 +90,14 @@ const buildInstructions = (profile: Profile, participantPreferences?: Participan
       translate: 'Traduza todos os termos técnicos para português sempre que possível. Se não houver tradução consolidada, apresente o termo em português seguido do original em inglês entre parênteses na primeira ocorrência.',
     };
     parts.push(englishInstructions[participantPreferences.englishComfort]);
+  }
+
+  if (participantPreferences?.domain) {
+    parts.push(`Domínio profissional do leitor: ${participantPreferences.domain}. Quando possível, relacione os conceitos e resultados do artigo com este domínio.`);
+  }
+
+  if (participantPreferences?.currentProject) {
+    parts.push(`O leitor está trabalhando em: ${participantPreferences.currentProject}. Contextualize o resumo destacando aspectos do artigo que possam ser relevantes para este projeto.`);
   }
 
   parts.push('Estruture o resumo com parágrafos bem definidos. Comece pela contribuição principal do artigo.');
