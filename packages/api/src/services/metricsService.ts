@@ -3,7 +3,14 @@
  *
  * Pure synchronous functions extracted from compute-metrics.ts
  * so they can be called inline after summary generation.
+ *
+ * BERTScore is delegated to the Python metrics service over HTTP since it
+ * depends on heavy ML dependencies (transformers/torch) that should not
+ * live in the Node runtime.
  */
+
+const METRICS_SERVICE_URL = process.env.METRICS_SERVICE_URL || 'http://127.0.0.1:5052';
+const BERT_TIMEOUT_MS = 60000;
 
 // ─── Tokenization helpers (private) ──────────────────────────────────
 
@@ -110,6 +117,41 @@ export function computeRouge(summary: string, reference: string): RougeScores {
     rouge2: rougeN(summary, reference, 2),
     rougeL: rougeL(summary, reference),
   };
+}
+
+/**
+ * Compute BERTScore F1 between a summary and a reference by calling the
+ * Python metrics microservice. Returns null if the service is unavailable
+ * or the call fails, so callers can degrade gracefully.
+ */
+export async function computeBertScore(
+  summary: string,
+  reference: string,
+): Promise<number | null> {
+  if (!summary || !reference) return null;
+
+  try {
+    const response = await fetch(`${METRICS_SERVICE_URL}/quality`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary, reference, compute_bert_score: true }),
+      signal: AbortSignal.timeout(BERT_TIMEOUT_MS),
+    });
+
+    if (!response.ok) {
+      console.warn(`[bertscore] metrics service returned ${response.status}`);
+      return null;
+    }
+
+    const data = (await response.json()) as {
+      bert_score?: { precision: number; recall: number; f1: number };
+    };
+
+    return data.bert_score?.f1 ?? null;
+  } catch (error) {
+    console.warn('[bertscore] metrics service call failed:', error);
+    return null;
+  }
 }
 
 export interface PairwiseDetail {

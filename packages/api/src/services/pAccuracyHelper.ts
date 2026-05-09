@@ -5,7 +5,7 @@
  * GET /results and GET /summaries endpoints.
  */
 
-import { queryAll } from '../db/connection.js';
+import { queryAll, execute } from '../db/connection.js';
 import { computePAccuracy } from './metricsService.js';
 
 const PROFILE_LABELS: Record<number, string> = {
@@ -77,3 +77,42 @@ export async function computePAccuracyForArticles(): Promise<ArticlePAccuracy[]>
 }
 
 export { PROFILE_LABELS };
+
+/**
+ * Recompute and persist P-Accuracy for a single article after a new summary
+ * is added. No-op if fewer than 2 distinct profiles have summaries for the
+ * article. Designed to run in background after summary generation.
+ */
+export async function recomputePAccuracyForArticle(articleId: number): Promise<void> {
+  const summaries = await queryAll<{ profile_id: number; content: string }>(
+    `SELECT profile_id, content FROM summaries WHERE article_id = $1`,
+    [articleId],
+  );
+
+  const distinctProfiles = new Set(summaries.map(s => s.profile_id));
+  if (distinctProfiles.size < 2) return;
+
+  const items = summaries.map(s => ({
+    profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
+    content: s.content,
+  }));
+
+  const result = computePAccuracy(items);
+  if (!result) return;
+
+  await execute(
+    `INSERT INTO p_accuracy_scores (article_id, p_accuracy_rouge, avg_pairwise_rouge_l, pairwise_details, computed_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (article_id) DO UPDATE
+       SET p_accuracy_rouge = EXCLUDED.p_accuracy_rouge,
+           avg_pairwise_rouge_l = EXCLUDED.avg_pairwise_rouge_l,
+           pairwise_details = EXCLUDED.pairwise_details,
+           computed_at = EXCLUDED.computed_at`,
+    [
+      articleId,
+      result.pAccuracy,
+      result.avgPairwiseRougeL,
+      JSON.stringify(result.pairwiseDetails),
+    ],
+  );
+}
