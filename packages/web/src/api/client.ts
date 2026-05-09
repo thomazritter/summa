@@ -201,12 +201,26 @@ export const userApi = {
       title: string;
       authors: string | null;
       createdAt: string;
+      pAccuracy: {
+        pAccuracyRouge: number | null;
+        avgPairwiseRougeL: number | null;
+      } | null;
       summaries: Array<{
         id: number;
         content: string;
         modelId: string | null;
         modelLabel: string | null;
         factualityScore: number | null;
+        factualityDetails: Array<{
+          sentence: string;
+          label: 'supported' | 'neutral' | 'contradicted';
+          confidence: number;
+          sourceSentence: string;
+        }> | null;
+        rouge1: number | null;
+        rouge2: number | null;
+        rougeL: number | null;
+        bertScore: number | null;
         profile: {
           expertise: string;
           focus: string;

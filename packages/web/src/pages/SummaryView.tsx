@@ -1,10 +1,25 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import ReactMarkdown from 'react-markdown';
 import { userApi } from '../api/client';
 import { ModelSwitcher } from '../components/ModelSwitcher';
+import { FactualityHighlightedMarkdown } from '../components/FactualityHighlightedMarkdown';
+import type { FactualitySentence } from '../components/FactualityHighlightedMarkdown';
+import { MetricsPanel } from '../components/MetricsPanel';
 import type { SummaryResult } from '../api/client';
+
+interface DisplaySummary {
+  id: number;
+  content: string;
+  factualityScore: number | null;
+  factualityDetails: FactualitySentence[] | null;
+  rouge1: number | null;
+  rouge2: number | null;
+  rougeL: number | null;
+  bertScore: number | null;
+  modelId: string | null;
+  modelLabel: string | null;
+}
 
 export function SummaryView() {
   const { id } = useParams<{ id: string }>();
@@ -24,8 +39,13 @@ export function SummaryView() {
 
   // Find the summary across all articles
   const summaryId = Number(id);
-  let foundSummary: { id: number; content: string; factualityScore: number | null; modelId: string | null; modelLabel: string | null } | null = null;
-  let foundArticle: { id: number; title: string; authors: string | null } | null = null;
+  let foundSummary: DisplaySummary | null = null;
+  let foundArticle: {
+    id: number;
+    title: string;
+    authors: string | null;
+    pAccuracy: { pAccuracyRouge: number | null; avgPairwiseRougeL: number | null } | null;
+  } | null = null;
 
   if (articles) {
     for (const article of articles) {
@@ -35,21 +55,38 @@ export function SummaryView() {
           id: match.id,
           content: match.content,
           factualityScore: match.factualityScore,
+          factualityDetails: match.factualityDetails,
+          rouge1: match.rouge1,
+          rouge2: match.rouge2,
+          rougeL: match.rougeL,
+          bertScore: match.bertScore,
           modelId: match.modelId,
           modelLabel: match.modelLabel,
         };
-        foundArticle = { id: article.id, title: article.title, authors: article.authors };
+        foundArticle = {
+          id: article.id,
+          title: article.title,
+          authors: article.authors,
+          pAccuracy: article.pAccuracy,
+        };
         break;
       }
     }
   }
 
-  // If a new summary was generated via model switch, use it instead
-  const displaySummary = overrideSummary
+  // If a new summary was generated via model switch, use it instead.
+  // Metrics for the new summary will populate on next refresh; show as null in the meantime.
+  const displaySummary: DisplaySummary | null = overrideSummary
     ? {
         id: overrideSummary.id,
         content: overrideSummary.content,
         factualityScore: overrideSummary.factualityScore,
+        factualityDetails: null,
+        rouge1: null,
+        rouge2: null,
+        rougeL: null,
+        bertScore: null,
+        modelId: overrideSummary.modelId,
         modelLabel: overrideSummary.modelId,
       }
     : foundSummary;
@@ -133,10 +170,22 @@ export function SummaryView() {
             </div>
           </div>
 
-          <div className="prose prose-gray max-w-none">
-            <ReactMarkdown>{displaySummary.content}</ReactMarkdown>
-          </div>
+          <FactualityHighlightedMarkdown
+            content={displaySummary.content}
+            factualityDetails={displaySummary.factualityDetails}
+          />
         </div>
+
+        {/* Technical metrics */}
+        <MetricsPanel
+          factualityScore={displaySummary.factualityScore}
+          factualityDetails={displaySummary.factualityDetails}
+          rouge1={displaySummary.rouge1}
+          rouge2={displaySummary.rouge2}
+          rougeL={displaySummary.rougeL}
+          bertScore={displaySummary.bertScore}
+          pAccuracy={foundArticle.pAccuracy}
+        />
 
         {/* Model switcher */}
         <ModelSwitcher
