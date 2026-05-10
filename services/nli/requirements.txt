@@ -3,3 +3,5 @@ transformers==4.40.2
 flask==3.0.3
 gunicorn==22.0.0
 numpy<2
+rouge-score==0.1.2
+bert-score==0.3.13

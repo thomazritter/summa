@@ -9,7 +9,7 @@
  * live in the Node runtime.
  */
 
-const METRICS_SERVICE_URL = process.env.METRICS_SERVICE_URL || 'http://127.0.0.1:5052';
+const METRICS_SERVICE_URL = process.env.METRICS_SERVICE_URL || 'http://127.0.0.1:5050';
 const BERT_TIMEOUT_MS = 60000;
 
 // ─── Tokenization helpers (private) ──────────────────────────────────

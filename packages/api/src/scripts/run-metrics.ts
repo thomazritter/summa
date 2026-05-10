@@ -11,7 +11,7 @@
 
 import { queryAll, closeDb } from '../db/connection.js';
 
-const METRICS_SERVICE_URL = process.env.METRICS_SERVICE_URL || 'http://127.0.0.1:5052';
+const METRICS_SERVICE_URL = process.env.METRICS_SERVICE_URL || 'http://127.0.0.1:5050';
 
 const PROFILE_NAMES: Record<number, string> = {
   99: 'generic',
