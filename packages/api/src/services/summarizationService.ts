@@ -3,7 +3,7 @@ import { generateCompletion, getActiveModel, LLMError } from './groqClient.js';
 import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxOutputTokens } from './promptBuilder.js';
 import type { ParticipantPreferences } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
-import { checkFactuality, checkNliServiceHealth } from './factualityChecker.js';
+import { checkFactuality, checkNliServiceHealth, findRelevantContexts } from './factualityChecker.js';
 import { computeRouge, computeBertScore } from './metricsService.js';
 import { recomputePAccuracyForArticle } from './pAccuracyHelper.js';
 import { safeJsonParse } from '../utils/validation.js';
@@ -22,6 +22,13 @@ export class NotFoundError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'NotFoundError';
+  }
+}
+
+export class NoFlaggedSentencesError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NoFlaggedSentencesError';
   }
 }
 
@@ -474,6 +481,108 @@ Gere o resumo melhorado agora:`;
   return mapRowToSummary(row);
 };
 
+/**
+ * Regenerate a summary using NLI factuality evidence.
+ *
+ * Loads per-sentence verdicts from the parent summary, picks the ones whose label
+ * is not 'supported', and appends a 4th block to the original prompt asking the
+ * model to either align each flagged sentence to its anchor paragraph or remove it.
+ * Generates with a lower temperature (0.1) to favour grounded output and persists
+ * the new summary linked to the parent via parent_summary_id.
+ */
+export const regenerateSummaryWithEvidence = async (summaryId: number): Promise<Summary> => {
+  const existing = await queryOne<SummaryRow>('SELECT * FROM summaries WHERE id = $1', [summaryId]);
+  if (!existing) {
+    throw new NotFoundError('Summary not found');
+  }
+
+  const factualityDetails = safeJsonParse<Array<{
+    sentence: string;
+    label: 'supported' | 'neutral' | 'contradicted';
+    confidence: number;
+    sourceSentence?: string;
+  }>>(existing.factuality_details) || [];
+
+  const flagged = factualityDetails.filter((d) => d.label !== 'supported');
+  if (flagged.length === 0) {
+    throw new NoFlaggedSentencesError(
+      'Nenhuma frase deste resumo foi sinalizada como não apoiada pelo artigo. Não há base para regeneração guiada por factualidade.'
+    );
+  }
+
+  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [existing.article_id]);
+  if (!article) {
+    throw new NotFoundError('Article not found');
+  }
+
+  const profile = await getProfileById(existing.profile_id);
+  if (!profile) {
+    throw new NotFoundError('Profile not found');
+  }
+
+  const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
+
+  const evidenceLines: string[] = [];
+  flagged.forEach((d, idx) => {
+    const contexts = findRelevantContexts(d.sentence, structuredContent, article.raw_text);
+    const anchor = contexts[0] || d.sourceSentence || '';
+    const anchorText = anchor.trim().length > 0
+      ? anchor.trim()
+      : '(nenhum trecho-âncora identificado)';
+    evidenceLines.push(`${idx + 1}. Frase: "${d.sentence}"\n   Trecho-âncora: "${anchorText}"`);
+  });
+
+  const basePrompt = buildSummarizationPrompt(profile, structuredContent, article.raw_text);
+
+  const evidencePrompt = `${basePrompt}
+
+ATENÇÃO: O resumo anterior continha afirmações sinalizadas como NÃO APOIADAS pelo artigo original. Reescreva o resumo evitando essas afirmações. Para cada uma das frases listadas a seguir, ou (a) reformule-a de modo a alinhá-la ao trecho-âncora correspondente, ou (b) remova-a se o trecho-âncora não a sustenta de forma direta. Não introduza novas afirmações sem suporte explícito no artigo.
+
+FRASES SINALIZADAS E TRECHOS-ÂNCORA:
+${evidenceLines.join('\n')}`;
+
+  const effectiveModel = existing.model_id || getActiveModel();
+  let summaryContent: string;
+  try {
+    summaryContent = await generateCompletion({
+      prompt: evidencePrompt,
+      temperature: 0.1,
+      maxTokens: getMaxOutputTokens(),
+      model: effectiveModel,
+    });
+  } catch (error) {
+    if (error instanceof LLMError) {
+      throw new SummarizationError(`Failed to regenerate summary with evidence: ${error.message}`);
+    }
+    throw error;
+  }
+
+  const row = await queryOne<SummaryRow>(
+    `INSERT INTO summaries (article_id, profile_id, content, model_id, parent_summary_id)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING *`,
+    [existing.article_id, existing.profile_id, summaryContent, effectiveModel, existing.id],
+  );
+
+  if (!row) {
+    throw new SummarizationError('Failed to save regenerated summary');
+  }
+
+  const abstract = (structuredContent.abstract || '').trim();
+  if (abstract.length > 0) {
+    const rouge = computeRouge(summaryContent, abstract);
+    await execute(
+      'UPDATE summaries SET rouge_1 = $1, rouge_2 = $2, rouge_l = $3 WHERE id = $4',
+      [rouge.rouge1, rouge.rouge2, rouge.rougeL, row.id],
+    );
+  }
+
+  checkFactualityInBackground(row.id, summaryContent, structuredContent, article.raw_text);
+  computeBertInBackground(row.id, summaryContent, abstract.length > 0 ? abstract : null);
+
+  return mapRowToSummary(row);
+};
+
 const mapRowToSummary = (row: SummaryRow): Summary => {
   return {
     id: row.id,
@@ -483,6 +592,7 @@ const mapRowToSummary = (row: SummaryRow): Summary => {
     factualityScore: row.factuality_score,
     factualityDetails: safeJsonParse(row.factuality_details) || null,
     modelId: row.model_id,
+    parentSummaryId: row.parent_summary_id ?? null,
     generatedAt: new Date(row.generated_at),
   };
 };

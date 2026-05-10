@@ -65,6 +65,7 @@ export interface Summary {
   factualityScore: number | null;
   factualityDetails: FactualityResult[] | null;
   modelId: string | null;
+  parentSummaryId: number | null;
   generatedAt: Date;
 }
 

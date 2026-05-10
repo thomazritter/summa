@@ -226,6 +226,10 @@ ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
 
 ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;
 
+-- ─── Guided Regeneration Lineage ──────────────────────────────────
+
+ALTER TABLE summaries ADD COLUMN IF NOT EXISTS parent_summary_id INTEGER REFERENCES summaries(id) ON DELETE SET NULL;
+
 -- ─── P-Accuracy Scores ──────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS p_accuracy_scores (

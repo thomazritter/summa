@@ -121,7 +121,7 @@ const verifySentence = async (
  * Find the top relevant contexts from the article for NLI comparison.
  * Returns multiple candidates (SummaC-inspired) for better matching.
  */
-const findRelevantContexts = (sentence: string, structure: ArticleStructure, rawText: string): string[] => {
+export const findRelevantContexts = (sentence: string, structure: ArticleStructure, rawText: string): string[] => {
   const terms = sentence.toLowerCase().split(/\W+/).filter(t => t.length > 2);
   const sections = [structure.abstract, structure.results, structure.methodology,
     structure.discussion, structure.conclusion, structure.introduction].filter(Boolean).join('\n\n');

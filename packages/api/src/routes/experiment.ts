@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
 import { parseId, safeJsonParse } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { regenerateSummaryWithFeedback, getSummaryById, generatePersonalizedSummary } from '../services/summarizationService.js';
+import { regenerateSummaryWithFeedback, regenerateSummaryWithEvidence, getSummaryById, generatePersonalizedSummary, NotFoundError, NoFlaggedSentencesError, SummarizationError } from '../services/summarizationService.js';
 import type { ProfileDimensions } from '../services/summarizationService.js';
 import { createExperimentSession, SessionCreationError, computeProfileDimensions, computeProfileSources, EXPERIENCE_CONFIG } from '../services/sessionService.js';
 import { AVAILABLE_MODELS, getActiveModel } from '../services/groqClient.js';
@@ -828,6 +828,77 @@ experimentRoutes.post('/sessions/:id/try-model', asyncHandler(async (req: Reques
     },
     previousModel,
   });
+}));
+
+// ─── Guided Regeneration by Factuality ────────────────────────────
+
+// POST /api/experiment/summaries/:id/regenerate-with-evidence
+// Re-runs the summary using NLI evidence: feeds flagged sentences and their
+// anchor paragraphs back to the LLM with a lower temperature.
+experimentRoutes.post('/summaries/:id/regenerate-with-evidence', asyncHandler(async (req: Request, res: Response) => {
+  const id = parseId(req.params.id);
+  if (id === null) return res.status(400).json({ error: 'Invalid summary ID' });
+
+  // Ownership check: managers always pass; otherwise the caller must own a session
+  // tied to this summary (either as personalized, generic, or regenerated summary).
+  if (req.accessCode?.role !== 'manager') {
+    const participantId = req.accessCode?.participantId;
+    if (!participantId) {
+      return res.status(403).json({ error: 'Acesso negado' });
+    }
+
+    const owns = await queryOne<{ id: number }>(
+      `SELECT es.id FROM experiment_sessions es
+       LEFT JOIN regenerations r ON r.session_id = es.id
+       WHERE es.participant_id = $1
+         AND (
+           es.personalized_summary_id = $2
+           OR es.generic_summary_id = $2
+           OR r.regenerated_summary_id = $2
+         )
+       LIMIT 1`,
+      [participantId, id],
+    );
+
+    if (!owns) {
+      const uploaded = await queryOne<{ id: number }>(
+        `SELECT a.id FROM articles a
+         JOIN summaries s ON s.article_id = a.id
+         WHERE s.id = $1 AND a.uploaded_by = $2
+         LIMIT 1`,
+        [id, participantId],
+      );
+      if (!uploaded) {
+        return res.status(403).json({ error: 'Acesso negado' });
+      }
+    }
+  }
+
+  try {
+    const summary = await regenerateSummaryWithEvidence(id);
+    res.status(201).json({
+      id: summary.id,
+      articleId: summary.articleId,
+      profileId: summary.profileId,
+      content: summary.content,
+      modelId: summary.modelId,
+      factualityScore: summary.factualityScore,
+      factualityDetails: summary.factualityDetails,
+      parentSummaryId: summary.parentSummaryId,
+      generatedAt: summary.generatedAt,
+    });
+  } catch (error) {
+    if (error instanceof NoFlaggedSentencesError) {
+      return res.status(400).json({ error: error.message });
+    }
+    if (error instanceof NotFoundError) {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error instanceof SummarizationError) {
+      return res.status(502).json({ error: error.message });
+    }
+    throw error;
+  }
 }));
 
 // ─── Mappers ────────────────────────────────────────────────────────

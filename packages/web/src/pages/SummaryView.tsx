@@ -1,12 +1,20 @@
 import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { userApi } from '../api/client';
+import { userApi, experimentApi } from '../api/client';
 import { ModelSwitcher } from '../components/ModelSwitcher';
 import { FactualityHighlightedMarkdown } from '../components/FactualityHighlightedMarkdown';
 import type { FactualitySentence } from '../components/FactualityHighlightedMarkdown';
 import { MetricsPanel } from '../components/MetricsPanel';
 import type { SummaryResult } from '../api/client';
+
+interface RegeneratedSummary {
+  id: number;
+  content: string;
+  factualityScore: number | null;
+  factualityDetails: FactualitySentence[] | null;
+  modelId: string | null;
+}
 
 interface DisplaySummary {
   id: number;
@@ -31,6 +39,9 @@ export function SummaryView() {
     modelId: string;
     factualityScore: number | null;
   } | null>(null);
+  const [regenerated, setRegenerated] = useState<RegeneratedSummary | null>(null);
+  const [regenLoading, setRegenLoading] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
 
   const { data: articles, isLoading } = useQuery({
     queryKey: ['user-articles'],
@@ -95,6 +106,27 @@ export function SummaryView() {
     setOverrideSummary(summary);
     void queryClient.invalidateQueries({ queryKey: ['user-articles'] });
     navigate(`/summary/${summary.id}`, { replace: true });
+  };
+
+  const handleRegenerateWithEvidence = async () => {
+    if (!displaySummary) return;
+    setRegenLoading(true);
+    setRegenError(null);
+    try {
+      const result = await experimentApi.regenerateSummaryWithEvidence(displaySummary.id);
+      setRegenerated({
+        id: result.id,
+        content: result.content,
+        factualityScore: result.factualityScore,
+        factualityDetails: result.factualityDetails,
+        modelId: result.modelId,
+      });
+      void queryClient.invalidateQueries({ queryKey: ['user-articles'] });
+    } catch (err) {
+      setRegenError(err instanceof Error ? err.message : 'Falha ao regenerar resumo');
+    } finally {
+      setRegenLoading(false);
+    }
   };
 
   if (isLoading) {
@@ -186,6 +218,88 @@ export function SummaryView() {
           bertScore={displaySummary.bertScore}
           pAccuracy={foundArticle.pAccuracy}
         />
+
+        {/* Guided regeneration by factuality */}
+        {(() => {
+          const flaggedCount = displaySummary.factualityDetails
+            ? displaySummary.factualityDetails.filter((d) => d.label !== 'supported').length
+            : 0;
+          const noFlagged = flaggedCount === 0;
+          const buttonTitle = noFlagged
+            ? 'Nenhuma frase deste resumo foi sinalizada como não apoiada pelo artigo.'
+            : `Reprocessa o resumo usando os trechos do artigo correspondentes às ${flaggedCount} frase(s) sinalizadas.`;
+
+          return (
+            <div className="mt-4 border border-gray-200 rounded-lg bg-white p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    Regeneração guiada por factualidade
+                  </h3>
+                  <p className="text-xs text-gray-600 mt-1">
+                    {noFlagged
+                      ? 'Todas as frases verificadas têm suporte direto no artigo.'
+                      : `${flaggedCount} frase(s) sem suporte direto no artigo. Você pode reprocessar o resumo com as evidências em mãos.`}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRegenerateWithEvidence}
+                  disabled={noFlagged || regenLoading}
+                  title={buttonTitle}
+                  className={`py-2.5 px-5 text-sm font-semibold rounded-lg transition-colors ${
+                    noFlagged || regenLoading
+                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'bg-[#2563eb] text-white hover:bg-[#1d4ed8]'
+                  }`}
+                >
+                  {regenLoading ? 'Regenerando...' : 'Regenerar com foco em factualidade'}
+                </button>
+              </div>
+              {regenError && (
+                <p className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                  {regenError}
+                </p>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Regenerated summary side-by-side */}
+        {regenerated && (
+          <div className="mt-6 bg-white border border-gray-200 rounded-lg p-8">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">
+                Resumo regenerado com evidências
+              </h2>
+              <div className="flex items-center gap-3">
+                {regenerated.factualityScore !== null ? (
+                  <span className={`px-3 py-1 text-xs rounded-full ${
+                    regenerated.factualityScore >= 0.8
+                      ? 'bg-green-100 text-green-700'
+                      : regenerated.factualityScore >= 0.6
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    Factualidade: {(regenerated.factualityScore * 100).toFixed(0)}%
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
+                    Verificando factualidade...
+                  </span>
+                )}
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mb-4">
+              Versão reescrita a partir das frases sinalizadas e dos trechos-âncora do artigo.
+              O escore de factualidade é recalculado em segundo plano e aparece após alguns segundos.
+            </p>
+            <FactualityHighlightedMarkdown
+              content={regenerated.content}
+              factualityDetails={regenerated.factualityDetails}
+            />
+          </div>
+        )}
 
         {/* Model switcher */}
         <ModelSwitcher

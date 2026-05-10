@@ -63,6 +63,8 @@ export async function runMigrations(): Promise<void> {
 
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
+
+    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS parent_summary_id INTEGER REFERENCES summaries(id) ON DELETE SET NULL;
   `;
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');

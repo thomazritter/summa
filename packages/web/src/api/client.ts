@@ -436,4 +436,24 @@ export const experimentApi = {
     }>('/experiment/profile/reset', {
       method: 'POST',
     }),
+
+  regenerateSummaryWithEvidence: (summaryId: number) =>
+    apiRequest<{
+      id: number;
+      articleId: number;
+      profileId: number;
+      content: string;
+      modelId: string | null;
+      factualityScore: number | null;
+      factualityDetails: Array<{
+        sentence: string;
+        label: 'supported' | 'neutral' | 'contradicted';
+        confidence: number;
+        sourceSentence: string;
+      }> | null;
+      parentSummaryId: number | null;
+      generatedAt: string;
+    }>(`/experiment/summaries/${summaryId}/regenerate-with-evidence`, {
+      method: 'POST',
+    }),
 };
