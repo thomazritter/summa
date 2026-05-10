@@ -17,16 +17,31 @@ export const buildSummarizationPrompt = (
   const contentSection = buildContentSection(articleContent, rawText);
   const instructions = buildInstructions(profile, participantPreferences);
 
-  return `${systemContext}
+  // XML-tagged structure (variant V2 in §6.6 of the thesis): improves the
+  // factuality score by ~6.4 percentage points over the previous prose-block
+  // layout by giving the model unambiguous boundaries between role,
+  // profile-derived directives and source content.
+  return `<role>
+${systemContext}
+</role>
 
+<profile>
+<expertise>${profile.expertise}</expertise>
+<focus>${profile.focus}</focus>
+<depth>${profile.depth}</depth>
+<context>${profile.context}</context>
+<directives>
 ${instructions}
+</directives>
+</profile>
 
----
-CONTEÚDO DO ARTIGO:
+<article>
 ${contentSection}
----
+</article>
 
-Gere o resumo agora:`;
+<task>
+Gere o resumo personalizado conforme as diretivas em <profile>, ancorando todas as afirmações no conteúdo de <article>. Responda apenas com o texto do resumo, sem repetir as tags.
+</task>`;
 };
 
 const buildSystemContext = (profile: Profile): string => {
@@ -159,12 +174,15 @@ export const buildGenericSummarizationPrompt = (
     ? '\n\nTraduza todos os termos técnicos para português sempre que possível. Se não houver tradução consolidada, apresente o termo em português seguido do original em inglês entre parênteses na primeira ocorrência.'
     : '\n\nMantenha termos técnicos em inglês quando forem amplamente usados na área (ex: code review, bug, commit, framework). Não traduza terminologia consagrada.';
 
-  return `Resuma o seguinte artigo científico em português. Produza um resumo objetivo de 3-4 parágrafos cobrindo o que o artigo faz, como faz e o que encontrou. Não adapte o texto para nenhum público específico.${englishInstruction}
+  return `<role>
+Você é um assistente especializado em resumir artigos científicos. Resuma o seguinte artigo em português. Produza um resumo objetivo de 3-4 parágrafos cobrindo o que o artigo faz, como faz e o que encontrou. Não adapte o texto para nenhum público específico.${englishInstruction}
+</role>
 
----
-CONTEÚDO DO ARTIGO:
+<article>
 ${contentSection}
----
+</article>
 
-Gere o resumo agora:`;
+<task>
+Gere o resumo agora, ancorando todas as afirmações no conteúdo de <article>. Responda apenas com o texto do resumo, sem repetir as tags.
+</task>`;
 };
