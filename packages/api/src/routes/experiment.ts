@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
 import { parseId, safeJsonParse } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
-import { regenerateSummaryWithFeedback, regenerateSummaryWithEvidence, getSummaryById, generatePersonalizedSummary, NotFoundError, NoFlaggedSentencesError, SummarizationError } from '../services/summarizationService.js';
+import { regenerateSummaryWithEvidence, getSummaryById, generatePersonalizedSummary, NotFoundError, NoFlaggedSentencesError, SummarizationError } from '../services/summarizationService.js';
 import type { ProfileDimensions } from '../services/summarizationService.js';
 import { createExperimentSession, SessionCreationError, computeProfileDimensions, computeProfileSources, EXPERIENCE_CONFIG } from '../services/sessionService.js';
 import { AVAILABLE_MODELS, getActiveModel } from '../services/groqClient.js';
@@ -11,7 +11,7 @@ import { inferProfileFromCv } from '../services/cvProfileMapper.js';
 import { requireAuth } from '../middleware/auth.js';
 import { createPdfUpload, createMulterErrorHandler } from '../utils/multerHelpers.js';
 import type { ExperimentSession, Participant, Regeneration } from '@summarizer/shared';
-import type { ParticipantRow, SessionRow, RegenerationRow } from '../types/rows.js';
+import type { ParticipantRow, SessionRow } from '../types/rows.js';
 
 export const experimentRoutes = Router();
 
@@ -40,18 +40,6 @@ const createSessionSchema = z.object({
 const preferenceSchema = z.object({
   preference: z.enum(['A', 'B']),
   reason: z.string().max(5000).optional(),
-});
-
-const feedbackSchema = z.object({
-  feedbackText: z.string().min(1).max(5000),
-});
-
-const rateRegenerationSchema = z.object({
-  improvementRating: z.enum(['improved', 'same', 'worse']),
-  utilityRating: z.number().int().min(1).max(5),
-  clarityRating: z.number().int().min(1).max(5),
-  adequacyRating: z.number().int().min(1).max(5),
-  changeDescription: z.string().max(5000).optional(),
 });
 
 const summaryRatingsSchema = z.object({
@@ -316,132 +304,6 @@ experimentRoutes.post('/sessions/:id/evaluate', asyncHandler(async (req: Request
   const updated = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
   if (!updated) return res.status(500).json({ error: 'Falha ao criar registro' });
   res.json(mapSessionRow(updated));
-}));
-
-// POST /api/experiment/sessions/:id/feedback — submit feedback text, triggers regeneration
-experimentRoutes.post('/sessions/:id/feedback', asyncHandler(async (req: Request, res: Response) => {
-  const id = parseId(req.params.id);
-  if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
-
-  // IDOR check
-  const sessionCheck = await verifySessionOwnership(req, res, id);
-  if (!sessionCheck) return;
-
-  const validation = feedbackSchema.safeParse(req.body);
-  if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
-    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
-  }
-
-  // Idempotency: if a regeneration already exists for this session, return it
-  const existingRegen = await queryOne<RegenerationRow>(
-    'SELECT * FROM regenerations WHERE session_id = $1 ORDER BY created_at DESC LIMIT 1',
-    [id]
-  );
-  if (existingRegen) {
-    return res.json({ ...mapRegenerationRow(existingRegen), alreadySubmitted: true });
-  }
-
-  // Session already verified by ownership check above
-  const sessionRow = sessionCheck;
-
-  // Regenerate the personalized summary incorporating the feedback
-  const regeneratedSummary = await regenerateSummaryWithFeedback(
-    sessionRow.personalized_summary_id,
-    validation.data.feedbackText
-  );
-
-  // Store regeneration record
-  const regenRow = await queryOne<RegenerationRow>(`
-    INSERT INTO regenerations (session_id, feedback_text, regenerated_summary_id)
-    VALUES ($1, $2, $3)
-    RETURNING *
-  `, [id, validation.data.feedbackText, regeneratedSummary.id]);
-
-  if (!regenRow) return res.status(500).json({ error: 'Falha ao criar registro' });
-
-  // Update session phase
-  await execute(`UPDATE experiment_sessions SET phase = 'regenerated' WHERE id = $1`, [id]);
-
-  res.status(201).json(mapRegenerationRow(regenRow));
-}));
-
-// GET /api/experiment/sessions/:id/regenerated — get regenerated summary
-experimentRoutes.get('/sessions/:id/regenerated', asyncHandler(async (req: Request, res: Response) => {
-  const id = parseId(req.params.id);
-  if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
-
-  // IDOR check
-  const sessionCheck = await verifySessionOwnership(req, res, id);
-  if (!sessionCheck) return;
-
-  const regenRow = await queryOne<RegenerationRow>(
-    'SELECT * FROM regenerations WHERE session_id = $1 ORDER BY created_at DESC LIMIT 1',
-    [id]
-  );
-  if (!regenRow) {
-    return res.status(404).json({ error: 'No regeneration found for this session' });
-  }
-
-  const summary = await getSummaryById(regenRow.regenerated_summary_id);
-  res.json({
-    ...mapRegenerationRow(regenRow),
-    summary: summary ? { id: summary.id, content: summary.content } : null,
-  });
-}));
-
-// POST /api/experiment/sessions/:id/rate-regeneration — rate the regenerated summary
-experimentRoutes.post('/sessions/:id/rate-regeneration', asyncHandler(async (req: Request, res: Response) => {
-  const id = parseId(req.params.id);
-  if (id === null) return res.status(400).json({ error: 'Invalid session ID' });
-
-  // IDOR check
-  const sessionCheck = await verifySessionOwnership(req, res, id);
-  if (!sessionCheck) return;
-
-  const validation = rateRegenerationSchema.safeParse(req.body);
-  if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
-    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
-  }
-
-  // Idempotency: if the regeneration is already rated, return the session
-  const existingRegen = await queryOne<RegenerationRow>(
-    'SELECT * FROM regenerations WHERE session_id = $1 ORDER BY created_at DESC LIMIT 1',
-    [id]
-  );
-  if (existingRegen && existingRegen.improvement_rating !== null) {
-    const sessionRow = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
-    if (sessionRow) return res.json(mapSessionRow(sessionRow));
-  }
-
-  // Update the latest regeneration for this session
-  const result = await execute(`
-    UPDATE regenerations
-    SET improvement_rating = $1, utility_rating = $2, clarity_rating = $3, adequacy_rating = $4, change_description = $5
-    WHERE session_id = $6 AND id = (
-      SELECT id FROM regenerations WHERE session_id = $7 ORDER BY created_at DESC LIMIT 1
-    )
-  `, [
-    validation.data.improvementRating,
-    validation.data.utilityRating,
-    validation.data.clarityRating,
-    validation.data.adequacyRating,
-    validation.data.changeDescription || null,
-    id,
-    id,
-  ]);
-
-  if (result.changes === 0) {
-    return res.status(404).json({ error: 'No regeneration found for this session' });
-  }
-
-  // Update session phase to complete
-  await execute(`UPDATE experiment_sessions SET phase = 'complete' WHERE id = $1`, [id]);
-
-  const sessionRow = await queryOne<SessionRow>('SELECT * FROM experiment_sessions WHERE id = $1', [id]);
-  if (!sessionRow) return res.status(500).json({ error: 'Falha ao criar registro' });
-  res.json(mapSessionRow(sessionRow));
 }));
 
 // POST /api/experiment/sessions/:id/ratings — save Likert ratings + preference in a transaction
@@ -934,16 +796,3 @@ const mapSessionRow = (row: SessionRow): ExperimentSession => ({
   createdAt: row.created_at,
 });
 
-const mapRegenerationRow = (row: RegenerationRow): Regeneration => ({
-  id: row.id,
-  sessionId: row.session_id,
-  feedbackText: row.feedback_text,
-  regeneratedSummaryId: row.regenerated_summary_id,
-  improvementRating: row.improvement_rating as Regeneration['improvementRating'],
-  satisfactionRating: row.satisfaction_rating,
-  utilityRating: row.utility_rating,
-  clarityRating: row.clarity_rating,
-  adequacyRating: row.adequacy_rating,
-  changeDescription: row.change_description,
-  createdAt: row.created_at,
-});

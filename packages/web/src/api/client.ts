@@ -338,38 +338,6 @@ export const experimentApi = {
       body: JSON.stringify({ preference }),
     }),
 
-  submitFeedback: (sessionId: number, feedbackText: string) =>
-    apiRequest<{
-      id: number;
-      sessionId: number;
-      feedbackText: string;
-      regeneratedSummaryId: number;
-    }>(`/experiment/sessions/${sessionId}/feedback`, {
-      method: 'POST',
-      body: JSON.stringify({ feedbackText }),
-    }),
-
-  getRegenerated: (sessionId: number) =>
-    apiRequest<{
-      id: number;
-      sessionId: number;
-      feedbackText: string;
-      improvementRating: string | null;
-      summary: { id: number; content: string } | null;
-    }>(`/experiment/sessions/${sessionId}/regenerated`),
-
-  rateRegeneration: (sessionId: number, data: {
-    improvementRating: 'improved' | 'same' | 'worse';
-    utilityRating: number;
-    clarityRating: number;
-    adequacyRating: number;
-    changeDescription?: string;
-  }) =>
-    apiRequest<unknown>(`/experiment/sessions/${sessionId}/rate-regeneration`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
-
   evaluateSession: (sessionId: number, data: {
     preference: 'A' | 'B';
     rating: number;
