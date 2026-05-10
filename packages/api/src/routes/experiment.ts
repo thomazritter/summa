@@ -409,15 +409,27 @@ experimentRoutes.post('/cv-profile', cvUpload.single('file'), handleCvMulterErro
     return res.status(400).json({ error: 'Nenhum arquivo PDF enviado' });
   }
 
-  const result = await inferProfileFromCv(req.file.buffer);
+  const outcome = await inferProfileFromCv(req.file.buffer);
 
-  if (!result) {
-    return res.status(422).json({
-      error: 'Nao foi possivel inferir o perfil a partir do curriculo. O PDF pode conter texto insuficiente ou estar em formato nao reconhecido.',
-    });
+  switch (outcome.kind) {
+    case 'ok':
+      return res.json(outcome.profile);
+    case 'not_cv':
+      return res.status(422).json({
+        error: `O documento enviado nao parece ser um curriculo profissional. ${outcome.reason}`,
+        kind: 'not_cv',
+      });
+    case 'insufficient_text':
+      return res.status(422).json({
+        error: 'O PDF enviado contem pouco ou nenhum texto extraivel. Verifique se o arquivo nao e uma imagem digitalizada e tente novamente.',
+        kind: 'insufficient_text',
+      });
+    case 'parse_failed':
+      return res.status(422).json({
+        error: 'Nao foi possivel inferir o perfil a partir do curriculo. Tente um PDF com seu historico profissional em formato textual.',
+        kind: 'parse_failed',
+      });
   }
-
-  res.json(result);
 }));
 
 // POST /api/experiment/participants/from-cv — create participant from CV-inferred profile
