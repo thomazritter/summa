@@ -106,34 +106,31 @@ const buildInstructions = (profile: Profile, participantPreferences?: Participan
 };
 
 const buildContentSection = (structure: ArticleStructure, rawText: string): string => {
-  const parts: string[] = [];
+  // Always send the full raw text. Section extraction by LLM/regex is imperfect
+  // and historically dropped methodology/results/discussion/conclusion when the
+  // structurer caught only abstract+introduction. The 128K context window of
+  // current models comfortably fits any scientific article, and the
+  // structuredContent is still used elsewhere (ROUGE reference selection, NLI
+  // anchor retrieval) — only the summarizer prompt receives the whole document.
+  // A short header lists the sections the structurer identified so the model has
+  // a navigational hint without us duplicating content.
+  const detectedSections = [
+    structure.abstract && 'abstract',
+    structure.introduction && 'introduction',
+    structure.methodology && 'methodology',
+    structure.results && 'results',
+    structure.discussion && 'discussion',
+    structure.conclusion && 'conclusion',
+  ].filter(Boolean) as string[];
 
-  // Send full article content — models have 128K context, no need to truncate
-  if (structure.abstract) {
-    parts.push(`ABSTRACT:\n${structure.abstract}`);
-  }
-  if (structure.introduction) {
-    parts.push(`INTRODUCTION:\n${structure.introduction}`);
-  }
-  if (structure.methodology) {
-    parts.push(`METHODOLOGY:\n${structure.methodology}`);
-  }
-  if (structure.results) {
-    parts.push(`RESULTS:\n${structure.results}`);
-  }
-  if (structure.discussion) {
-    parts.push(`DISCUSSION:\n${structure.discussion}`);
-  }
-  if (structure.conclusion) {
-    parts.push(`CONCLUSION:\n${structure.conclusion}`);
-  }
-
-  // If no structured content, use raw text
-  if (parts.length === 0) {
-    parts.push(rawText);
+  if (detectedSections.length === 0) {
+    return rawText;
   }
 
-  return parts.join('\n\n');
+  return `Seções detectadas pelo pré-processamento: ${detectedSections.join(', ')}.
+
+Texto completo do artigo:
+${rawText}`;
 };
 
 /**
