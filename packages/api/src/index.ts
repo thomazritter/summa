@@ -91,12 +91,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/manager', managerRoutes);
 app.use('/api/user', requireAuth, userRoutes);
 
-// Legacy routes — disabled (no auth protection, not used by experiment)
-// app.use('/api/users', userRoutes);
-// app.use('/api/profiles', profileRoutes);
-// app.use('/api/summaries', summaryRoutes);
-// app.use('/api/feedback', feedbackRoutes);
-
 // Serve frontend in production
 if (!isDev) {
   const frontendPath = path.join(__dirname, '../../web/dist');
