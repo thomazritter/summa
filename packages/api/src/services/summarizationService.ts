@@ -8,7 +8,7 @@ import { computeRouge, computeBertScore } from './metricsService.js';
 import { recomputePAccuracyForArticle } from './pAccuracyHelper.js';
 import { safeJsonParse } from '../utils/validation.js';
 import { GENERIC_PROFILE_ID } from '../types/rows.js';
-import type { ArticleRow, SummaryRow } from '../types/rows.js';
+import type { ArticleRow, SummaryRow, ParticipantRow } from '../types/rows.js';
 import type { Summary, ArticleStructure, Profile } from '@summarizer/shared';
 
 export class SummarizationError extends Error {
@@ -439,6 +439,43 @@ export const regenerateSummaryWithEvidence = async (summaryId: number): Promise<
 
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
 
+  // Look up participant preferences so the regen respects the same auxiliary
+  // settings (structure preference, English comfort, domain, current project)
+  // that shaped the parent summary. Without this, the regen prompt is strictly
+  // a subset of the first-gen prompt, which both regresses UX (the user's
+  // chosen format and language preference are dropped) and biases the
+  // factuality benchmark by giving the regen artificially less material to
+  // elaborate on.
+  let participantPreferences: ParticipantPreferences | undefined;
+  const session = await queryOne<{ participant_id: number }>(
+    `SELECT participant_id FROM experiment_sessions
+     WHERE personalized_summary_id = $1 OR generic_summary_id = $1
+     LIMIT 1`,
+    [summaryId],
+  );
+  let participantId: number | null = session?.participant_id ?? null;
+  if (participantId === null) {
+    const articleOwner = await queryOne<{ uploaded_by: number | null }>(
+      'SELECT uploaded_by FROM articles WHERE id = $1',
+      [existing.article_id],
+    );
+    participantId = articleOwner?.uploaded_by ?? null;
+  }
+  if (participantId !== null) {
+    const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
+    if (participant) {
+      const candidate: ParticipantPreferences = {
+        structurePreference: (participant.structure_preference as 'prose' | 'bullets' | 'mixed' | null) ?? undefined,
+        englishComfort: (participant.english_comfort as 'keep_english' | 'translate' | null) ?? undefined,
+        domain: participant.domain ?? undefined,
+        currentProject: participant.current_project ?? undefined,
+      };
+      if (candidate.structurePreference || candidate.englishComfort || candidate.domain || candidate.currentProject) {
+        participantPreferences = candidate;
+      }
+    }
+  }
+
   const evidenceLines: string[] = [];
   flagged.forEach((d, idx) => {
     const contexts = findRelevantContexts(d.sentence, structuredContent, article.raw_text);
@@ -449,7 +486,7 @@ export const regenerateSummaryWithEvidence = async (summaryId: number): Promise<
     evidenceLines.push(`${idx + 1}. Frase: "${d.sentence}"\n   Trecho-âncora: "${anchorText}"`);
   });
 
-  const basePrompt = buildSummarizationPrompt(profile, structuredContent, article.raw_text);
+  const basePrompt = buildSummarizationPrompt(profile, structuredContent, article.raw_text, participantPreferences);
 
   const evidencePrompt = `${basePrompt}
 
