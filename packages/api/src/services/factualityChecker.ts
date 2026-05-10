@@ -1,6 +1,12 @@
 import type { FactualityResult, ArticleStructure } from '@summarizer/shared';
+import { generateCompletion } from './groqClient.js';
 
 const NLI_SERVICE_URL = process.env.NLI_SERVICE_URL || 'http://127.0.0.1:5050';
+
+// Cap on LLM-judge calls per summary to bound latency and Groq usage.
+// In practice ~50% of sentences are NLI-neutral; capping at 10 keeps the
+// background re-check under ~30 seconds even for long summaries.
+const MAX_LLM_JUDGE_CALLS = 10;
 
 export const checkFactuality = async (
   summaryContent: string,
@@ -17,6 +23,11 @@ export const checkFactuality = async (
     const result = await verifySentence(sentence, articleStructure, rawText);
     results.push(result);
   }
+
+  // Phase C: refine NLI-neutral verdicts with an LLM-as-judge pass that operates
+  // cross-lingual against the original anchor paragraphs. NLI conflates
+  // legitimate paraphrase with unsupported claims; the LLM-judge separates them.
+  await refineNeutralWithLlmJudge(results, articleStructure, rawText);
 
   return { score: calculateFactualityScore(results), results };
 };
@@ -142,6 +153,105 @@ const calculateFactualityScore = (results: FactualityResult[]): number => {
   if (results.length === 0) return 1.0;
   const weights = { supported: 1, neutral: 0.5, contradicted: 0 };
   return results.reduce((sum, r) => sum + weights[r.label], 0) / results.length;
+};
+
+const LLM_JUDGE_PROMPT = `Você é um avaliador de factualidade em sumários de artigos científicos.
+
+Receberá um TRECHO-ÂNCORA do artigo original (em inglês) e uma FRASE do resumo (em português) que pode ou não estar suportada pelo trecho. O modelo NLI marcou esta frase como "neutra", o que pode significar paráfrase legítima OU afirmação sem suporte direto.
+
+Sua tarefa:
+1. Decomponha a frase em afirmações atômicas independentes (1 a 4 claims).
+2. Para cada claim, verifique se está suportado pelo trecho-âncora — paráfrases, simplificações e reformulações fiéis CONTAM como suportadas.
+3. Retorne um veredito agregado para a frase inteira:
+   - "supported": todas as claims atômicas estão suportadas (paráfrases/simplificações fiéis incluem-se aqui).
+   - "contradicted": ao menos uma claim contradiz o trecho-âncora.
+   - "neutral": ao menos uma claim não pode ser nem confirmada nem refutada pelo trecho.
+
+Retorne APENAS um JSON válido, sem markdown, sem explicação fora do JSON:
+{"label":"supported|contradicted|neutral","rationale":"justificativa em 1-2 linhas, em português"}
+
+TRECHO-ÂNCORA (artigo original, EN):
+"""
+{{anchor}}
+"""
+
+FRASE (resumo, PT):
+"""
+{{sentence}}
+"""
+
+JSON:`;
+
+const judgeWithLlm = async (
+  sentence: string,
+  anchor: string,
+): Promise<{ label: 'supported' | 'contradicted' | 'neutral'; rationale: string } | null> => {
+  if (!anchor.trim()) return null;
+
+  const prompt = LLM_JUDGE_PROMPT
+    .replace('{{anchor}}', anchor.slice(0, 1500))
+    .replace('{{sentence}}', sentence);
+
+  let raw: string;
+  try {
+    raw = await generateCompletion({
+      prompt,
+      temperature: 0.1,
+      maxTokens: 300,
+    });
+  } catch (error) {
+    console.warn('[llm-judge] generation failed', error);
+    return null;
+  }
+
+  const cleaned = raw.replace(/```(?:json)?/g, '').replace(/```/g, '').trim();
+  const first = cleaned.indexOf('{');
+  const last = cleaned.lastIndexOf('}');
+  if (first === -1 || last === -1 || last <= first) return null;
+
+  try {
+    const parsed = JSON.parse(cleaned.slice(first, last + 1));
+    const label = parsed.label;
+    if (label !== 'supported' && label !== 'contradicted' && label !== 'neutral') return null;
+    return {
+      label,
+      rationale: typeof parsed.rationale === 'string' ? parsed.rationale.slice(0, 500) : '',
+    };
+  } catch {
+    return null;
+  }
+};
+
+const refineNeutralWithLlmJudge = async (
+  results: FactualityResult[],
+  structure: ArticleStructure,
+  rawText: string,
+): Promise<void> => {
+  let calls = 0;
+  for (const r of results) {
+    if (calls >= MAX_LLM_JUDGE_CALLS) break;
+    if (r.label !== 'neutral') {
+      r.judgedBy = 'nli';
+      continue;
+    }
+
+    const anchors = findRelevantContexts(r.sentence, structure, rawText);
+    const anchor = anchors[0] || r.sourceSentence || '';
+    if (!anchor.trim()) {
+      r.judgedBy = 'nli';
+      continue;
+    }
+
+    const verdict = await judgeWithLlm(r.sentence, anchor);
+    calls++;
+    if (verdict) {
+      r.label = verdict.label;
+      r.rationale = verdict.rationale;
+      r.judgedBy = 'llm';
+    } else {
+      r.judgedBy = 'nli';
+    }
+  }
 };
 
 export const checkNliServiceHealth = async (): Promise<{ available: boolean; model?: string }> => {

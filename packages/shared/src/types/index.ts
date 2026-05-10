@@ -87,6 +87,11 @@ export interface FactualityResult {
   label: 'supported' | 'contradicted' | 'neutral';
   confidence: number;
   sourceSentence?: string;
+  // Set when the verdict was refined by the LLM-as-judge layer (Phase C).
+  // 'nli' means the verdict came from the NLI model alone; 'llm' means
+  // the LLM-as-judge re-evaluated and (potentially) revised it.
+  judgedBy?: 'nli' | 'llm';
+  rationale?: string;
 }
 
 // API request/response types
