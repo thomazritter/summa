@@ -312,9 +312,9 @@ managerRoutes.get('/participants', asyncHandler(async (_req: Request, res: Respo
 // PROFILE_LABELS imported from pAccuracyHelper
 
 managerRoutes.get('/summaries', asyncHandler(async (_req: Request, res: Response) => {
-  const summaryRows = await queryAll<ManagerSummaryRow>(`
+  const summaryRows = await queryAll<ManagerSummaryRow & { factuality_details: string | null }>(`
     SELECT s.id, s.article_id, a.title as article_title, s.profile_id, s.content,
-           s.factuality_score, s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score
+           s.factuality_score, s.factuality_details, s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score
     FROM summaries s
     JOIN articles a ON s.article_id = a.id
     ORDER BY s.id
@@ -332,6 +332,7 @@ managerRoutes.get('/summaries', asyncHandler(async (_req: Request, res: Response
       profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
       content: s.content,
       factualityScore: s.factuality_score,
+      factualityDetails: s.factuality_details ? JSON.parse(s.factuality_details) : null,
       rouge1: s.rouge_1,
       rouge2: s.rouge_2,
       rougeL: s.rouge_l,

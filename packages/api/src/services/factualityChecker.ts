@@ -96,7 +96,7 @@ const verifySentence = async (
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ premise: context, hypothesis: sentence }),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(60000),
       });
 
       if (!response.ok) {
