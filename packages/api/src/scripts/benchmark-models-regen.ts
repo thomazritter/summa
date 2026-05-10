@@ -24,8 +24,8 @@ import path from 'path';
 import { generateCompletion, AVAILABLE_MODELS } from '../services/groqClient.js';
 import { checkFactuality, findRelevantContexts } from '../services/factualityChecker.js';
 import { computeBertScore } from '../services/metricsService.js';
+import { buildSummarizationPrompt, type ParticipantPreferences } from '../services/promptBuilder.js';
 import type { ArticleStructure, FactualityResult, Profile } from '@summarizer/shared';
-import { buildV0 } from './promptVariants.js';
 
 const BASE_URL = process.env.BASE_URL || 'https://summa.thomazritter.com.br';
 const ADMIN_CODE = process.env.ADMIN_CODE || 'SUMMA-ADMIN';
@@ -92,6 +92,22 @@ const PROFILE_BY_ID: Record<number, Profile> = {
   102: { id: 102, name: 'senior', expertise: 'advanced', focus: 'results', depth: 'comprehensive', context: 'research' } as Profile,
 };
 
+// Synthetic participant preferences applied uniformly to all parents in this
+// benchmark. This matches the production regen path (which now looks up real
+// participant prefs via experiment_sessions or articles.uploaded_by) by
+// ensuring the regen prompt receives the same auxiliary fields the parent
+// summary's first-gen prompt did. Without this, the regen prompt would be
+// strictly smaller than the parent's, biasing the factuality measurement
+// upward by giving the model less material to elaborate on. We use a fixed
+// configuration to control for prefs across models — what we are isolating
+// here is the model's effect, not the prefs' effect.
+const REGEN_PREFERENCES: ParticipantPreferences = {
+  structurePreference: 'prose',
+  englishComfort: 'keep_english',
+  domain: 'software engineering',
+  currentProject: undefined,
+};
+
 async function fetchParents(): Promise<ManagerSummary[]> {
   const res = await fetch(`${BASE_URL}/api/manager/summaries`, { headers: { 'x-access-code': ADMIN_CODE } });
   if (!res.ok) throw new Error(`manager summaries failed: ${res.status}`);
@@ -119,7 +135,7 @@ function buildRegenPrompt(profile: Profile, structure: ArticleStructure, rawText
     evidenceLines.push(`${idx + 1}. Frase: "${d.sentence}"\n   Trecho-âncora: "${anchorText}"`);
   });
 
-  const basePrompt = buildV0(profile, structure, rawText);
+  const basePrompt = buildSummarizationPrompt(profile, structure, rawText, REGEN_PREFERENCES);
   return `${basePrompt}
 
 ATENÇÃO: O resumo anterior continha afirmações sinalizadas como NÃO APOIADAS pelo artigo original. Reescreva o resumo evitando essas afirmações. Para cada uma das frases listadas a seguir, ou (a) reformule-a de modo a alinhá-la ao trecho-âncora correspondente, ou (b) remova-a se o trecho-âncora não a sustenta de forma direta. Não introduza novas afirmações sem suporte explícito no artigo.
