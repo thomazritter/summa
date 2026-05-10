@@ -458,7 +458,13 @@ ATENÇÃO: O resumo anterior continha afirmações sinalizadas como NÃO APOIADA
 FRASES SINALIZADAS E TRECHOS-ÂNCORA:
 ${evidenceLines.join('\n')}`;
 
-  const effectiveModel = existing.model_id || getActiveModel();
+  // Regen uses a different model than first-gen by default. The empirical
+  // benchmark in §6.7 of the thesis shows Qwen 3 32B improves factuality on
+  // 5/5 flagged summaries (avg delta +0.143), versus llama-3.1-8b-instant
+  // (the first-gen default) which actually *worsens* factuality on the regen
+  // task (0/5 improved, avg delta -0.050). The override can be set per
+  // deployment via GROQ_REGEN_MODEL.
+  const effectiveModel = process.env.GROQ_REGEN_MODEL || 'qwen/qwen3-32b';
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
@@ -467,6 +473,8 @@ ${evidenceLines.join('\n')}`;
       maxTokens: getMaxOutputTokens(),
       model: effectiveModel,
     });
+    // Strip Qwen-style chain-of-thought blocks if present.
+    summaryContent = summaryContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   } catch (error) {
     if (error instanceof LLMError) {
       throw new SummarizationError(`Failed to regenerate summary with evidence: ${error.message}`);
