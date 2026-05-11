@@ -87,10 +87,12 @@ export interface FactualityResult {
   label: 'supported' | 'contradicted' | 'neutral';
   confidence: number;
   sourceSentence?: string;
-  // Set when the verdict was refined by the LLM-as-judge layer (Phase C).
-  // 'nli' means the verdict came from the NLI model alone; 'llm' means
-  // the LLM-as-judge re-evaluated and (potentially) revised it.
-  judgedBy?: 'nli' | 'llm';
+  // Records which layer produced the final verdict (Phase C).
+  // 'nli'           — NLI verdict, no LLM-judge pass attempted (non-neutral or cap exhausted).
+  // 'llm'           — LLM-as-judge re-evaluated and (potentially) revised the NLI verdict.
+  // 'cap_exhausted' — neutral that should have been judged by LLM but the per-summary
+  //                   call cap was reached; the NLI verdict is kept as-is.
+  judgedBy?: 'nli' | 'llm' | 'cap_exhausted';
   rationale?: string;
 }
 
@@ -138,7 +140,6 @@ export type TopicFamiliarity = 'none' | 'little' | 'moderate' | 'high';
 export type StructurePreference = 'prose' | 'bullets' | 'mixed';
 export type ReadingGoal = 'overview' | 'methodology' | 'results' | 'practical';
 export type PreferredLength = 'brief' | 'moderate' | 'detailed';
-export type EnglishComfort = 'keep_english' | 'translate';
 
 export interface Participant {
   id: number;
@@ -150,7 +151,6 @@ export interface Participant {
   structurePreference: StructurePreference | null;
   readingGoal: ReadingGoal | null;
   preferredLength: PreferredLength | null;
-  englishComfort: EnglishComfort | null;
   domain: string | null;
   currentProject: string | null;
   createdAt: string;
@@ -195,7 +195,6 @@ export interface RegisterParticipantRequest {
   structurePreference?: StructurePreference;
   readingGoal?: ReadingGoal;
   preferredLength?: PreferredLength;
-  englishComfort?: EnglishComfort;
 }
 
 export interface CreateExperimentSessionRequest {
@@ -253,7 +252,6 @@ export interface ProfileResponse {
     depth: DepthLevel;
     context: ReadingContext;
     structurePreference: StructurePreference | null;
-    englishComfort: EnglishComfort | null;
     domain: string | null;
     currentProject: string | null;
   };
@@ -268,7 +266,6 @@ export interface UpdateProfileRequest {
     depth?: DepthLevel;
     context?: ReadingContext;
     structurePreference?: StructurePreference;
-    englishComfort?: EnglishComfort;
     domain?: string;
     currentProject?: string;
   };

@@ -1,11 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import {
-  validateCode,
   validateMagicLink,
   createAccessCode,
-  createMagicLink,
-  countRecentMagicLinks,
+  createMagicLinkUnderQuota,
 } from '../services/authService.js';
 import { sendAccessCode, sendMagicLinkEmail } from '../services/emailService.js';
 import { requireManager } from '../middleware/auth.js';
@@ -45,21 +43,21 @@ authRoutes.post('/magic-link', asyncHandler(async (req: Request, res: Response) 
 
   const { email } = validation.data;
 
-  // Rate limit: 3 magic link requests per email per 15 minutes
+  // Rate limit: 3 magic link requests per email per 15 minutes.
+  // createMagicLinkUnderQuota enforces this atomically (advisory lock + count
+  // + insert in one transaction) so two concurrent requests cannot both
+  // observe count < quota and both insert.
   const WINDOW_MS = 15 * 60 * 1000;
   const MAX_REQUESTS = 3;
-  const recentCount = await countRecentMagicLinks(email, WINDOW_MS);
-  if (recentCount >= MAX_REQUESTS) {
-    // Still return 200 to prevent email enumeration
-    return res.json({ message: 'Se este email existir, enviaremos um link de acesso.' });
-  }
 
   try {
-    const { code } = await createMagicLink(email);
-    await sendMagicLinkEmail(email, code);
+    const result = await createMagicLinkUnderQuota(email, MAX_REQUESTS, WINDOW_MS);
+    if (result) {
+      await sendMagicLinkEmail(email, result.code);
+    }
   } catch {
     // Swallow errors to prevent email enumeration via timing attacks
-    // In dev, createMagicLink/sendMagicLinkEmail will log to console
+    // In dev, createMagicLinkUnderQuota / sendMagicLinkEmail will log to console
   }
 
   // Always return the same response regardless of outcome

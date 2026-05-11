@@ -48,6 +48,12 @@ CREATE TABLE IF NOT EXISTS summaries (
   rouge_2 REAL,
   rouge_l REAL,
   bert_score REAL,
+  -- Per-summary snapshot of profile dimensions + auxiliary preferences that
+  -- were active at generation time. Lets the system reproduce what produced
+  -- this row even after the user edits their profile later.
+  profile_snapshot JSONB,
+  -- Lifecycle of the async factuality job: 'pending' | 'complete' | 'failed' | 'skipped'.
+  factuality_status TEXT DEFAULT 'pending',
   generated_at TIMESTAMP DEFAULT NOW(),
   FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
   FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
@@ -109,7 +115,7 @@ CREATE TABLE IF NOT EXISTS participants (
   structure_preference TEXT CHECK (structure_preference IN ('prose', 'bullets', 'mixed')),
   reading_goal TEXT CHECK (reading_goal IN ('overview', 'methodology', 'results', 'practical')),
   preferred_length TEXT CHECK (preferred_length IN ('brief', 'moderate', 'detailed')),
-  english_comfort TEXT CHECK (english_comfort IN ('keep_english', 'translate')),
+  english_comfort TEXT, -- deprecated; column kept to preserve historical experiment data
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -162,12 +168,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_variant ON summaries(articl
 
 -- ─── Embedded Feedback Tables ──────────────────────────────────────
 
--- Likert ratings per summary (Trial page, Phase 1)
+-- Likert ratings per summary.
+--   source='experiment': session_id and ab_label are required (Trial page).
+--   source='product':    participant_id is required (Summary view in product mode).
 CREATE TABLE IF NOT EXISTS summary_ratings (
   id SERIAL PRIMARY KEY,
-  session_id INTEGER NOT NULL,
+  session_id INTEGER,
   summary_id INTEGER NOT NULL,
-  ab_label TEXT NOT NULL CHECK (ab_label IN ('A', 'B')),
+  participant_id INTEGER,
+  ab_label TEXT CHECK (ab_label IN ('A', 'B')),
+  source TEXT DEFAULT 'experiment',
   utilidade INTEGER NOT NULL CHECK (utilidade BETWEEN 1 AND 5),
   clareza INTEGER NOT NULL CHECK (clareza BETWEEN 1 AND 5),
   adequacao_perfil INTEGER NOT NULL CHECK (adequacao_perfil BETWEEN 1 AND 5),
@@ -175,9 +185,11 @@ CREATE TABLE IF NOT EXISTS summary_ratings (
   comment TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   FOREIGN KEY (session_id) REFERENCES experiment_sessions(id) ON DELETE CASCADE,
-  FOREIGN KEY (summary_id) REFERENCES summaries(id) ON DELETE CASCADE
+  FOREIGN KEY (summary_id) REFERENCES summaries(id) ON DELETE CASCADE,
+  FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_summary_ratings_session ON summary_ratings(session_id);
+CREATE INDEX IF NOT EXISTS idx_summary_ratings_participant ON summary_ratings(participant_id) WHERE source = 'product';
 
 -- Post-test responses (replaces Google Forms)
 CREATE TABLE IF NOT EXISTS post_test_responses (

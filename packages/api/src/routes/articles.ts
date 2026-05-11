@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { queryOne, queryAll } from '../db/connection.js';
-import { processPDF, PDFProcessingError } from '../services/pdfProcessor.js';
+import { extractRawText, structureRawText, PDFProcessingError } from '../services/pdfProcessor.js';
 import { validatePreStructuring, validatePostStructuring } from '../services/articleValidator.js';
 import { parseId, safeJsonParse, MAX_PDF_SIZE } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
@@ -20,9 +20,11 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
     return res.status(400).json({ error: 'No PDF file provided' });
   }
 
-  const { rawText, structuredContent, metadata } = await processPDF(req.file.buffer);
+  // Step 1: Cheap extraction via pdf-parse (no LLM call yet).
+  const { rawText, metadata } = await extractRawText(req.file.buffer);
 
-  // Phase 1: Pre-structuring validation (blocking)
+  // Step 2: Pre-structuring validation (blocking) — runs BEFORE the LLM call
+  // so invalid documents are rejected without wasting an API call.
   const preValidation = validatePreStructuring(rawText);
   if (!preValidation.valid) {
     return res.status(422).json({
@@ -30,6 +32,9 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
       validation: { errors: preValidation.errors },
     });
   }
+
+  // Step 3: LLM structuring (only after validation passes).
+  const structuredContent = await structureRawText(rawText);
 
   // Resolve uploaded_by from access code if present
   const uploadedBy = req.accessCode?.participantId ?? null;

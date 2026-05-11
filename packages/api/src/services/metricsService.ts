@@ -81,7 +81,7 @@ function lcsLength(a: string[], b: string[]): number {
   return prev[n];
 }
 
-function rougeL(summary: string, reference: string): number {
+function computeRougeLScore(summary: string, reference: string): number {
   const sumTokens = tokenize(summary);
   const refTokens = tokenize(reference);
 
@@ -115,7 +115,7 @@ export function computeRouge(summary: string, reference: string): RougeScores {
   return {
     rouge1: rougeN(summary, reference, 1),
     rouge2: rougeN(summary, reference, 2),
-    rougeL: rougeL(summary, reference),
+    rougeL: computeRougeLScore(summary, reference),
   };
 }
 
@@ -196,7 +196,7 @@ export function computePAccuracy(
       const contentA = byProfile.get(profiles[i])!;
       const contentB = byProfile.get(profiles[j])!;
 
-      const score = rougeL(contentA, contentB);
+      const score = computeRougeLScore(contentA, contentB);
       pairwiseDetails.push({
         profileA: profiles[i],
         profileB: profiles[j],

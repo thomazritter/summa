@@ -6,6 +6,7 @@ import { ModelSwitcher } from '../components/ModelSwitcher';
 import { FactualityHighlightedMarkdown } from '../components/FactualityHighlightedMarkdown';
 import type { FactualitySentence } from '../components/FactualityHighlightedMarkdown';
 import { MetricsPanel } from '../components/MetricsPanel';
+import { SummaryRatingPanel } from '../components/SummaryRatingPanel';
 import type { SummaryResult } from '../api/client';
 
 interface RegeneratedSummary {
@@ -299,6 +300,11 @@ export function SummaryView() {
               factualityDetails={regenerated.factualityDetails}
             />
           </div>
+        )}
+
+        {/* Rating panel: collects Likert feedback after reading. */}
+        {displaySummary?.id && (
+          <SummaryRatingPanel summaryId={displaySummary.id} />
         )}
 
         {/* Model switcher */}

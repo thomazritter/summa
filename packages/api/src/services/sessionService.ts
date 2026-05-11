@@ -9,7 +9,7 @@
 import { queryOne, queryAll, execute } from '../db/connection.js';
 import { generateGenericSummary, generatePersonalizedSummary } from './summarizationService.js';
 import type { ProfileDimensions } from './summarizationService.js';
-import { GENERIC_PROFILE_ID } from '../types/rows.js';
+import { GENERIC_PROFILE_IDS } from '../types/rows.js';
 import type { ParticipantRow, SessionRow } from '../types/rows.js';
 
 export interface ExperienceConfig {
@@ -81,7 +81,52 @@ export function computeProfileSources(participant: ParticipantRow): Record<strin
     depth: sourceLabel(participant.override_depth),
     context: sourceLabel(participant.override_context),
     structurePreference: 'questionnaire',
-    englishComfort: 'questionnaire',
+  };
+}
+
+/**
+ * Shape the participant row into the JSON envelope returned by the GET /profile
+ * endpoints (uses `null` instead of `undefined` for unset fields so the
+ * frontend can treat absence consistently).
+ */
+export function serializeProfileForApi(participant: ParticipantRow) {
+  return {
+    ...computeProfileDimensions(participant),
+    structurePreference: participant.structure_preference || null,
+    domain: participant.domain || null,
+    currentProject: participant.current_project || null,
+  };
+}
+
+export interface PersonalizationContext {
+  dimensions: ProfileDimensions;
+  preferences: import('./promptBuilder.js').ParticipantPreferences | undefined;
+}
+
+/**
+ * Build the personalization payload that every summarization caller needs:
+ * the four profile dimensions (with manual-override fallback) plus the
+ * auxiliary participant preferences. Returns `preferences: undefined` when
+ * none of structure/english/domain/currentProject is set, so callers can
+ * pass it straight through to generatePersonalizedSummary.
+ *
+ * Centralises the casts of participant.* fields to their typed unions and
+ * the "hasAnyPreference" check so the three former call sites
+ * (sessionService.createExperimentSession, routes/user.ts, routes/experiment.ts)
+ * stay in lockstep when new dimensions/preferences are added.
+ */
+export function buildPersonalizationContext(participant: ParticipantRow): PersonalizationContext {
+  const preferences = {
+    structurePreference: (participant.structure_preference as 'prose' | 'bullets' | 'mixed' | null) ?? undefined,
+    domain: participant.domain ?? undefined,
+    currentProject: participant.current_project ?? undefined,
+  };
+  const hasAny = preferences.structurePreference
+    || preferences.domain
+    || preferences.currentProject;
+  return {
+    dimensions: computeProfileDimensions(participant),
+    preferences: hasAny ? preferences : undefined,
   };
 }
 
@@ -139,42 +184,23 @@ export async function createExperimentSession(
     throw new SessionCreationError('Article not found', 404);
   }
 
-  // Generic summary: one per article+englishComfort combination to preserve A/B blinding.
-  // If participant prefers translated terms, both summaries must use translated terms.
-  const englishComfort = (participant.english_comfort as 'keep_english' | 'translate') || 'keep_english';
-  const genericVariantId = englishComfort === 'translate' ? 98 : GENERIC_PROFILE_ID; // 98=translate, 99=keep_english
-
+  // Generic summary: one per article (no translation variants).
   let genericSummary = await queryOne<{ id: number }>(
     'SELECT id FROM summaries WHERE article_id = $1 AND profile_id = $2',
-    [articleId, genericVariantId],
+    [articleId, GENERIC_PROFILE_IDS.keepEnglish],
   );
   if (!genericSummary) {
-    const generated = await generateGenericSummary(articleId, englishComfort, genericVariantId);
+    const generated = await generateGenericSummary(articleId);
     genericSummary = { id: generated.id };
   }
 
-  // Build profile dimensions using the shared computation function.
-  // Applies: manual overrides > questionnaire answers > level-derived defaults.
-  const dimensions = computeProfileDimensions(participant);
-
-  // Remaining preferences that don't map to profile dimensions
-  const participantPreferences = {
-    structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
-    englishComfort: participant.english_comfort as 'keep_english' | 'translate' | undefined,
-    domain: participant.domain || undefined,
-    currentProject: participant.current_project || undefined,
-  };
-
-  const hasPreferences = participantPreferences.structurePreference
-    || participantPreferences.englishComfort
-    || participantPreferences.domain
-    || participantPreferences.currentProject;
+  const { dimensions, preferences } = buildPersonalizationContext(participant);
 
   const personalizedSummary = await generatePersonalizedSummary(
     articleId,
     config.profileId,
     dimensions,
-    hasPreferences ? participantPreferences : undefined,
+    preferences,
   );
 
   // Randomize A/B order

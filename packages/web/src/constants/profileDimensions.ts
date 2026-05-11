@@ -63,12 +63,4 @@ export const FORMAT_DIMENSIONS: DimensionConfig[] = [
       { value: 'mixed', label: 'Misto' },
     ],
   },
-  {
-    key: 'english_comfort',
-    label: 'Termos em inglês',
-    options: [
-      { value: 'keep_english', label: 'Manter em inglês' },
-      { value: 'translate', label: 'Traduzir' },
-    ],
-  },
 ];

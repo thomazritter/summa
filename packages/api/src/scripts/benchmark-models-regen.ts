@@ -66,8 +66,8 @@ interface BenchRow {
   parent_summary_id: number;
   article_id: number;
   parent_factuality: number;
-  regen_factuality: number;
-  delta: number;
+  regen_factuality: number | null;
+  delta: number | null;
   pct_supported: number;
   pct_neutral: number;
   pct_contradicted: number;
@@ -103,7 +103,6 @@ const PROFILE_BY_ID: Record<number, Profile> = {
 // here is the model's effect, not the prefs' effect.
 const REGEN_PREFERENCES: ParticipantPreferences = {
   structurePreference: 'prose',
-  englishComfort: 'keep_english',
   domain: 'software engineering',
   currentProject: undefined,
 };
@@ -176,11 +175,16 @@ async function runOne(parent: ParentInfo, modelId: string): Promise<BenchRow> {
     bert = await computeBertScore(summary, reference).catch(() => null);
   }
 
+  // If the regen has no verifiable claims, factuality is "not measured" — log it
+  // and emit NaN so the row is excluded from aggregate statistics downstream.
+  const regenFactuality = fact.score;
+  const delta = regenFactuality === null ? null : regenFactuality - parent.parentFactuality;
+
   return {
     model: modelId, parent_summary_id: parent.summaryId, article_id: parent.articleId,
     parent_factuality: Number(parent.parentFactuality.toFixed(4)),
-    regen_factuality: Number(fact.score.toFixed(4)),
-    delta: Number((fact.score - parent.parentFactuality).toFixed(4)),
+    regen_factuality: regenFactuality === null ? null : Number(regenFactuality.toFixed(4)),
+    delta: delta === null ? null : Number(delta.toFixed(4)),
     pct_supported: Number((100 * supported / total).toFixed(1)),
     pct_neutral: Number((100 * neutral / total).toFixed(1)),
     pct_contradicted: Number((100 * contradicted / total).toFixed(1)),
@@ -209,6 +213,10 @@ async function main() {
     const flagged = fact.results.filter(r => r.label !== 'supported');
     if (flagged.length === 0) {
       console.log(' (no flagged sentences after recompute, skipping)');
+      continue;
+    }
+    if (fact.score === null) {
+      console.log(' (no verifiable claims after recompute, skipping)');
       continue;
     }
     parents.push({
@@ -254,22 +262,26 @@ async function main() {
       if (row.error) {
         console.log(` ERR: ${row.error.slice(0, 50)}`);
       } else {
-        const arrow = row.delta > 0.001 ? '↑' : row.delta < -0.001 ? '↓' : '=';
-        console.log(` ${row.parent_factuality.toFixed(2)}→${row.regen_factuality.toFixed(2)} ${arrow}${row.delta.toFixed(3)} bert=${row.bert_score ?? '?'} (${row.duration_ms}ms)`);
+        if (row.regen_factuality === null || row.delta === null) {
+          console.log(` ${row.parent_factuality.toFixed(2)}→n/a (no verifiable claims) bert=${row.bert_score ?? '?'} (${row.duration_ms}ms)`);
+        } else {
+          const arrow = row.delta > 0.001 ? '↑' : row.delta < -0.001 ? '↓' : '=';
+          console.log(` ${row.parent_factuality.toFixed(2)}→${row.regen_factuality.toFixed(2)} ${arrow}${row.delta.toFixed(3)} bert=${row.bert_score ?? '?'} (${row.duration_ms}ms)`);
+        }
       }
     }
   }
 
   console.log(`\n=== Aggregate per model (${parents.length} parents each) ===`);
   for (const m of MODELS) {
-    const rows = all.filter(r => r.model === m && !r.error);
+    const rows = all.filter(r => r.model === m && !r.error && r.regen_factuality !== null && r.delta !== null);
     if (rows.length === 0) {
       console.log(`  ${m}: no successful runs`);
       continue;
     }
-    const facts = rows.map(r => r.regen_factuality);
-    const deltas = rows.map(r => r.delta);
-    const improved = rows.filter(r => r.delta > 0.001).length;
+    const facts = rows.map(r => r.regen_factuality as number);
+    const deltas = rows.map(r => r.delta as number);
+    const improved = rows.filter(r => (r.delta as number) > 0.001).length;
     const factMean = mean(facts);
     const factStd = stddev(facts);
     const deltaMean = mean(deltas);

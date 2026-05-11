@@ -179,6 +179,28 @@ export const managerApi = {
     }
     return fetch(`${API_BASE}/manager/export/${type}`, { headers });
   },
+
+  getProductRatings: () => apiRequest<{
+    total: number;
+    means: {
+      utilidade: number | null;
+      clareza: number | null;
+      adequacao_perfil: number | null;
+      factualidade_percebida: number | null;
+    };
+    ratings: Array<{
+      id: number;
+      summaryId: number;
+      participantId: number;
+      participantName: string | null;
+      utilidade: number;
+      clareza: number;
+      adequacaoPerfil: number;
+      factualidadePercebida: number;
+      comment: string | null;
+      createdAt: string;
+    }>;
+  }>('/manager/product-ratings'),
 };
 
 export interface ModelOption {
@@ -246,6 +268,42 @@ export const userApi = {
     apiRequest<{ success: boolean }>(`/user/summaries/${summaryId}`, {
       method: 'DELETE',
     }),
+
+  rateSummary: (
+    summaryId: number,
+    data: {
+      utilidade: number;
+      clareza: number;
+      adequacao_perfil: number;
+      factualidade_percebida: number;
+      comment?: string;
+    },
+  ) =>
+    apiRequest<{
+      id: number;
+      createdAt: string;
+      utilidade: number;
+      clareza: number;
+      adequacao_perfil: number;
+      factualidade_percebida: number;
+      comment?: string;
+    }>(`/user/summaries/${summaryId}/rate`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getRating: (summaryId: number) =>
+    apiRequest<{
+      rating: {
+        id: number;
+        utilidade: number;
+        clareza: number;
+        adequacao_perfil: number;
+        factualidade_percebida: number;
+        comment: string | null;
+        createdAt: string;
+      } | null;
+    }>(`/user/summaries/${summaryId}/rating`),
 };
 
 export const experimentApi = {
@@ -278,7 +336,6 @@ export const experimentApi = {
     structurePreference?: string;
     readingGoal?: string;
     preferredLength?: string;
-    englishComfort?: string;
     profileSource?: string;
   }) =>
     apiRequest<{ id: number; name: string; experienceLevel: string }>('/experiment/participants', {
@@ -291,7 +348,6 @@ export const experimentApi = {
     experienceLevel: string;
     dimensions: Record<string, string>;
     structurePreference: string;
-    englishComfort: string;
     domain?: string;
   }) =>
     apiRequest<{ id: number; name: string; experienceLevel: string }>('/experiment/participants/from-cv', {

@@ -6,9 +6,28 @@
  */
 
 // ─── Shared Constants ────────────────────────────────────────────────
+//
+// The `profiles` table is seeded with two flavours of generic summaries
+// (with vs. without translation) and three persona templates that back the
+// `experience_level` slots. Everything that filters or branches on these
+// IDs should reference the constants below instead of bare numbers.
 
-/** Profile ID used for generic (non-personalized) summaries. */
-export const GENERIC_PROFILE_ID = 99;
+/** Profile ID used for the generic (control) summaries. */
+export const GENERIC_PROFILE_IDS = {
+  keepEnglish: 99,
+} as const;
+/** All generic profile IDs as an array. Profile 98 (legacy translated variant)
+ *  is kept in historical rows but no new summaries are generated under it. */
+export const ALL_GENERIC_PROFILE_IDS: readonly number[] = [98, 99];
+/** @deprecated Use GENERIC_PROFILE_IDS.keepEnglish instead. */
+export const GENERIC_PROFILE_ID = GENERIC_PROFILE_IDS.keepEnglish;
+
+/** Profile IDs for the persona templates that back each experience level. */
+export const PARTICIPANT_PROFILE_IDS = {
+  junior: 100,
+  pleno: 101,
+  senior: 102,
+} as const;
 
 // ─── Row Interfaces ──────────────────────────────────────────────────
 
@@ -22,7 +41,6 @@ export interface ParticipantRow {
   structure_preference: string | null;
   reading_goal: string | null;
   preferred_length: string | null;
-  english_comfort: string | null;
   override_expertise: string | null;
   override_focus: string | null;
   override_depth: string | null;
@@ -85,6 +103,8 @@ export interface SummaryRow {
   factuality_details: string | null;
   model_id: string | null;
   parent_summary_id: number | null;
+  profile_snapshot: string | null;
+  factuality_status: 'pending' | 'complete' | 'failed' | 'skipped' | null;
   generated_at: string;
 }
 
@@ -186,7 +206,6 @@ export interface ExportParticipantRow {
   structure_preference: string | null;
   reading_goal: string | null;
   preferred_length: string | null;
-  english_comfort: string | null;
   created_at: string;
 }
 

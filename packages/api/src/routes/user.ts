@@ -7,12 +7,11 @@
 
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { queryAll, queryOne } from '../db/connection.js';
-import { parseId, safeJsonParse } from '../utils/validation.js';
+import { queryAll, queryOne, execute } from '../db/connection.js';
+import { parseId, safeJsonParse, zodErrorMessage } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { generatePersonalizedSummary, SummarizationError, NotFoundError } from '../services/summarizationService.js';
-import type { ProfileDimensions } from '../services/summarizationService.js';
-import { computeProfileDimensions } from '../services/sessionService.js';
+import { buildPersonalizationContext } from '../services/sessionService.js';
 import { EXPERIENCE_CONFIG } from '../services/sessionService.js';
 import { AVAILABLE_MODELS } from '../services/groqClient.js';
 import type { ParticipantRow } from '../types/rows.js';
@@ -102,7 +101,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
   const articleRows = await queryAll<UserArticleRow>(
     `SELECT DISTINCT a.id, a.title, a.authors, a.created_at
      FROM articles a
-     LEFT JOIN summaries s ON s.article_id = a.id AND s.profile_id NOT IN (99, 98)
+     LEFT JOIN summaries s ON s.article_id = a.id AND s.profile_id NOT IN (98, 99)
      WHERE a.uploaded_by = $1
         OR s.id IN (
           SELECT personalized_summary_id FROM experiment_sessions WHERE participant_id = $1
@@ -121,14 +120,17 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
       rouge_l: number | null;
       bert_score: number | null;
     }>(
+      // Prefer the per-summary snapshot (always present on summaries created
+      // after the C1/M3 fix). Fall back to the experiment_sessions snapshot
+      // for historical rows generated before that column existed.
       `SELECT DISTINCT s.id, s.article_id, s.content, s.factuality_score, s.factuality_details,
               s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score,
               s.model_id, s.generated_at,
-              es.profile_snapshot
+              COALESCE(s.profile_snapshot, es.profile_snapshot) AS profile_snapshot
        FROM summaries s
        LEFT JOIN experiment_sessions es ON es.personalized_summary_id = s.id
        WHERE s.article_id = $1
-         AND s.profile_id NOT IN (99, 98)
+         AND s.profile_id NOT IN (98, 99)
          AND (
            s.id IN (
              SELECT personalized_summary_id FROM experiment_sessions WHERE participant_id = $2
@@ -162,7 +164,13 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
         : null,
       summaries: summaryRows.map((s) => {
         const modelInfo = AVAILABLE_MODELS.find((m) => m.id === s.model_id);
-        const profile = s.profile_snapshot ? JSON.parse(s.profile_snapshot) : null;
+        // Accept both snapshot shapes:
+        //   new (per-summary): { dimensions: {...}, preferences: {...} }
+        //   old (per-session):  { expertise, focus, depth, context }
+        const snapshot = s.profile_snapshot ? safeJsonParse<Record<string, unknown>>(s.profile_snapshot) : null;
+        const dims = (snapshot && typeof snapshot === 'object' && 'dimensions' in snapshot
+          ? (snapshot.dimensions as Record<string, string>)
+          : (snapshot as Record<string, string> | null)) ?? null;
         const factualityDetails = s.factuality_details ? safeJsonParse(s.factuality_details) : null;
         return {
           id: s.id,
@@ -180,11 +188,11 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
           bertScore: s.bert_score,
           modelId: s.model_id,
           modelLabel: modelInfo?.name || s.model_id || 'Desconhecido',
-          profile: profile ? {
-            expertise: profile.expertise,
-            focus: profile.focus,
-            depth: profile.depth,
-            context: profile.context,
+          profile: dims ? {
+            expertise: dims.expertise,
+            focus: dims.focus,
+            depth: dims.depth,
+            context: dims.context,
           } : null,
           generatedAt: s.generated_at,
         };
@@ -205,8 +213,7 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
 
   const validation = summarizeSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
-    return res.status(400).json({ error: `Dados inválidos: ${messages}` });
+    return res.status(400).json({ error: `Dados inválidos: ${zodErrorMessage(validation.error)}` });
   }
 
   const { articleId, modelId } = validation.data;
@@ -230,19 +237,7 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
     return res.status(404).json({ error: 'Participante nao encontrado' });
   }
 
-  const dimensions: ProfileDimensions = computeProfileDimensions(participant);
-
-  // Build participant preferences
-  const participantPreferences = {
-    structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
-    englishComfort: participant.english_comfort as 'keep_english' | 'translate' | undefined,
-    domain: participant.domain || undefined,
-    currentProject: participant.current_project || undefined,
-  };
-  const hasPreferences = participantPreferences.structurePreference
-    || participantPreferences.englishComfort
-    || participantPreferences.domain
-    || participantPreferences.currentProject;
+  const { dimensions, preferences } = buildPersonalizationContext(participant);
 
   // Determine the base profile ID from experience config
   const config = EXPERIENCE_CONFIG[participant.experience_level];
@@ -253,7 +248,7 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
       articleId,
       baseProfileId,
       dimensions,
-      hasPreferences ? participantPreferences : undefined,
+      preferences,
       modelId,
     );
 
@@ -300,6 +295,129 @@ userRoutes.delete('/summaries/:id', asyncHandler(async (req: Request, res: Respo
     return res.status(404).json({ error: 'Resumo nao encontrado ou voce nao tem permissao para deleta-lo' });
   }
 
-  await queryOne('DELETE FROM summaries WHERE id = $1', [summaryId]);
+  await execute('DELETE FROM summaries WHERE id = $1', [summaryId]);
   res.json({ success: true });
+}));
+
+// ─── POST /api/user/summaries/:id/rate ──────────────────────────────
+//
+// Submits a Likert rating (1–5 across four dimensions, plus an optional
+// free-text comment) for a summary the authenticated participant owns.
+// One rating per (participant, summary) pair; subsequent attempts return 409.
+
+const rateSchema = z.object({
+  utilidade: z.number().int().min(1).max(5),
+  clareza: z.number().int().min(1).max(5),
+  adequacao_perfil: z.number().int().min(1).max(5),
+  factualidade_percebida: z.number().int().min(1).max(5),
+  comment: z.string().max(2000).optional(),
+});
+
+userRoutes.post('/summaries/:id/rate', asyncHandler(async (req: Request, res: Response) => {
+  const participantId = req.accessCode?.participantId;
+  if (!participantId) {
+    return res.status(400).json({ error: 'Perfil de participante nao configurado' });
+  }
+
+  const summaryId = parseId(req.params.id);
+  if (summaryId === null) {
+    return res.status(400).json({ error: 'ID de resumo invalido' });
+  }
+
+  const validation = rateSchema.safeParse(req.body);
+  if (!validation.success) {
+    return res.status(400).json({
+      error: 'Dados de avaliacao invalidos',
+      details: zodErrorMessage(validation.error, true),
+    });
+  }
+
+  // Verify ownership: summary must belong to an article uploaded by this participant.
+  const summary = await queryOne<{ id: number }>(
+    `SELECT s.id FROM summaries s
+     JOIN articles a ON a.id = s.article_id
+     WHERE s.id = $1 AND a.uploaded_by = $2`,
+    [summaryId, participantId],
+  );
+  if (!summary) {
+    return res.status(404).json({ error: 'Resumo nao encontrado' });
+  }
+
+  try {
+    const inserted = await queryOne<{ id: number; created_at: string }>(
+      `INSERT INTO summary_ratings
+         (summary_id, participant_id, source, utilidade, clareza, adequacao_perfil, factualidade_percebida, comment)
+       VALUES ($1, $2, 'product', $3, $4, $5, $6, $7)
+       RETURNING id, created_at`,
+      [
+        summaryId,
+        participantId,
+        validation.data.utilidade,
+        validation.data.clareza,
+        validation.data.adequacao_perfil,
+        validation.data.factualidade_percebida,
+        validation.data.comment ?? null,
+      ],
+    );
+    res.status(201).json({
+      id: inserted?.id,
+      createdAt: inserted?.created_at,
+      ...validation.data,
+    });
+  } catch (error) {
+    // Unique constraint on (participant_id, summary_id) WHERE source='product'.
+    if (error instanceof Error && /idx_unique_product_rating|duplicate key/.test(error.message)) {
+      return res.status(409).json({ error: 'Voce ja avaliou este resumo' });
+    }
+    throw error;
+  }
+}));
+
+// ─── GET /api/user/summaries/:id/rating ─────────────────────────────
+//
+// Returns the rating this participant gave for the summary, or null if
+// they haven't rated it yet. Used by the SummaryView to hydrate the form.
+
+userRoutes.get('/summaries/:id/rating', asyncHandler(async (req: Request, res: Response) => {
+  const participantId = req.accessCode?.participantId;
+  if (!participantId) {
+    return res.status(400).json({ error: 'Perfil de participante nao configurado' });
+  }
+
+  const summaryId = parseId(req.params.id);
+  if (summaryId === null) {
+    return res.status(400).json({ error: 'ID de resumo invalido' });
+  }
+
+  const row = await queryOne<{
+    id: number;
+    utilidade: number;
+    clareza: number;
+    adequacao_perfil: number;
+    factualidade_percebida: number;
+    comment: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, utilidade, clareza, adequacao_perfil, factualidade_percebida, comment, created_at
+     FROM summary_ratings
+     WHERE summary_id = $1 AND participant_id = $2 AND source = 'product'
+     LIMIT 1`,
+    [summaryId, participantId],
+  );
+
+  if (!row) {
+    return res.json({ rating: null });
+  }
+
+  res.json({
+    rating: {
+      id: row.id,
+      utilidade: row.utilidade,
+      clareza: row.clareza,
+      adequacao_perfil: row.adequacao_perfil,
+      factualidade_percebida: row.factualidade_percebida,
+      comment: row.comment,
+      createdAt: row.created_at,
+    },
+  });
 }));

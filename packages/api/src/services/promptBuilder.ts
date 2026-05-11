@@ -2,7 +2,6 @@ import type { Profile, ArticleStructure } from '@summarizer/shared';
 
 export interface ParticipantPreferences {
   structurePreference?: 'prose' | 'bullets' | 'mixed';
-  englishComfort?: 'keep_english' | 'translate';
   domain?: string;
   currentProject?: string;
 }
@@ -17,31 +16,22 @@ export const buildSummarizationPrompt = (
   const contentSection = buildContentSection(articleContent, rawText);
   const instructions = buildInstructions(profile, participantPreferences);
 
-  // XML-tagged structure (variant V2 in §6.6 of the thesis): improves the
-  // factuality score by ~6.4 percentage points over the previous prose-block
-  // layout by giving the model unambiguous boundaries between role,
-  // profile-derived directives and source content.
-  return `<role>
-${systemContext}
-</role>
+  // Three-block prose layout (variant V0 in the prompt-variant benchmark of
+  // §6.6 of the thesis): a single continuous instruction without structural
+  // markup. Empirically led to the highest factuality score across the
+  // tested variants and is the simplest design — no dependency on XML tags,
+  // no decomposition into multiple LLM calls.
+  return `${systemContext}
 
-<profile>
-<expertise>${profile.expertise}</expertise>
-<focus>${profile.focus}</focus>
-<depth>${profile.depth}</depth>
-<context>${profile.context}</context>
-<directives>
+Considere as seguintes diretivas derivadas do perfil do leitor:
+
 ${instructions}
-</directives>
-</profile>
 
-<article>
+A seguir, o artigo a ser resumido:
+
 ${contentSection}
-</article>
 
-<task>
-Gere o resumo personalizado conforme as diretivas em <profile>, ancorando todas as afirmações no conteúdo de <article>. Responda apenas com o texto do resumo, sem repetir as tags.
-</task>`;
+Gere o resumo personalizado conforme as diretivas acima, ancorando todas as afirmações no conteúdo do artigo. Responda apenas com o texto do resumo.`;
 };
 
 const buildSystemContext = (profile: Profile): string => {
@@ -98,15 +88,6 @@ const buildInstructions = (profile: Profile, participantPreferences?: Participan
     parts.push(structureInstructions[participantPreferences.structurePreference]);
   }
 
-  // English comfort instructions (from participant, not profile)
-  if (participantPreferences?.englishComfort) {
-    const englishInstructions: Record<NonNullable<ParticipantPreferences['englishComfort']>, string> = {
-      keep_english: 'Mantenha termos técnicos em inglês quando forem amplamente usados na área (ex: code review, bug, commit, framework). Não traduza terminologia consagrada.',
-      translate: 'Traduza todos os termos técnicos para português sempre que possível. Se não houver tradução consolidada, apresente o termo em português seguido do original em inglês entre parênteses na primeira ocorrência.',
-    };
-    parts.push(englishInstructions[participantPreferences.englishComfort]);
-  }
-
   if (participantPreferences?.domain) {
     parts.push(`Domínio profissional do leitor: ${participantPreferences.domain}. Quando possível, relacione os conceitos e resultados do artigo com este domínio.`);
   }
@@ -160,22 +141,15 @@ export const getMaxOutputTokens = (): number => {
 /**
  * Build a generic summarization prompt with no profile parameterization.
  * Used as the control condition in the experiment.
- * Accepts englishComfort to match participant's language preference,
- * preserving A/B blinding (otherwise the participant can tell which is personalized).
  */
 export const buildGenericSummarizationPrompt = (
   articleContent: ArticleStructure,
   rawText: string,
-  englishComfort?: 'keep_english' | 'translate'
 ): string => {
   const contentSection = buildContentSection(articleContent, rawText);
 
-  const englishInstruction = englishComfort === 'translate'
-    ? '\n\nTraduza todos os termos técnicos para português sempre que possível. Se não houver tradução consolidada, apresente o termo em português seguido do original em inglês entre parênteses na primeira ocorrência.'
-    : '\n\nMantenha termos técnicos em inglês quando forem amplamente usados na área (ex: code review, bug, commit, framework). Não traduza terminologia consagrada.';
-
   return `<role>
-Você é um assistente especializado em resumir artigos científicos. Resuma o seguinte artigo em português. Produza um resumo objetivo de 3-4 parágrafos cobrindo o que o artigo faz, como faz e o que encontrou. Não adapte o texto para nenhum público específico.${englishInstruction}
+Você é um assistente especializado em resumir artigos científicos. Resuma o seguinte artigo em português. Produza um resumo objetivo de 3-4 parágrafos cobrindo o que o artigo faz, como faz e o que encontrou. Não adapte o texto para nenhum público específico.
 </role>
 
 <article>

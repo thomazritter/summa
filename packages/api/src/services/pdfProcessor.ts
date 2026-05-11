@@ -10,29 +10,25 @@ export class PDFProcessingError extends Error {
   }
 }
 
-export interface PDFProcessingResult {
+export interface PDFExtractionResult {
   rawText: string;
-  structuredContent: ArticleStructure;
   metadata: { title?: string; authors?: string };
 }
 
+export interface PDFProcessingResult extends PDFExtractionResult {
+  structuredContent: ArticleStructure;
+}
+
 /**
- * Process a PDF buffer and extract structured text.
- * Uses pdf-parse to extract raw text, then tries LLM-based structuring
- * with regex-based fallback.
+ * Extract raw text + metadata from a PDF buffer (cheap, no LLM call).
+ * Run this first so the caller can validate the document before paying
+ * for the LLM structuring step.
  */
-export const processPDF = async (buffer: Buffer): Promise<PDFProcessingResult> => {
+export const extractRawText = async (buffer: Buffer): Promise<PDFExtractionResult> => {
   if (buffer.length > MAX_PDF_SIZE) {
     throw new PDFProcessingError(`PDF exceeds maximum size of ${MAX_PDF_SIZE / 1024 / 1024}MB`);
   }
 
-  return extractViaPdfParse(buffer);
-};
-
-/**
- * Extract text using pdf-parse, then structure via LLM with regex fallback.
- */
-const extractViaPdfParse = async (buffer: Buffer): Promise<PDFProcessingResult> => {
   let data;
   try {
     data = await pdf(buffer, { max: 100 });
@@ -41,22 +37,37 @@ const extractViaPdfParse = async (buffer: Buffer): Promise<PDFProcessingResult> 
     throw new PDFProcessingError(`Failed to parse PDF: ${message}`);
   }
 
-  const rawText = data.text;
-  const metadata = {
-    title: data.info?.Title || extractTitleFromText(rawText),
-    authors: data.info?.Author || undefined,
+  return {
+    rawText: data.text,
+    metadata: {
+      title: data.info?.Title || extractTitleFromText(data.text),
+      authors: data.info?.Author || undefined,
+    },
   };
+};
 
-  // Try LLM-based structuring first, fall back to regex
+/**
+ * Structure the raw text into article sections via LLM, with regex fallback.
+ * Run only after pre-structuring validation passes.
+ */
+export const structureRawText = async (rawText: string): Promise<ArticleStructure> => {
   const llmStructure = await structureWithLLM(rawText);
   if (llmStructure) {
     console.log('[PDF] Structured via LLM');
-    return { rawText, structuredContent: llmStructure, metadata };
+    return llmStructure;
   }
-
-  const structuredContent = structureArticleContent(rawText);
   console.log('[PDF] Structured via regex fallback');
-  return { rawText, structuredContent, metadata };
+  return structureArticleContent(rawText);
+};
+
+/**
+ * Process a PDF buffer end-to-end (extraction + structuring).
+ * Kept for callers that don't need the intermediate validation step.
+ */
+export const processPDF = async (buffer: Buffer): Promise<PDFProcessingResult> => {
+  const extracted = await extractRawText(buffer);
+  const structuredContent = await structureRawText(extracted.rawText);
+  return { ...extracted, structuredContent };
 };
 
 /**
@@ -64,9 +75,20 @@ const extractViaPdfParse = async (buffer: Buffer): Promise<PDFProcessingResult> 
  * More accurate than regex for non-standard headers and multilingual articles.
  * Returns null on failure so the caller can fall back to regex.
  */
+const MAX_STRUCTURING_CHARS = 30000;
+
+const truncateAtWordBoundary = (text: string, limit: number): string => {
+  if (text.length <= limit) return text;
+  const cut = text.slice(0, limit);
+  // Back off to the last whitespace so we don't leave a half-word at the end,
+  // which can produce a malformed string inside the requested JSON payload.
+  const lastSpace = cut.lastIndexOf(' ');
+  return lastSpace > limit - 200 ? cut.slice(0, lastSpace) : cut;
+};
+
 const structureWithLLM = async (rawText: string): Promise<ArticleStructure | null> => {
   try {
-    const truncatedText = rawText.slice(0, 30000);
+    const truncatedText = truncateAtWordBoundary(rawText, MAX_STRUCTURING_CHARS);
     const prompt = `Analise este texto de artigo científico e identifique as seções.
 Retorne APENAS um JSON válido (sem markdown, sem \`\`\`, sem texto antes ou depois):
 {

@@ -65,6 +65,27 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
 
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS parent_summary_id INTEGER REFERENCES summaries(id) ON DELETE SET NULL;
+
+    -- Per-summary snapshot of the profile + preferences that were active when the
+    -- summary was generated. Stored on every summary (experiment + product) so
+    -- the row can be reproduced even after the user edits their profile later.
+    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
+
+    -- Tracks the lifecycle of the asynchronous factuality job for each summary.
+    -- 'pending' (default) → set at INSERT; the job is still running or will start.
+    -- 'complete'         → checkFactuality finished successfully.
+    -- 'failed'           → the job threw an error.
+    -- 'skipped'          → the NLI service was unavailable when the job ran.
+    -- Lets the UI distinguish "still verifying" from "verification gave up".
+    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS factuality_status TEXT DEFAULT 'pending';
+
+    -- Likert ratings collected outside the experiment flow (product mode).
+    -- session_id and ab_label are NULL for product ratings; participant_id is
+    -- populated instead. source distinguishes the two regimes.
+    ALTER TABLE summary_ratings ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'experiment';
+    ALTER TABLE summary_ratings ADD COLUMN IF NOT EXISTS participant_id INTEGER REFERENCES participants(id) ON DELETE CASCADE;
+    ALTER TABLE summary_ratings ALTER COLUMN session_id DROP NOT NULL;
+    ALTER TABLE summary_ratings ALTER COLUMN ab_label DROP NOT NULL;
   `;
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');
@@ -93,6 +114,8 @@ export async function runMigrations(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_session_participant_article ON experiment_sessions(participant_id, article_id);
     DROP INDEX IF EXISTS idx_unique_generic_summary;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_variant ON summaries(article_id, profile_id) WHERE profile_id IN (98, 99);
+    -- One product rating per (participant, summary) pair.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_product_rating ON summary_ratings(participant_id, summary_id) WHERE source = 'product';
   `;
   await query(uniqueConstraints);
   console.log('[auto-migrate] Unique constraints ensured.');

@@ -70,7 +70,7 @@ interface BenchRow {
   profile_name: string;
   summary_chars: number;
   summary_words: number;
-  factuality_score: number;
+  factuality_score: number | null;
   pct_supported: number;
   pct_neutral: number;
   pct_contradicted: number;
@@ -173,7 +173,7 @@ async function runOne(
     profile_name: profileEntry.name,
     summary_chars: summary.length,
     summary_words: wordCount(summary),
-    factuality_score: Number(fact.score.toFixed(4)),
+    factuality_score: fact.score === null ? null : Number(fact.score.toFixed(4)),
     pct_supported: Number((100 * supported / total).toFixed(1)),
     pct_neutral: Number((100 * neutral / total).toFixed(1)),
     pct_contradicted: Number((100 * contradicted / total).toFixed(1)),
@@ -240,12 +240,12 @@ async function main() {
   // ─── Aggregate per variant ──────────────────────────────────────────
   console.log(`\n=== Aggregate per variant (mean across ${PROFILE_PRESETS.length * articles.length} runs) ===`);
   for (const v of VARIANTS) {
-    const rows = all.filter(r => r.variant === v && !r.error);
+    const rows = all.filter(r => r.variant === v && !r.error && r.factuality_score !== null);
     if (rows.length === 0) {
       console.log(`  ${v}: no successful runs`);
       continue;
     }
-    const fact = mean(rows.map(r => r.factuality_score));
+    const fact = mean(rows.map(r => r.factuality_score as number));
     const supported = mean(rows.map(r => r.pct_supported));
     const bert = mean(rows.filter(r => r.bert_score !== null).map(r => r.bert_score as number));
     const rouge = mean(rows.filter(r => r.rouge_l !== null).map(r => r.rouge_l as number));

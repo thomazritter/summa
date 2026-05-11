@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { queryOne, execute } from '../db/connection.js';
+import { queryOne, execute, getClient } from '../db/connection.js';
 
 export interface AccessCodeRow {
   id: number;
@@ -31,32 +31,9 @@ export async function createAccessCode(email: string, role: 'participant' | 'man
   return code;
 }
 
-/**
- * Create a magic link access code for self-service login.
- * - If email has an existing code with a participant_id, reuse it (returning existing code).
- * - If email has a code but no participant, create a new code (allow re-registration).
- * - If no code exists, create a new one with role='participant' and 15-min expiration.
- */
-export async function createMagicLink(email: string): Promise<{ code: string }> {
-  const existing = await queryOne<AccessCodeRow>(
-    'SELECT * FROM access_codes WHERE email = $1 ORDER BY created_at DESC LIMIT 1',
-    [email],
-  );
-
-  if (existing && existing.participant_id !== null) {
-    // Participant already registered — reuse their permanent code
-    return { code: existing.code };
-  }
-
-  // Create a new magic link code with 15-minute expiration
-  const code = generateCode();
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-  await execute(
-    'INSERT INTO access_codes (code, email, role, expires_at) VALUES ($1, $2, $3, $4)',
-    [code, email, 'participant', expiresAt],
-  );
-  return { code };
-}
+// createMagicLink (non-atomic) and countRecentMagicLinks were removed once the
+// /magic-link route migrated to createMagicLinkUnderQuota, which combines the
+// quota check and code insertion inside a single advisory-locked transaction.
 
 /**
  * Validate a magic link code, checking expiration.
@@ -90,13 +67,64 @@ export async function validateMagicLink(code: string): Promise<AccessCodeRow | n
 }
 
 /**
- * Count how many magic link requests an email has made in the last windowMs.
+ * Atomic "count recent magic links → create a new one if under quota".
+ *
+ * The non-atomic version (count + create as separate calls) has a race window:
+ * two concurrent requests can both observe count=N (under the limit), both
+ * create a new code, and the table ends up with N+2 codes — silently
+ * violating the "max requests per window" invariant.
+ *
+ * This function serialises requests per email using a PostgreSQL advisory
+ * transaction lock keyed on hash(email), then runs the count and the insert
+ * inside the same transaction so the invariant is enforced.
+ *
+ * Returns `null` when the quota is already exhausted (caller should respond
+ * with the email-enumeration-safe success message anyway).
  */
-export async function countRecentMagicLinks(email: string, windowMs: number): Promise<number> {
-  const since = new Date(Date.now() - windowMs).toISOString();
-  const row = await queryOne<{ count: string }>(
-    'SELECT COUNT(*) as count FROM access_codes WHERE email = $1 AND expires_at IS NOT NULL AND created_at > $2',
-    [email, since],
-  );
-  return row ? parseInt(row.count, 10) : 0;
+export async function createMagicLinkUnderQuota(
+  email: string,
+  maxRequests: number,
+  windowMs: number,
+): Promise<{ code: string } | null> {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    // Per-email lock prevents concurrent count/insert races.
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [email]);
+
+    // Reuse a permanent code if the email is already a registered participant.
+    const existing = await client.query<AccessCodeRow>(
+      'SELECT * FROM access_codes WHERE email = $1 ORDER BY created_at DESC LIMIT 1',
+      [email],
+    );
+    if (existing.rows[0]?.participant_id != null) {
+      await client.query('COMMIT');
+      return { code: existing.rows[0].code };
+    }
+
+    const since = new Date(Date.now() - windowMs).toISOString();
+    const countResult = await client.query<{ count: string }>(
+      'SELECT COUNT(*) AS count FROM access_codes WHERE email = $1 AND expires_at IS NOT NULL AND created_at > $2',
+      [email, since],
+    );
+    const recent = parseInt(countResult.rows[0]?.count ?? '0', 10);
+    if (recent >= maxRequests) {
+      await client.query('COMMIT');
+      return null;
+    }
+
+    const code = generateCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    await client.query(
+      'INSERT INTO access_codes (code, email, role, expires_at) VALUES ($1, $2, $3, $4)',
+      [code, email, 'participant', expiresAt],
+    );
+    await client.query('COMMIT');
+    return { code };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {/* already failed; nothing to undo */});
+    throw error;
+  } finally {
+    client.release();
+  }
 }

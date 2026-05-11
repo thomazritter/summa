@@ -69,7 +69,7 @@ interface BenchRow {
   parent_summary_id?: number;
   summary_chars: number;
   summary_words: number;
-  factuality_score: number;
+  factuality_score: number | null;
   pct_supported: number;
   pct_neutral: number;
   pct_contradicted: number;
@@ -210,7 +210,7 @@ async function runFirstGen(modelId: string, profileEntry: typeof PROFILE_PRESETS
     profile_name: profileEntry.name,
     summary_chars: summary.length,
     summary_words: words,
-    factuality_score: Number(fact.score.toFixed(4)),
+    factuality_score: fact.score === null ? null : Number(fact.score.toFixed(4)),
     pct_supported: Number((100 * supported / total).toFixed(1)),
     pct_neutral: Number((100 * neutral / total).toFixed(1)),
     pct_contradicted: Number((100 * contradicted / total).toFixed(1)),
@@ -287,12 +287,12 @@ async function main() {
   };
   console.log(`\n=== Aggregate per model (first_gen, mean ± std across ${PROFILE_PRESETS.length * articles.length} runs each) ===`);
   for (const modelId of MODELS) {
-    const rows = all.filter(r => r.task === 'first_gen' && r.model === modelId && !r.error);
+    const rows = all.filter(r => r.task === 'first_gen' && r.model === modelId && !r.error && r.factuality_score !== null);
     if (rows.length === 0) {
       console.log(`  ${modelId}: no successful runs`);
       continue;
     }
-    const facts = rows.map(r => r.factuality_score);
+    const facts = rows.map(r => r.factuality_score as number);
     const factMean = mean(facts);
     const factStd = stddev(facts);
     const supported = mean(rows.map(r => r.pct_supported));

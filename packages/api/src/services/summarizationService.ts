@@ -1,4 +1,4 @@
-import { queryOne, queryAll, execute } from '../db/connection.js';
+import { queryOne, execute } from '../db/connection.js';
 import { generateCompletion, getActiveModel, LLMError } from './groqClient.js';
 import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxOutputTokens } from './promptBuilder.js';
 import type { ParticipantPreferences } from './promptBuilder.js';
@@ -7,7 +7,7 @@ import { checkFactuality, checkNliServiceHealth, findRelevantContexts } from './
 import { computeRouge, computeBertScore } from './metricsService.js';
 import { recomputePAccuracyForArticle } from './pAccuracyHelper.js';
 import { safeJsonParse } from '../utils/validation.js';
-import { GENERIC_PROFILE_ID } from '../types/rows.js';
+import { GENERIC_PROFILE_IDS, GENERIC_PROFILE_ID } from '../types/rows.js';
 import type { ArticleRow, SummaryRow, ParticipantRow } from '../types/rows.js';
 import type { Summary, ArticleStructure, Profile } from '@summarizer/shared';
 
@@ -80,89 +80,12 @@ export const generateSummary = async (articleId: number, profileId: number, mode
   return mapRowToSummary(row);
 };
 
-export const generateSummaryWithFactuality = async (articleId: number, profileId: number, modelId?: string): Promise<Summary> => {
-  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
-  if (!article) throw new NotFoundError('Article not found');
-
-  const profile = await getProfileById(profileId);
-  if (!profile) throw new NotFoundError('Profile not found');
-
-  const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
-  const prompt = buildSummarizationPrompt(profile, structuredContent, article.raw_text);
-
-  const effectiveModel = modelId || getActiveModel();
-  let summaryContent: string;
-  try {
-    summaryContent = await generateCompletion({
-      prompt,
-      temperature: 0.3,
-      maxTokens: getMaxOutputTokens(),
-      model: effectiveModel,
-    });
-  } catch (error) {
-    if (error instanceof LLMError) throw new SummarizationError(`Failed to generate summary: ${error.message}`);
-    throw error;
-  }
-
-  const { score, results } = await checkFactuality(summaryContent, structuredContent, article.raw_text);
-
-  const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content, factuality_score, factuality_details, model_id)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING *`,
-    [articleId, profileId, summaryContent, score, JSON.stringify(results), effectiveModel],
-  );
-
-  if (!row) throw new SummarizationError('Failed to save summary');
-  return mapRowToSummary(row);
-};
-
 export const getSummaryById = async (id: number): Promise<Summary | null> => {
   const row = await queryOne<SummaryRow>('SELECT * FROM summaries WHERE id = $1', [id]);
   if (!row) {
     return null;
   }
   return mapRowToSummary(row);
-};
-
-export const getSummariesByArticle = async (articleId: number): Promise<Summary[]> => {
-  const rows = await queryAll<SummaryRow>('SELECT * FROM summaries WHERE article_id = $1', [articleId]);
-  return rows.map(mapRowToSummary);
-};
-
-export const getSummariesByProfile = async (profileId: number): Promise<Summary[]> => {
-  const rows = await queryAll<SummaryRow>('SELECT * FROM summaries WHERE profile_id = $1', [profileId]);
-  return rows.map(mapRowToSummary);
-};
-
-export const regenerateSummary = async (summaryId: number): Promise<Summary> => {
-  const existing = await getSummaryById(summaryId);
-  if (!existing) {
-    throw new NotFoundError('Summary not found');
-  }
-
-  // Generate new summary first (preserves old one if generation fails)
-  const newSummary = await generateSummary(existing.articleId, existing.profileId);
-
-  // Only delete old summary after new one is successfully created
-  await execute('DELETE FROM summaries WHERE id = $1', [summaryId]);
-
-  return newSummary;
-};
-
-export const updateSummaryFactuality = async (
-  summaryId: number,
-  factualityScore: number,
-  factualityDetails: unknown[]
-): Promise<Summary | null> => {
-  await execute(
-    `UPDATE summaries
-     SET factuality_score = $1, factuality_details = $2
-     WHERE id = $3`,
-    [factualityScore, JSON.stringify(factualityDetails), summaryId],
-  );
-
-  return getSummaryById(summaryId);
 };
 
 /**
@@ -180,20 +103,32 @@ const checkFactualityInBackground = (
     try {
       const health = await checkNliServiceHealth();
       if (!health.available) {
-        console.warn(`[factuality] NLI service unavailable – skipping factuality check for summary ${summaryId}`);
+        console.warn(`[factuality] NLI service unavailable – marking summary ${summaryId} as skipped`);
+        await execute(
+          `UPDATE summaries SET factuality_status = 'skipped' WHERE id = $1`,
+          [summaryId],
+        );
         return;
       }
 
       const { score, results } = await checkFactuality(summaryContent, structuredContent, rawText);
 
       await execute(
-        'UPDATE summaries SET factuality_score = $1, factuality_details = $2 WHERE id = $3',
+        `UPDATE summaries
+         SET factuality_score = $1, factuality_details = $2, factuality_status = 'complete'
+         WHERE id = $3`,
         [score, JSON.stringify(results), summaryId],
       );
 
-      console.info(`[factuality] Summary ${summaryId} scored ${score.toFixed(3)} (${results.length} claims checked)`);
+      const scoreLabel = score === null ? 'n/a (no verifiable claims)' : score.toFixed(3);
+      console.info(`[factuality] Summary ${summaryId} scored ${scoreLabel} (${results.length} claims checked)`);
     } catch (error) {
       console.warn(`[factuality] Background check failed for summary ${summaryId}:`, error);
+      // Surface the failure so the UI stops waiting forever.
+      await execute(
+        `UPDATE summaries SET factuality_status = 'failed' WHERE id = $1`,
+        [summaryId],
+      ).catch(() => {/* best-effort: don't double-fail on the status update */});
     }
   })();
 };
@@ -237,11 +172,9 @@ const recomputePAccuracyInBackground = (articleId: number): void => {
 /**
  * Generate a generic summary (no profile parameterization).
  * Used as the control condition in the experiment.
- * Accepts englishComfort to match participant's language preference for A/B blinding.
  */
 export const generateGenericSummary = async (
   articleId: number,
-  englishComfort?: 'keep_english' | 'translate',
   profileId: number = GENERIC_PROFILE_ID,
   modelId?: string,
 ): Promise<Summary> => {
@@ -251,7 +184,7 @@ export const generateGenericSummary = async (
   }
 
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
-  const prompt = buildGenericSummarizationPrompt(structuredContent, article.raw_text, englishComfort);
+  const prompt = buildGenericSummarizationPrompt(structuredContent, article.raw_text);
 
   const effectiveModel = modelId || getActiveModel();
   let summaryContent: string;
@@ -365,11 +298,19 @@ export const generatePersonalizedSummary = async (
     throw error;
   }
 
+  // Build the snapshot that will travel with this row forever, so we can
+  // reproduce what produced this summary even after the user edits their
+  // profile or preferences later.
+  const profileSnapshot = {
+    dimensions: profileDimensions,
+    preferences: participantPreferences ?? null,
+  };
+
   const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content, model_id)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO summaries (article_id, profile_id, content, model_id, profile_snapshot)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
-    [articleId, baseProfileId, summaryContent, effectiveModel],
+    [articleId, baseProfileId, summaryContent, effectiveModel, JSON.stringify(profileSnapshot)],
   );
 
   if (!row) {
@@ -379,8 +320,8 @@ export const generatePersonalizedSummary = async (
   // Compute ROUGE against the generic summary (baseline)
   // Measures how much personalization diverges from the generic version
   const genericSummary = await queryOne<{ content: string }>(
-    'SELECT content FROM summaries WHERE article_id = $1 AND profile_id = 99 LIMIT 1',
-    [articleId],
+    'SELECT content FROM summaries WHERE article_id = $1 AND profile_id = $2 LIMIT 1',
+    [articleId, GENERIC_PROFILE_IDS.keepEnglish],
   );
   if (genericSummary) {
     const rouge = computeRouge(summaryContent, genericSummary.content);
@@ -432,46 +373,76 @@ export const regenerateSummaryWithEvidence = async (summaryId: number): Promise<
     throw new NotFoundError('Article not found');
   }
 
-  const profile = await getProfileById(existing.profile_id);
-  if (!profile) {
-    throw new NotFoundError('Profile not found');
-  }
-
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
 
-  // Look up participant preferences so the regen respects the same auxiliary
-  // settings (structure preference, English comfort, domain, current project)
-  // that shaped the parent summary. Without this, the regen prompt is strictly
-  // a subset of the first-gen prompt, which both regresses UX (the user's
-  // chosen format and language preference are dropped) and biases the
-  // factuality benchmark by giving the regen artificially less material to
-  // elaborate on.
-  let participantPreferences: ParticipantPreferences | undefined;
-  const session = await queryOne<{ participant_id: number }>(
-    `SELECT participant_id FROM experiment_sessions
-     WHERE personalized_summary_id = $1 OR generic_summary_id = $1
-     LIMIT 1`,
-    [summaryId],
-  );
-  let participantId: number | null = session?.participant_id ?? null;
-  if (participantId === null) {
-    const articleOwner = await queryOne<{ uploaded_by: number | null }>(
-      'SELECT uploaded_by FROM articles WHERE id = $1',
-      [existing.article_id],
-    );
-    participantId = articleOwner?.uploaded_by ?? null;
+  // Reconstruct the parent's profile + preferences from the snapshot that was
+  // persisted at generation time. This is what makes the regen actually
+  // personalized: if we resolved the participant's CURRENT profile instead,
+  // edits made after the parent was generated would silently leak into the
+  // regen, and the §6.7 benchmark of parent vs. regen would compare apples
+  // to oranges. Fall back to the static template + current participant prefs
+  // only when there's no snapshot (legacy rows generated before the C1 fix).
+  type ProfileSnapshot = {
+    dimensions?: ProfileDimensions;
+    preferences?: ParticipantPreferences | null;
+  } & Partial<ProfileDimensions>;
+  const snapshot = safeJsonParse<ProfileSnapshot>(existing.profile_snapshot);
+  const snapshotDimensions: ProfileDimensions | null = snapshot?.dimensions ?? (snapshot && snapshot.expertise && snapshot.focus && snapshot.depth && snapshot.context
+    ? { expertise: snapshot.expertise, focus: snapshot.focus, depth: snapshot.depth, context: snapshot.context }
+    : null);
+
+  let profile: Profile;
+  if (snapshotDimensions) {
+    profile = {
+      id: existing.profile_id,
+      userId: 0,
+      name: 'parent-snapshot',
+      expertise: snapshotDimensions.expertise,
+      focus: snapshotDimensions.focus,
+      depth: snapshotDimensions.depth,
+      context: snapshotDimensions.context,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+  } else {
+    // Legacy fallback: parent has no snapshot; use the static template.
+    const fallback = await getProfileById(existing.profile_id);
+    if (!fallback) {
+      throw new NotFoundError('Profile not found');
+    }
+    profile = fallback;
   }
-  if (participantId !== null) {
-    const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
-    if (participant) {
-      const candidate: ParticipantPreferences = {
-        structurePreference: (participant.structure_preference as 'prose' | 'bullets' | 'mixed' | null) ?? undefined,
-        englishComfort: (participant.english_comfort as 'keep_english' | 'translate' | null) ?? undefined,
-        domain: participant.domain ?? undefined,
-        currentProject: participant.current_project ?? undefined,
-      };
-      if (candidate.structurePreference || candidate.englishComfort || candidate.domain || candidate.currentProject) {
-        participantPreferences = candidate;
+
+  let participantPreferences: ParticipantPreferences | undefined;
+  if (snapshot?.preferences) {
+    participantPreferences = snapshot.preferences;
+  } else {
+    // Legacy fallback: derive prefs from the current participant state.
+    const session = await queryOne<{ participant_id: number }>(
+      `SELECT participant_id FROM experiment_sessions
+       WHERE personalized_summary_id = $1 OR generic_summary_id = $1
+       LIMIT 1`,
+      [summaryId],
+    );
+    let participantId: number | null = session?.participant_id ?? null;
+    if (participantId === null) {
+      const articleOwner = await queryOne<{ uploaded_by: number | null }>(
+        'SELECT uploaded_by FROM articles WHERE id = $1',
+        [existing.article_id],
+      );
+      participantId = articleOwner?.uploaded_by ?? null;
+    }
+    if (participantId !== null) {
+      const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
+      if (participant) {
+        const candidate: ParticipantPreferences = {
+          structurePreference: (participant.structure_preference as 'prose' | 'bullets' | 'mixed' | null) ?? undefined,
+          domain: participant.domain ?? undefined,
+          currentProject: participant.current_project ?? undefined,
+        };
+        if (candidate.structurePreference || candidate.domain || candidate.currentProject) {
+          participantPreferences = candidate;
+        }
       }
     }
   }
@@ -519,11 +490,25 @@ ${evidenceLines.join('\n')}`;
     throw error;
   }
 
+  // Carry the parent's snapshot forward so the regen row also reproduces the
+  // exact profile + preferences that drove the prompt — important for §6.7
+  // parent-vs-regen comparisons and for any future regen-of-regen.
+  const regenSnapshot = snapshotDimensions
+    ? { dimensions: snapshotDimensions, preferences: participantPreferences ?? null }
+    : null;
+
   const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content, model_id, parent_summary_id)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO summaries (article_id, profile_id, content, model_id, parent_summary_id, profile_snapshot)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING *`,
-    [existing.article_id, existing.profile_id, summaryContent, effectiveModel, existing.id],
+    [
+      existing.article_id,
+      existing.profile_id,
+      summaryContent,
+      effectiveModel,
+      existing.id,
+      regenSnapshot ? JSON.stringify(regenSnapshot) : null,
+    ],
   );
 
   if (!row) {

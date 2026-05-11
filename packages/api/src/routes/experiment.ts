@@ -1,11 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { queryOne, queryAll, execute, getClient } from '../db/connection.js';
-import { parseId, safeJsonParse } from '../utils/validation.js';
+import { parseId, safeJsonParse, zodErrorMessage } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { regenerateSummaryWithEvidence, getSummaryById, generatePersonalizedSummary, NotFoundError, NoFlaggedSentencesError, SummarizationError } from '../services/summarizationService.js';
 import type { ProfileDimensions } from '../services/summarizationService.js';
-import { createExperimentSession, SessionCreationError, computeProfileDimensions, computeProfileSources, EXPERIENCE_CONFIG } from '../services/sessionService.js';
+import { createExperimentSession, SessionCreationError, computeProfileDimensions, computeProfileSources, serializeProfileForApi, buildPersonalizationContext, EXPERIENCE_CONFIG } from '../services/sessionService.js';
 import { AVAILABLE_MODELS, getActiveModel } from '../services/groqClient.js';
 import { inferProfileFromCv } from '../services/cvProfileMapper.js';
 import { requireAuth } from '../middleware/auth.js';
@@ -29,7 +29,6 @@ const registerParticipantSchema = z.object({
   structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
   readingGoal: z.enum(['overview', 'methodology', 'results', 'practical']).optional(),
   preferredLength: z.enum(['brief', 'moderate', 'detailed']).optional(),
-  englishComfort: z.enum(['keep_english', 'translate']).optional(),
 });
 
 const createSessionSchema = z.object({
@@ -71,7 +70,6 @@ const updateProfileSchema = z.object({
     depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']).optional(),
     context: z.enum(['quick_review', 'learning', 'research', 'teaching']).optional(),
     structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
-    englishComfort: z.enum(['keep_english', 'translate']).optional(),
     domain: z.string().max(500).optional(),
     currentProject: z.string().max(2000).optional(),
   }),
@@ -86,7 +84,6 @@ const registerFromCvSchema = z.object({
     context: z.enum(['quick_review', 'learning', 'research', 'teaching']),
   }),
   experienceLevel: z.enum(['junior', 'pleno', 'senior']),
-  englishComfort: z.enum(['keep_english', 'translate']).optional(),
   structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
 });
 
@@ -128,17 +125,17 @@ async function verifySessionOwnership(req: Request, res: Response, sessionId: nu
 experimentRoutes.post('/participants', asyncHandler(async (req: Request, res: Response) => {
   const validation = registerParticipantSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
+    const messages = zodErrorMessage(validation.error);
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
-  const { name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference, readingGoal, preferredLength, englishComfort } = validation.data;
+  const { name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference, readingGoal, preferredLength } = validation.data;
 
   const row = await queryOne<ParticipantRow>(`
-    INSERT INTO participants (name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal, preferred_length, english_comfort)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    INSERT INTO participants (name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal, preferred_length)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
     RETURNING *
-  `, [name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference || null, readingGoal || null, preferredLength || null, englishComfort || null]);
+  `, [name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference || null, readingGoal || null, preferredLength || null]);
 
   if (!row) return res.status(500).json({ error: 'Falha ao criar registro' });
 
@@ -185,7 +182,7 @@ experimentRoutes.get('/participants/:id/sessions', asyncHandler(async (req: Requ
 experimentRoutes.post('/sessions', asyncHandler(async (req: Request, res: Response) => {
   const validation = createSessionSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
+    const messages = zodErrorMessage(validation.error);
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
@@ -247,7 +244,7 @@ experimentRoutes.post('/sessions/:id/preference', asyncHandler(async (req: Reque
 
   const validation = preferenceSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
+    const messages = zodErrorMessage(validation.error);
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
@@ -282,7 +279,7 @@ experimentRoutes.post('/sessions/:id/evaluate', asyncHandler(async (req: Request
 
   const validation = evaluateSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
+    const messages = zodErrorMessage(validation.error);
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
@@ -317,7 +314,7 @@ experimentRoutes.post('/sessions/:id/ratings', asyncHandler(async (req: Request,
 
   const validation = summaryRatingsSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
+    const messages = zodErrorMessage(validation.error);
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
@@ -365,7 +362,7 @@ experimentRoutes.post('/sessions/:id/ratings', asyncHandler(async (req: Request,
 experimentRoutes.post('/post-test', asyncHandler(async (req: Request, res: Response) => {
   const validation = postTestSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
+    const messages = zodErrorMessage(validation.error);
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
@@ -436,19 +433,19 @@ experimentRoutes.post('/cv-profile', cvUpload.single('file'), handleCvMulterErro
 experimentRoutes.post('/participants/from-cv', asyncHandler(async (req: Request, res: Response) => {
   const validation = registerFromCvSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
+    const messages = zodErrorMessage(validation.error);
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
-  const { name, dimensions, experienceLevel, englishComfort, structurePreference } = validation.data;
+  const { name, dimensions, experienceLevel, structurePreference } = validation.data;
 
   const row = await queryOne<ParticipantRow>(`
     INSERT INTO participants (
       name, experience_level, years_experience, reading_frequency, topic_familiarity,
       override_expertise, override_focus, override_depth, override_context,
-      structure_preference, english_comfort, profile_source
+      structure_preference, profile_source
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
     RETURNING *
   `, [
     name,
@@ -461,7 +458,6 @@ experimentRoutes.post('/participants/from-cv', asyncHandler(async (req: Request,
     dimensions.depth,
     dimensions.context,
     structurePreference || null,
-    englishComfort || null,
     'cv',
   ]);
 
@@ -490,18 +486,9 @@ experimentRoutes.get('/profile', asyncHandler(async (req: Request, res: Response
     return res.status(404).json({ error: 'Participante nao encontrado' });
   }
 
-  const dimensions = computeProfileDimensions(participant);
-  const sources = computeProfileSources(participant);
-
   res.json({
-    dimensions: {
-      ...dimensions,
-      structurePreference: participant.structure_preference || null,
-      englishComfort: participant.english_comfort || null,
-      domain: participant.domain || null,
-      currentProject: participant.current_project || null,
-    },
-    sources,
+    dimensions: serializeProfileForApi(participant),
+    sources: computeProfileSources(participant),
     profileSource: participant.profile_source || 'questionnaire',
   });
 }));
@@ -515,7 +502,7 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
 
   const validation = updateProfileSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
+    const messages = zodErrorMessage(validation.error);
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
@@ -529,17 +516,15 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
          override_depth     = COALESCE($3, override_depth),
          override_context   = COALESCE($4, override_context),
          structure_preference = COALESCE($5, structure_preference),
-         english_comfort    = COALESCE($6, english_comfort),
-         domain             = COALESCE($7, domain),
-         current_project    = COALESCE($8, current_project)
-     WHERE id = $9`,
+         domain             = COALESCE($6, domain),
+         current_project    = COALESCE($7, current_project)
+     WHERE id = $8`,
     [
       overrides.expertise || null,
       overrides.focus || null,
       overrides.depth || null,
       overrides.context || null,
       overrides.structurePreference || null,
-      overrides.englishComfort || null,
       overrides.domain || null,
       overrides.currentProject || null,
       participantId,
@@ -552,18 +537,9 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
     return res.status(404).json({ error: 'Participante nao encontrado' });
   }
 
-  const dimensions = computeProfileDimensions(participant);
-  const sources = computeProfileSources(participant);
-
   res.json({
-    dimensions: {
-      ...dimensions,
-      structurePreference: participant.structure_preference || null,
-      englishComfort: participant.english_comfort || null,
-      domain: participant.domain || null,
-      currentProject: participant.current_project || null,
-    },
-    sources,
+    dimensions: serializeProfileForApi(participant),
+    sources: computeProfileSources(participant),
     profileSource: participant.profile_source || 'questionnaire',
   });
 }));
@@ -592,18 +568,9 @@ experimentRoutes.post('/profile/reset', asyncHandler(async (req: Request, res: R
     return res.status(404).json({ error: 'Participante nao encontrado' });
   }
 
-  const dimensions = computeProfileDimensions(participant);
-  const sources = computeProfileSources(participant);
-
   res.json({
-    dimensions: {
-      ...dimensions,
-      structurePreference: participant.structure_preference || null,
-      englishComfort: participant.english_comfort || null,
-      domain: participant.domain || null,
-      currentProject: participant.current_project || null,
-    },
-    sources,
+    dimensions: serializeProfileForApi(participant),
+    sources: computeProfileSources(participant),
     profileSource: participant.profile_source || 'questionnaire',
   });
 }));
@@ -632,7 +599,7 @@ experimentRoutes.post('/sessions/:id/try-model', asyncHandler(async (req: Reques
 
   const validation = tryModelSchema.safeParse(req.body);
   if (!validation.success) {
-    const messages = validation.error.errors.map(e => e.message).join('; ');
+    const messages = zodErrorMessage(validation.error);
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
@@ -662,19 +629,7 @@ experimentRoutes.post('/sessions/:id/try-model', asyncHandler(async (req: Reques
     return res.status(404).json({ error: 'Participante nao encontrado' });
   }
 
-  const dimensions: ProfileDimensions = computeProfileDimensions(participant);
-
-  // Build participant preferences
-  const participantPreferences = {
-    structurePreference: participant.structure_preference as 'prose' | 'bullets' | 'mixed' | undefined,
-    englishComfort: participant.english_comfort as 'keep_english' | 'translate' | undefined,
-    domain: participant.domain || undefined,
-    currentProject: participant.current_project || undefined,
-  };
-  const hasPreferences = participantPreferences.structurePreference
-    || participantPreferences.englishComfort
-    || participantPreferences.domain
-    || participantPreferences.currentProject;
+  const { dimensions, preferences } = buildPersonalizationContext(participant);
 
   // Determine the model used by the original personalized summary
   const originalSummary = await getSummaryById(sessionCheck.personalized_summary_id);
@@ -689,7 +644,7 @@ experimentRoutes.post('/sessions/:id/try-model', asyncHandler(async (req: Reques
     sessionCheck.article_id,
     baseProfileId,
     dimensions,
-    hasPreferences ? participantPreferences : undefined,
+    preferences,
     modelId,
   );
 
@@ -787,7 +742,6 @@ const mapParticipantRow = (row: ParticipantRow): Participant => ({
   structurePreference: row.structure_preference as Participant['structurePreference'],
   readingGoal: row.reading_goal as Participant['readingGoal'],
   preferredLength: row.preferred_length as Participant['preferredLength'],
-  englishComfort: row.english_comfort as Participant['englishComfort'],
   domain: row.domain,
   currentProject: row.current_project,
   createdAt: row.created_at,

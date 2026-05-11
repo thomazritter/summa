@@ -12,12 +12,12 @@ export const checkFactuality = async (
   summaryContent: string,
   articleStructure: ArticleStructure,
   rawText: string
-): Promise<{ score: number; results: FactualityResult[] }> => {
+): Promise<{ score: number | null; results: FactualityResult[] }> => {
   const sentences = splitIntoSentences(summaryContent);
   const results: FactualityResult[] = [];
 
   for (const sentence of sentences) {
-    if (sentence.length < 20 || !containsFactualClaim(sentence)) {
+    if (isSkippable(sentence)) {
       continue;
     }
     const result = await verifySentence(sentence, articleStructure, rawText);
@@ -32,8 +32,23 @@ export const checkFactuality = async (
   return { score: calculateFactualityScore(results), results };
 };
 
+// Common Portuguese/English abbreviations that end with a period but do NOT
+// end a sentence. We mask the trailing dot with a placeholder before splitting
+// and restore it afterwards so "Dr. Silva afirma..." stays in one piece.
+const SENTENCE_ABBREVS = [
+  'sr', 'sra', 'srta', 'dr', 'dra', 'prof', 'profa', 'eng', 'gen', 'cel',
+  'fig', 'figs', 'tab', 'tabs', 'eq', 'eqs', 'ref', 'refs', 'cap', 'caps',
+  'pg', 'pgs', 'p', 'pp', 'vol', 'no', 'etc', 'ed', 'eds', 'art', 'arts',
+  'ex', 'i.e', 'e.g', 'cf', 'vs', 'ca',
+];
+const ABBREV_REGEX = new RegExp(`\\b(${SENTENCE_ABBREVS.join('|')})\\.`, 'gi');
+
 const splitIntoSentences = (text: string): string[] => {
-  return text.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(s => s.length > 0);
+  const masked = text.replace(ABBREV_REGEX, (m) => m.replace('.', ''));
+  return masked
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.replace(//g, '.').trim())
+    .filter((s) => s.length > 0);
 };
 
 /**
@@ -49,8 +64,10 @@ const isSkippable = (sentence: string): boolean => {
   // Too short to be a meaningful claim
   if (clean.length < 30) return true;
 
-  // Section headers (not claims)
-  if (/^(resumo|método|resultado|conclus|introduç|recomendaç|limitaç|implica)/i.test(clean) && clean.length < 60) return true;
+  // Pure section headers like "Resultados:" or "Conclusão." are already caught
+  // by the length filter above; longer sentences that happen to start with a
+  // section word (e.g., "Resultados mostram ganho de 15%...") are factual
+  // claims and must be verified.
 
   // Meta/discourse sentences about the paper itself
   const metaPatterns = [
@@ -64,11 +81,6 @@ const isSkippable = (sentence: string): boolean => {
   if (/^(as recomendações|recomenda-se|é necessário|é importante|deve-se|devem ser)/i.test(clean)) return true;
 
   return false;
-};
-
-// Keep old function name for compatibility
-const containsFactualClaim = (sentence: string): boolean => {
-  return !isSkippable(sentence);
 };
 
 /**
@@ -85,47 +97,73 @@ const verifySentence = async (
     return { sentence, label: 'neutral', confidence: 0.0, sourceSentence: '' };
   }
 
-  let bestResult: FactualityResult = {
-    sentence, label: 'neutral', confidence: 0.0, sourceSentence: contexts[0].slice(0, 200),
-  };
-  let bestSupportedScore = 0;
+  type Response = { label: 'supported' | 'contradicted' | 'neutral'; confidence: number; scores: Record<string, number> };
+  const responses: Array<{ data: Response; context: string }> = [];
+
+  // Retry with exponential backoff: the NLI service occasionally times out
+  // under load (we saw ~1.5% failure rate during the rerun). One retry after
+  // a short delay recovers most of those without skewing the timing budget.
+  const MAX_RETRIES = 3;
+  const RETRY_BACKOFF_MS = [0, 2000, 5000];
 
   for (const context of contexts) {
-    try {
-      const response = await fetch(`${NLI_SERVICE_URL}/classify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ premise: context, hypothesis: sentence }),
-        signal: AbortSignal.timeout(60000),
-      });
-
-      if (!response.ok) {
-        throw new Error(`NLI service returned ${response.status}`);
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, RETRY_BACKOFF_MS[attempt]));
       }
+      try {
+        const response = await fetch(`${NLI_SERVICE_URL}/classify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ premise: context, hypothesis: sentence }),
+          signal: AbortSignal.timeout(60000),
+        });
 
-      const data = await response.json() as {
-        label: 'supported' | 'contradicted' | 'neutral';
-        confidence: number;
-        scores: Record<string, number>;
-      };
+        if (!response.ok) {
+          throw new Error(`NLI service returned ${response.status}`);
+        }
 
-      // Keep the result with highest supported score (SummaC max aggregation)
-      const supportedScore = data.scores?.supported ?? (data.label === 'supported' ? data.confidence : 0);
-      if (supportedScore > bestSupportedScore) {
-        bestSupportedScore = supportedScore;
-        bestResult = {
-          sentence,
-          label: data.label,
-          confidence: data.confidence,
-          sourceSentence: context.slice(0, 200),
-        };
+        const data = (await response.json()) as Response;
+        responses.push({ data, context });
+        lastError = null;
+        break;
+      } catch (error) {
+        lastError = error;
       }
-    } catch (error) {
-      console.error(`NLI service error for sentence: "${sentence.slice(0, 50)}..."`, error);
+    }
+    if (lastError !== null) {
+      console.error(`NLI service error after ${MAX_RETRIES} retries for sentence: "${sentence.slice(0, 50)}..."`, lastError);
     }
   }
 
-  return bestResult;
+  if (responses.length === 0) {
+    return { sentence, label: 'neutral', confidence: 0.0, sourceSentence: contexts[0]?.slice(0, 200) ?? '' };
+  }
+
+  // SummaC max aggregation: prefer highest supported score across contexts.
+  // Tiebreaker (e.g., all contexts have supported=0): surface the strongest
+  // contradiction signal instead of silently falling back to neutral.
+  const scoreOf = (data: Response, k: 'supported' | 'contradicted' | 'neutral') =>
+    data.scores?.[k] ?? (data.label === k ? data.confidence : 0);
+
+  const ranked = [...responses].sort((a, b) => {
+    const sa = scoreOf(a.data, 'supported');
+    const sb = scoreOf(b.data, 'supported');
+    if (sa !== sb) return sb - sa;
+    const ca = scoreOf(a.data, 'contradicted');
+    const cb = scoreOf(b.data, 'contradicted');
+    if (ca !== cb) return cb - ca;
+    return b.data.confidence - a.data.confidence;
+  });
+
+  const best = ranked[0];
+  return {
+    sentence,
+    label: best.data.label,
+    confidence: best.data.confidence,
+    sourceSentence: best.context.slice(0, 200),
+  };
 };
 
 /**
@@ -149,8 +187,10 @@ export const findRelevantContexts = (sentence: string, structure: ArticleStructu
   return scored.slice(0, 3).filter(s => s.score > 0).map(s => s.para.slice(0, 1000));
 };
 
-const calculateFactualityScore = (results: FactualityResult[]): number => {
-  if (results.length === 0) return 1.0;
+const calculateFactualityScore = (results: FactualityResult[]): number | null => {
+  // No verifiable sentences: surface as "not measured" instead of a misleading 1.0.
+  // The UI distinguishes null (não verificado) from a numeric score.
+  if (results.length === 0) return null;
   const weights = { supported: 1, neutral: 0.5, contradicted: 0 };
   return results.reduce((sum, r) => sum + weights[r.label], 0) / results.length;
 };
@@ -229,9 +269,14 @@ const refineNeutralWithLlmJudge = async (
 ): Promise<void> => {
   let calls = 0;
   for (const r of results) {
-    if (calls >= MAX_LLM_JUDGE_CALLS) break;
     if (r.label !== 'neutral') {
       r.judgedBy = 'nli';
+      continue;
+    }
+    if (calls >= MAX_LLM_JUDGE_CALLS) {
+      // Cap exhausted: keep the NLI verdict but mark explicitly so auditing
+      // can distinguish this from a neutral that was judged and confirmed.
+      r.judgedBy = 'cap_exhausted';
       continue;
     }
 

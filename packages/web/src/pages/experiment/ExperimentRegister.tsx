@@ -12,7 +12,6 @@ interface FormData {
   structurePreference: string;
   readingGoal: string;
   preferredLength: string;
-  englishComfort: string;
 }
 
 export function ExperimentRegister() {
@@ -26,7 +25,6 @@ export function ExperimentRegister() {
     structurePreference: '',
     readingGoal: '',
     preferredLength: '',
-    englishComfort: '',
   });
 
   const registerMutation = useMutation({
@@ -45,8 +43,7 @@ export function ExperimentRegister() {
     form.topicFamiliarity !== '' &&
     form.structurePreference !== '' &&
     form.readingGoal !== '' &&
-    form.preferredLength !== '' &&
-    form.englishComfort !== '';
+    form.preferredLength !== '';
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -253,31 +250,6 @@ export function ExperimentRegister() {
               </div>
             </div>
 
-            {/* English Comfort */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Como prefere os termos técnicos em inglês?
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  { value: 'keep_english', label: 'Manter em inglês' },
-                  { value: 'translate', label: 'Traduzir para português' },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, englishComfort: opt.value })}
-                    className={`p-4 border rounded-lg text-center transition-all ${
-                      form.englishComfort === opt.value
-                        ? 'bg-blue-50 border-[#2563eb]'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
           </div>
 
           {registerMutation.error && (

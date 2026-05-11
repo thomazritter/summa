@@ -332,7 +332,7 @@ managerRoutes.get('/summaries', asyncHandler(async (_req: Request, res: Response
       profileLabel: PROFILE_LABELS[s.profile_id] ?? `Profile ${s.profile_id}`,
       content: s.content,
       factualityScore: s.factuality_score,
-      factualityDetails: s.factuality_details ? JSON.parse(s.factuality_details) : null,
+      factualityDetails: s.factuality_details ? safeJsonParse(s.factuality_details) ?? null : null,
       rouge1: s.rouge_1,
       rouge2: s.rouge_2,
       rougeL: s.rouge_l,
@@ -365,11 +365,11 @@ function buildCsv(headers: string[], rows: unknown[][]): string {
 
 async function getParticipantsCsv(): Promise<string> {
   const rows = await queryAll<ExportParticipantRow>(
-    'SELECT id, name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal, preferred_length, english_comfort, created_at FROM participants ORDER BY id'
+    'SELECT id, name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal, preferred_length, created_at FROM participants ORDER BY id'
   );
   return buildCsv(
     ['id', 'nome', 'nivel', 'anos_experiencia', 'frequencia_leitura', 'familiaridade_tema', 'preferencia_estrutura', 'objetivo_leitura', 'extensao_preferida', 'conforto_ingles', 'data_registro'],
-    rows.map(r => [r.id, r.name, r.experience_level, r.years_experience, r.reading_frequency, r.topic_familiarity, r.structure_preference, r.reading_goal, r.preferred_length, r.english_comfort, r.created_at])
+    rows.map(r => [r.id, r.name, r.experience_level, r.years_experience, r.reading_frequency, r.topic_familiarity, r.structure_preference, r.reading_goal, r.preferred_length, r.created_at])
   );
 }
 
@@ -476,6 +476,63 @@ managerRoutes.delete('/participants/:id', asyncHandler(async (req: Request, res:
   await execute('DELETE FROM participants WHERE id = $1', [id]);
 
   res.json({ success: true, message: `Participante ${participant.name || id} removido com sucesso` });
+}));
+
+// ─── GET /product-ratings ────────────────────────────────────────────
+//
+// Aggregated Likert feedback collected outside the experiment flow
+// (source='product'). Returns means per dimension, the per-rating breakdown,
+// and the most recent comments.
+
+interface ProductRatingRow {
+  id: number;
+  summary_id: number;
+  participant_id: number;
+  participant_name: string | null;
+  utilidade: number;
+  clareza: number;
+  adequacao_perfil: number;
+  factualidade_percebida: number;
+  comment: string | null;
+  created_at: string;
+}
+
+managerRoutes.get('/product-ratings', asyncHandler(async (_req: Request, res: Response) => {
+  const rows = await queryAll<ProductRatingRow>(
+    `SELECT sr.id, sr.summary_id, sr.participant_id, p.name AS participant_name,
+            sr.utilidade, sr.clareza, sr.adequacao_perfil, sr.factualidade_percebida,
+            sr.comment, sr.created_at
+     FROM summary_ratings sr
+     LEFT JOIN participants p ON p.id = sr.participant_id
+     WHERE sr.source = 'product'
+     ORDER BY sr.created_at DESC`,
+  );
+
+  const total = rows.length;
+  const mean = (k: 'utilidade' | 'clareza' | 'adequacao_perfil' | 'factualidade_percebida') =>
+    total === 0 ? null : rows.reduce((s, r) => s + r[k], 0) / total;
+
+  res.json({
+    total,
+    means: {
+      utilidade: mean('utilidade'),
+      clareza: mean('clareza'),
+      adequacao_perfil: mean('adequacao_perfil'),
+      factualidade_percebida: mean('factualidade_percebida'),
+    },
+    ratings: rows.map(r => ({
+      id: r.id,
+      summaryId: r.summary_id,
+      participantId: r.participant_id,
+      participantName: r.participant_name,
+      utilidade: r.utilidade,
+      clareza: r.clareza,
+      adequacaoPerfil: r.adequacao_perfil,
+      factualidadePercebida: r.factualidade_percebida,
+      comment: r.comment,
+      createdAt: r.created_at,
+    })),
+  });
 }));
 
 // ─── GET /model ──────────────────────────────────────────────────────

@@ -16,6 +16,26 @@ interface Props {
 const SENTENCE_SPLIT_REGEX = /(?<=[.!?])\s+/;
 const NORM_KEY_LEN = 60;
 
+// Mirror the backend list so frontend splitting matches the index keys
+// produced when factualityDetails were computed.
+const SENTENCE_ABBREVS = [
+  'sr', 'sra', 'srta', 'dr', 'dra', 'prof', 'profa', 'eng', 'gen', 'cel',
+  'fig', 'figs', 'tab', 'tabs', 'eq', 'eqs', 'ref', 'refs', 'cap', 'caps',
+  'pg', 'pgs', 'p', 'pp', 'vol', 'no', 'etc', 'ed', 'eds', 'art', 'arts',
+  'ex', 'i.e', 'e.g', 'cf', 'vs', 'ca',
+];
+const ABBREV_REGEX = new RegExp(`\\b(${SENTENCE_ABBREVS.join('|')})\\.`, 'gi');
+
+const DOT_PLACEHOLDER = '\u0003';
+
+function maskAbbreviations(text: string): string {
+  return text.replace(ABBREV_REGEX, (m) => m.replace('.', DOT_PLACEHOLDER));
+}
+
+function unmaskAbbreviations(text: string): string {
+  return text.replace(new RegExp(DOT_PLACEHOLDER, 'g'), '.');
+}
+
 function normalizeKey(text: string): string {
   return text
     .toLowerCase()
@@ -36,7 +56,9 @@ function buildIndex(details: FactualitySentence[] | null): Map<string, Factualit
 }
 
 function highlightString(text: string, index: Map<string, FactualitySentence>, prefix: string): React.ReactNode[] {
-  const sentences = text.split(SENTENCE_SPLIT_REGEX);
+  const sentences = maskAbbreviations(text)
+    .split(SENTENCE_SPLIT_REGEX)
+    .map(unmaskAbbreviations);
   const nodes: React.ReactNode[] = [];
 
   sentences.forEach((sentence, i) => {
@@ -44,7 +66,7 @@ function highlightString(text: string, index: Map<string, FactualitySentence>, p
     const isLast = i === sentences.length - 1;
     const trailingSpace = isLast ? '' : ' ';
 
-    if (!detail || detail.label === 'supported') {
+    if (!detail) {
       nodes.push(
         <React.Fragment key={`${prefix}-${i}`}>
           {sentence}
@@ -54,15 +76,21 @@ function highlightString(text: string, index: Map<string, FactualitySentence>, p
       return;
     }
 
-    const className =
-      detail.label === 'contradicted'
-        ? 'bg-red-50 border-b-2 border-red-300'
-        : 'bg-amber-50 border-b-2 border-amber-300';
+    let className: string;
+    let tooltip: string;
+    const conf = (detail.confidence * 100).toFixed(0);
+    const trecho = detail.sourceSentence.slice(0, 200);
 
-    const tooltip =
-      detail.label === 'contradicted'
-        ? `Contraditada pelo artigo (confiança ${(detail.confidence * 100).toFixed(0)}%)\nTrecho: "${detail.sourceSentence.slice(0, 200)}"`
-        : `Sem confirmação direta no artigo (confiança ${(detail.confidence * 100).toFixed(0)}%)\nTrecho mais próximo: "${detail.sourceSentence.slice(0, 200)}"`;
+    if (detail.label === 'contradicted') {
+      className = 'bg-red-50 border-b-2 border-red-300';
+      tooltip = `Contraditada pelo artigo (confiança ${conf}%)\nTrecho: "${trecho}"`;
+    } else if (detail.label === 'supported') {
+      className = 'bg-emerald-50 border-b-2 border-emerald-300';
+      tooltip = `Suportada pelo artigo (confiança ${conf}%)\nTrecho: "${trecho}"`;
+    } else {
+      className = 'bg-amber-50 border-b-2 border-amber-300';
+      tooltip = `Sem confirmação direta no artigo (confiança ${conf}%)\nTrecho mais próximo: "${trecho}"`;
+    }
 
     nodes.push(
       <span
@@ -104,7 +132,11 @@ export function FactualityHighlightedMarkdown({ content, factualityDetails }: Pr
   return (
     <>
       {hasHighlights && (
-        <div className="mb-4 flex items-center gap-4 text-xs text-gray-500">
+        <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-sm bg-emerald-50 border border-emerald-300"></span>
+            suportada pelo artigo
+          </span>
           <span className="flex items-center gap-1.5">
             <span className="inline-block w-3 h-3 rounded-sm bg-amber-50 border border-amber-300"></span>
             sem confirmação direta no artigo

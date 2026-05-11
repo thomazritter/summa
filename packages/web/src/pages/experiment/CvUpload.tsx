@@ -39,7 +39,6 @@ export function CvUpload() {
   const [cvResult, setCvResult] = useState<CvProfileResponse | null>(null);
   const [selections, setSelections] = useState<Record<string, string>>({});
   const [structurePreference, setStructurePreference] = useState('');
-  const [englishComfort, setEnglishComfort] = useState('');
   const [name, setName] = useState('');
   const [inferredDomain, setInferredDomain] = useState('');
 
@@ -70,14 +69,12 @@ export function CvUpload() {
       name: string;
       experienceLevel: string;
       structurePreference: string;
-      englishComfort: string;
       dimensions: Record<string, string>;
     }) => experimentApi.registerFromCv({
       name: data.name,
       experienceLevel: data.experienceLevel,
       dimensions: data.dimensions,
       structurePreference: data.structurePreference,
-      englishComfort: data.englishComfort,
     }),
     onSuccess: (participant) => {
       sessionStorage.setItem('experimentParticipantId', String(participant.id));
@@ -161,21 +158,19 @@ export function CvUpload() {
   }, []);
 
   const handleConfirm = useCallback(() => {
-    if (!name.trim() || !structurePreference || !englishComfort) return;
+    if (!name.trim() || !structurePreference) return;
     registerMutation.mutate({
       name: name.trim(),
       experienceLevel: cvResult?.experienceLevel || 'pleno',
       structurePreference,
-      englishComfort,
       dimensions: selections,
       ...(inferredDomain.trim() ? { domain: inferredDomain.trim() } : {}),
     });
-  }, [name, structurePreference, englishComfort, selections, inferredDomain, registerMutation]);
+  }, [name, structurePreference, selections, inferredDomain, registerMutation]);
 
   const isResultsValid =
     name.trim().length > 0 &&
     structurePreference !== '' &&
-    englishComfort !== '' &&
     Object.keys(selections).length >= 4;
 
   return (
@@ -494,33 +489,6 @@ export function CvUpload() {
                           : 'border-gray-300 hover:border-gray-400'
                       }`}
                       aria-pressed={structurePreference === opt.value}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* English comfort */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Termos técnicos em inglês
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    { value: 'keep_english', label: 'Manter em inglês' },
-                    { value: 'translate', label: 'Traduzir para português' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setEnglishComfort(opt.value)}
-                      className={`p-4 border rounded-lg text-center transition-all ${
-                        englishComfort === opt.value
-                          ? 'bg-blue-50 border-[#2563eb]'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                      aria-pressed={englishComfort === opt.value}
                     >
                       {opt.label}
                     </button>

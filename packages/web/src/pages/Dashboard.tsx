@@ -127,21 +127,54 @@ export function Dashboard() {
               Configure seu perfil
             </h2>
             <p className="text-gray-600 mb-6">
-              Configure seu perfil para receber resumos personalizados de acordo
-              com seu nível de experiência e preferências de leitura.
+              Escolha um dos caminhos abaixo para receber resumos personalizados
+              de acordo com seu nível de experiência e preferências de leitura.
+              O perfil pode ser editado a qualquer momento.
             </p>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <Link
                 to="/profile/setup"
-                className="py-3 px-6 bg-[#2563eb] text-white font-semibold rounded-lg hover:bg-[#1d4ed8] transition-colors text-center"
+                className="group flex flex-col p-5 bg-white border-2 border-gray-200 rounded-lg hover:border-[#2563eb] hover:shadow-sm transition-all"
               >
-                Responder questionário
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-[#2563eb] group-hover:bg-blue-100 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="4" width="18" height="16" rx="2" />
+                      <line x1="7" y1="9" x2="17" y2="9" />
+                      <line x1="7" y1="13" x2="17" y2="13" />
+                      <line x1="7" y1="17" x2="13" y2="17" />
+                    </svg>
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium">~2 minutos</span>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">
+                  Responder questionário
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Algumas perguntas curtas sobre seu perfil de leitura e
+                  preferências.
+                </p>
               </Link>
               <Link
                 to="/profile/cv"
-                className="py-3 px-6 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 transition-colors text-center"
+                className="group flex flex-col p-5 bg-white border-2 border-gray-200 rounded-lg hover:border-[#2563eb] hover:shadow-sm transition-all"
               >
-                Enviar currículo (PDF)
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50 text-[#2563eb] group-hover:bg-blue-100 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium">~30 segundos</span>
+                </div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">
+                  Enviar currículo (PDF)
+                </h3>
+                <p className="text-sm text-gray-600">
+                  O sistema infere seu perfil a partir do conteúdo do seu CV.
+                </p>
               </Link>
             </div>
           </div>

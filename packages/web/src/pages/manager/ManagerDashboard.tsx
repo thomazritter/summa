@@ -16,13 +16,14 @@ interface CodeRow {
   created_at: string;
 }
 
-type TabKey = 'overview' | 'results' | 'participants' | 'summaries' | 'export';
+type TabKey = 'overview' | 'results' | 'participants' | 'summaries' | 'product' | 'export';
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Visão Geral' },
   { key: 'results', label: 'Resultados' },
   { key: 'participants', label: 'Participantes' },
   { key: 'summaries', label: 'Resumos' },
+  { key: 'product', label: 'Feedback Produto' },
   { key: 'export', label: 'Exportar' },
 ];
 
@@ -174,6 +175,7 @@ export function ManagerDashboard() {
         {activeTab === 'results' && <ResultsTab />}
         {activeTab === 'participants' && <ParticipantsTab />}
         {activeTab === 'summaries' && <SummariesTab />}
+        {activeTab === 'product' && <ProductFeedbackTab />}
         {activeTab === 'export' && <ExportTab />}
       </div>
     </div>
@@ -1047,7 +1049,105 @@ function SummariesTab() {
 }
 
 /* ═══════════════════════════════════════════════════════════
-   Tab 5: Exportar Dados
+   Tab 5: Feedback do Produto (Likert fora do experimento)
+   ═══════════════════════════════════════════════════════════ */
+
+function ProductFeedbackTab() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['manager-product-ratings'],
+    queryFn: () => managerApi.getProductRatings(),
+  });
+
+  if (isLoading) {
+    return <div className="text-center py-8 text-gray-500">Carregando...</div>;
+  }
+  if (!data) {
+    return <div className="text-center py-8 text-red-600">Falha ao carregar feedback do produto.</div>;
+  }
+
+  if (data.total === 0) {
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg p-8 text-center">
+        <h2 className="text-lg font-semibold text-gray-900 mb-2">Sem feedback ainda</h2>
+        <p className="text-gray-600 text-sm">
+          Nenhum participante avaliou um resumo no fluxo de produto até agora.
+          As avaliações coletadas no experimento aparecem na aba <em>Resultados</em>.
+        </p>
+      </div>
+    );
+  }
+
+  const fmt = (v: number | null) => (v === null ? '—' : v.toFixed(2));
+  const dimensions = [
+    { key: 'utilidade' as const, label: 'Utilidade' },
+    { key: 'clareza' as const, label: 'Clareza' },
+    { key: 'adequacao_perfil' as const, label: 'Adequação ao perfil' },
+    { key: 'factualidade_percebida' as const, label: 'Factualidade percebida' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-5">
+        <div className="flex items-baseline justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900">Médias por dimensão</h2>
+          <span className="text-xs text-gray-500">{data.total} avaliação(ões)</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {dimensions.map((d) => (
+            <div key={d.key} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="text-xs text-gray-500 mb-1">{d.label}</div>
+              <div className="text-2xl font-semibold text-gray-900">
+                {fmt(data.means[d.key])}
+                <span className="text-sm font-normal text-gray-500"> / 5</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Avaliações individuais</h2>
+        </div>
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="text-left px-4 py-2 font-medium text-gray-700">Participante</th>
+              <th className="text-left px-4 py-2 font-medium text-gray-700">Resumo</th>
+              <th className="text-center px-2 py-2 font-medium text-gray-700">Util.</th>
+              <th className="text-center px-2 py-2 font-medium text-gray-700">Clar.</th>
+              <th className="text-center px-2 py-2 font-medium text-gray-700">Adeq.</th>
+              <th className="text-center px-2 py-2 font-medium text-gray-700">Fact.</th>
+              <th className="text-left px-4 py-2 font-medium text-gray-700">Comentário</th>
+              <th className="text-right px-4 py-2 font-medium text-gray-700">Data</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.ratings.map((r) => (
+              <tr key={r.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <td className="px-4 py-2 text-gray-900">{r.participantName ?? `#${r.participantId}`}</td>
+                <td className="px-4 py-2 text-gray-600">#{r.summaryId}</td>
+                <td className="text-center px-2 py-2 text-gray-900">{r.utilidade}</td>
+                <td className="text-center px-2 py-2 text-gray-900">{r.clareza}</td>
+                <td className="text-center px-2 py-2 text-gray-900">{r.adequacaoPerfil}</td>
+                <td className="text-center px-2 py-2 text-gray-900">{r.factualidadePercebida}</td>
+                <td className="px-4 py-2 text-gray-700 italic max-w-xs truncate" title={r.comment ?? ''}>
+                  {r.comment ?? '—'}
+                </td>
+                <td className="px-4 py-2 text-right text-gray-500 whitespace-nowrap">
+                  {new Date(r.createdAt).toLocaleDateString('pt-BR')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Tab 6: Exportar Dados
    ═══════════════════════════════════════════════════════════ */
 
 function ExportTab() {
