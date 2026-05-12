@@ -53,13 +53,25 @@ export function SummaryView() {
     regenPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [regenerated?.id]);
 
+  const summaryId = Number(id);
   const { data: articles, isLoading } = useQuery({
     queryKey: ['user-articles'],
     queryFn: () => userApi.getArticles(),
+    // Same pattern as Dashboard: while the summary on this page still has a
+    // null factuality score (background NLI job not finished), poll the
+    // list endpoint so the "Verificando..." badge resolves on its own.
+    refetchInterval: (query) => {
+      const data = query.state.data as Awaited<ReturnType<typeof userApi.getArticles>> | undefined;
+      if (!data) return false;
+      const current = data
+        .flatMap((article) => article.summaries)
+        .find((s) => s.id === summaryId);
+      return current && current.factualityScore === null ? 5000 : false;
+    },
+    refetchOnWindowFocus: true,
   });
 
   // Find the summary across all articles
-  const summaryId = Number(id);
   let foundSummary: DisplaySummary | null = null;
   let foundArticle: {
     id: number;
