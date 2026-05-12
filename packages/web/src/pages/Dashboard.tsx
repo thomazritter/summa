@@ -105,7 +105,10 @@ export function Dashboard() {
       {/* Header */}
       <header className="bg-white border-b border-gray-200 px-6 py-3 sticky top-0 z-10">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-bold text-gray-900">Summa</h1>
+          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <img src="/favicon-32x32.png" alt="" aria-hidden="true" className="w-6 h-6" />
+            Summa
+          </h1>
           <div className="flex items-center gap-4">
             {userEmail && (
               <span className="text-sm text-gray-600">{userEmail}</span>

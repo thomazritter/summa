@@ -70,7 +70,10 @@ export function AuthVerify() {
 
         {state === 'error' && (
           <div className="space-y-6">
-            <h1 className="text-3xl font-bold text-gray-900 text-center">Acesse o Summa</h1>
+            <h1 className="text-3xl font-bold text-gray-900 text-center flex items-center justify-center gap-3">
+              <img src="/apple-touch-icon.png" alt="" aria-hidden="true" className="w-10 h-10" />
+              Acesse o Summa
+            </h1>
             <div
               className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700 text-center"
               role="alert"

@@ -76,7 +76,10 @@ export function Login() {
   return (
     <div className="min-h-screen bg-[#f9fafb] flex items-center justify-center p-6">
       <div className="bg-white border border-gray-200 rounded-lg p-8 w-full max-w-md space-y-6">
-        <h1 className="text-3xl font-bold text-gray-900 text-center">Acesse o Summa</h1>
+        <h1 className="text-3xl font-bold text-gray-900 text-center flex items-center justify-center gap-3">
+          <img src="/apple-touch-icon.png" alt="" aria-hidden="true" className="w-10 h-10" />
+          Acesse o Summa
+        </h1>
 
         {/* Tabs */}
         <nav className="flex gap-6 justify-center" role="tablist" aria-label="Metodo de acesso">
