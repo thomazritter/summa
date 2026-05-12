@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { userApi, experimentApi } from '../api/client';
@@ -43,6 +43,15 @@ export function SummaryView() {
   const [regenerated, setRegenerated] = useState<RegeneratedSummary | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
+  const regenPanelRef = useRef<HTMLDivElement | null>(null);
+
+  // Scroll the regen panel into view once it appears. Without this, users
+  // see the unchanged parent at the top and assume the regeneration did
+  // nothing, missing the new panel further down the page.
+  useEffect(() => {
+    if (!regenerated) return;
+    regenPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [regenerated?.id]);
 
   const { data: articles, isLoading } = useQuery({
     queryKey: ['user-articles'],
@@ -232,7 +241,9 @@ export function SummaryView() {
         {/* Summary content */}
         <div className="bg-white border border-gray-200 rounded-lg p-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Resumo Personalizado</h2>
+            <h2 className="text-lg font-semibold text-gray-900">
+              {regenerated ? 'Resumo original' : 'Resumo Personalizado'}
+            </h2>
             <div className="flex items-center gap-3">
               {displaySummary.modelLabel && (
                 <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
@@ -318,10 +329,10 @@ export function SummaryView() {
 
         {/* Regenerated summary side-by-side */}
         {regenerated && (
-          <div className="mt-6 bg-white border border-gray-200 rounded-lg p-8">
+          <div ref={regenPanelRef} className="mt-6 bg-white border-2 border-[#2563eb] rounded-lg p-8 ring-4 ring-blue-100">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Resumo regenerado com evidências
+              <h2 className="text-lg font-semibold text-[#1d4ed8]">
+                Resumo regenerado com evidências (nova versão)
               </h2>
               <div className="flex items-center gap-3">
                 {regenerated.factualityScore !== null ? (
