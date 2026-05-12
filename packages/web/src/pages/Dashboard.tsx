@@ -76,6 +76,20 @@ export function Dashboard() {
     queryKey: ['user-articles'],
     queryFn: () => userApi.getArticles() as Promise<UserArticle[]>,
     enabled: hasProfile,
+    // Factuality scores (and other metrics surfaced indirectly) are filled
+    // in by background jobs after the summary row is saved. Without
+    // periodic refetch they would stay "null" on screen until the user
+    // manually reloaded. Poll while any summary still lacks a factuality
+    // score; stop polling otherwise.
+    refetchInterval: (query) => {
+      const data = query.state.data as UserArticle[] | undefined;
+      if (!data) return false;
+      const hasPending = data.some((article) =>
+        article.summaries.some((s) => s.factualityScore === null),
+      );
+      return hasPending ? 8000 : false;
+    },
+    refetchOnWindowFocus: true,
   });
 
   const handleLogout = () => {
