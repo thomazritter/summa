@@ -2,12 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { userApi, experimentApi } from '../api/client';
-import { ModelSwitcher } from '../components/ModelSwitcher';
 import { FactualityHighlightedMarkdown } from '../components/FactualityHighlightedMarkdown';
 import type { FactualitySentence } from '../components/FactualityHighlightedMarkdown';
 import { MetricsPanel } from '../components/MetricsPanel';
 import { SummaryRatingPanel } from '../components/SummaryRatingPanel';
-import type { SummaryResult } from '../api/client';
 
 interface RegeneratedSummary {
   id: number;
@@ -34,12 +32,6 @@ export function SummaryView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [overrideSummary, setOverrideSummary] = useState<{
-    id: number;
-    content: string;
-    modelId: string;
-    factualityScore: number | null;
-  } | null>(null);
   const [regenerated, setRegenerated] = useState<RegeneratedSummary | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
@@ -95,28 +87,7 @@ export function SummaryView() {
     }
   }
 
-  // If a new summary was generated via model switch, use it instead.
-  // Metrics for the new summary will populate on next refresh; show as null in the meantime.
-  const displaySummary: DisplaySummary | null = overrideSummary
-    ? {
-        id: overrideSummary.id,
-        content: overrideSummary.content,
-        factualityScore: overrideSummary.factualityScore,
-        factualityDetails: null,
-        rouge1: null,
-        rouge2: null,
-        rougeL: null,
-        bertScore: null,
-        modelId: overrideSummary.modelId,
-        modelLabel: overrideSummary.modelId,
-      }
-    : foundSummary;
-
-  const handleNewSummary = (summary: SummaryResult) => {
-    setOverrideSummary(summary);
-    void queryClient.invalidateQueries({ queryKey: ['user-articles'] });
-    navigate(`/summary/${summary.id}`, { replace: true });
-  };
+  const displaySummary: DisplaySummary | null = foundSummary;
 
   const handleRegenerateWithEvidence = async () => {
     if (!displaySummary) return;
@@ -381,13 +352,6 @@ export function SummaryView() {
         {displaySummary?.id && (
           <SummaryRatingPanel summaryId={displaySummary.id} />
         )}
-
-        {/* Model switcher */}
-        <ModelSwitcher
-          articleId={foundArticle.id}
-          currentModelId={overrideSummary?.modelId || foundSummary?.modelId || null}
-          onNewSummary={handleNewSummary}
-        />
       </div>
     </div>
   );

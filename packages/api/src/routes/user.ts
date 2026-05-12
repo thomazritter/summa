@@ -84,7 +84,6 @@ interface UserArticle {
 
 const summarizeSchema = z.object({
   articleId: z.number().int().positive(),
-  modelId: z.string().min(1).max(100).optional(),
 });
 
 // ─── GET /api/user/articles ────────────────────────────────────────
@@ -224,17 +223,7 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
     return res.status(400).json({ error: `Dados inválidos: ${zodErrorMessage(validation.error)}` });
   }
 
-  const { articleId, modelId } = validation.data;
-
-  // Validate modelId if provided
-  if (modelId) {
-    const validModel = AVAILABLE_MODELS.find((m) => m.id === modelId);
-    if (!validModel) {
-      return res.status(400).json({
-        error: `Modelo invalido: ${modelId}. Modelos disponiveis: ${AVAILABLE_MODELS.map((m) => m.id).join(', ')}`,
-      });
-    }
-  }
+  const { articleId } = validation.data;
 
   // Load participant to compute profile dimensions
   const participant = await queryOne<ParticipantRow>(
@@ -257,7 +246,6 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
       baseProfileId,
       dimensions,
       preferences,
-      modelId,
     );
 
     res.status(201).json({

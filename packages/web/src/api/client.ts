@@ -203,12 +203,6 @@ export const managerApi = {
   }>('/manager/product-ratings'),
 };
 
-export interface ModelOption {
-  id: string;
-  name: string;
-  description: string;
-}
-
 export interface SummaryResult {
   id: number;
   content: string;
@@ -256,13 +250,10 @@ export const userApi = {
       }>;
     }>>('/user/articles'),
 
-  getModels: () =>
-    apiRequest<ModelOption[]>('/experiment/models'),
-
-  summarize: (articleId: number, modelId?: string) =>
+  summarize: (articleId: number) =>
     apiRequest<SummaryResult>('/user/summarize', {
       method: 'POST',
-      body: JSON.stringify({ articleId, modelId }),
+      body: JSON.stringify({ articleId }),
     }),
 
   deleteSummary: (summaryId: number) =>

@@ -3,8 +3,6 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { userApi } from '../api/client';
-import { ModelSwitcher } from '../components/ModelSwitcher';
-import type { SummaryResult } from '../api/client';
 
 interface UserArticle {
   id: number;
@@ -100,10 +98,6 @@ export function Dashboard() {
 
   const toggleArticle = (articleId: number) => {
     setExpandedArticleId((prev) => (prev === articleId ? null : articleId));
-  };
-
-  const handleDashboardNewSummary = (_summary: SummaryResult) => {
-    void queryClient.invalidateQueries({ queryKey: ['user-articles'] });
   };
 
   return (
@@ -380,12 +374,6 @@ export function Dashboard() {
                             Excluir resumo
                           </button>
                         </div>
-
-                        <ModelSwitcher
-                          articleId={article.id}
-                          currentModelId={latestSummary.modelId}
-                          onNewSummary={handleDashboardNewSummary}
-                        />
                       </div>
                     )}
 
