@@ -37,12 +37,18 @@ export const extractRawText = async (buffer: Buffer): Promise<PDFExtractionResul
     throw new PDFProcessingError(`Failed to parse PDF: ${message}`);
   }
 
+  // Some PDFs include NUL bytes (0x00) in the extracted text. PostgreSQL TEXT
+  // columns reject them with "invalid byte sequence for encoding UTF8: 0x00",
+  // so strip them up front.
+  const sanitize = (s: string) => s.replace(/\x00/g, '');
+  const rawText = sanitize(data.text);
+  const titleSrc: string = data.info?.Title || extractTitleFromText(rawText) || '';
+  const title = sanitize(titleSrc);
+  const authors = data.info?.Author ? sanitize(data.info.Author) : undefined;
+
   return {
-    rawText: data.text,
-    metadata: {
-      title: data.info?.Title || extractTitleFromText(data.text),
-      authors: data.info?.Author || undefined,
-    },
+    rawText,
+    metadata: { title, authors },
   };
 };
 
