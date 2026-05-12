@@ -10,24 +10,38 @@
  * candidate model's agreement with ground-truth labels.
  *
  * Methodology (Mode B from the proposal):
- *   - Dataset: XNLI test split, joined cross-lingually (premise in EN +
- *     hypothesis in PT) to mirror the production scenario in which the
- *     anchor is an English paragraph from the article and the sentence is
- *     in Portuguese from the generated summary.
- *   - Sample: 30 examples per class × 3 classes = 90 pairs, taken from the
- *     beginning of the test split (deterministic, no random seed).
- *   - Prompt: the exact LLM_JUDGE_PROMPT used in production, with anchor
- *     replaced by the EN premise and sentence by the PT hypothesis.
+ *   - Dataset: MoritzLaurer/multilingual-NLI-26lang-2mil7, split pt_mnli.
+ *     This is a community-translated MNLI corpus by the same author who
+ *     trained the mDeBERTa NLI model used in production, so the bench
+ *     mirrors the conditions under which the production NLI step itself
+ *     was tuned. Rows expose both the original EN texts and PT machine
+ *     translations.
+ *   - Cross-lingual pairing: premise = premise_original (EN), hypothesis
+ *     = hypothesis (PT). This mirrors the production scenario in which
+ *     the anchor is an English paragraph from the article and the
+ *     sentence is in Portuguese from the generated summary.
+ *   - Sample: 30 examples per class × 3 classes = 90 pairs, taken
+ *     deterministically from the start of the split (no random seed) and
+ *     stratified by label.
+ *   - Prompts: TWO variants tested independently per model:
+ *       1. verbatim — copied as-is from factualityChecker.ts, including
+ *          the "NLI marcou esta frase como neutra" framing that reflects
+ *          production conditions (judge only called on NLI-neutral cases).
+ *       2. neutralized — same task but with the NLI hint removed, to
+ *          test pure classification ability without the bias toward
+ *          re-classifying as neutral.
  *   - Per candidate: temperature 0.1, maxTokens 300, parse JSON output.
- *   - Aggregates: accuracy, macro F1, per-class precision/recall, confusion
- *     matrix, parse-failure count.
+ *   - Aggregates: accuracy, macro F1, per-class precision/recall,
+ *     confusion matrix, parse-failure count.
  *
- * Result file: scripts/results/benchmark-llm-judge-{ts}.csv
+ * Result files: scripts/results/benchmark-llm-judge-{ts}.csv (per-model
+ * × per-variant summary) and benchmark-llm-judge-detail-{ts}.csv
+ * (per-prediction rows).
  *
- * Limitation: XNLI is a general-domain NLI dataset (news, fiction, travel),
- * while production runs the judge on scientific summaries. The metric here
- * isolates *classification ability* and not domain transfer; the §6.7 /
- * Apêndice F narrative records both numbers and this domain caveat.
+ * Limitation: MNLI source data is general-domain (news, fiction,
+ * conversation), not scientific. The metric here isolates classification
+ * ability, not domain transfer; the Apêndice F narrative records this
+ * caveat alongside the numbers.
  *
  * Usage:
  *   N_PER_CLASS=30 JUDGE_MODELS=llama-3.3-70b-versatile,qwen/qwen3-32b
@@ -131,18 +145,20 @@ const PROMPT_TEMPLATES: Record<PromptVariant, string> = {
 };
 const PROMPT_VARIANTS: PromptVariant[] = ['verbatim', 'neutralized'];
 
-type XnliLabel = 0 | 1 | 2;
-const LABEL_NAMES: Record<XnliLabel, 'supported' | 'neutral' | 'contradicted'> = {
+type NliLabel = 0 | 1 | 2;
+const LABEL_NAMES: Record<NliLabel, 'supported' | 'neutral' | 'contradicted'> = {
   0: 'supported',     // entailment
   1: 'neutral',
   2: 'contradicted',  // contradiction
 };
 
-interface XnliRow {
+interface NliRow {
   row: {
-    premise: string;
-    hypothesis: string;
-    label: XnliLabel;
+    premise_original: string;  // EN
+    hypothesis_original: string; // EN
+    premise: string;             // PT
+    hypothesis: string;          // PT
+    label: NliLabel;
   };
   row_idx: number;
 }
@@ -163,17 +179,18 @@ interface PredictionRow {
   durationMs: number;
 }
 
-async function fetchXnliRows(config: 'en' | 'pt', total: number): Promise<XnliRow[]> {
-  const out: XnliRow[] = [];
+async function fetchNliRows(total: number): Promise<NliRow[]> {
+  const out: NliRow[] = [];
   let offset = 0;
   const pageSize = 100;
+  const datasetParam = encodeURIComponent('MoritzLaurer/multilingual-NLI-26lang-2mil7');
   while (out.length < total) {
-    const url = `https://datasets-server.huggingface.co/rows?dataset=facebook/xnli&config=${config}&split=test&offset=${offset}&length=${pageSize}`;
+    const url = `https://datasets-server.huggingface.co/rows?dataset=${datasetParam}&config=default&split=pt_mnli&offset=${offset}&length=${pageSize}`;
     const res = await fetch(url);
     if (!res.ok) {
-      throw new Error(`HF API ${config} offset=${offset}: HTTP ${res.status}`);
+      throw new Error(`HF API offset=${offset}: HTTP ${res.status}`);
     }
-    const json = await res.json() as { rows: XnliRow[] };
+    const json = await res.json() as { rows: NliRow[] };
     if (!json.rows || json.rows.length === 0) break;
     out.push(...json.rows);
     offset += json.rows.length;
@@ -183,42 +200,29 @@ async function fetchXnliRows(config: 'en' | 'pt', total: number): Promise<XnliRo
 }
 
 async function buildStratifiedSample(nPerClass: number): Promise<JoinedPair[]> {
-  // Pull enough EN + PT rows that we have at least nPerClass per label after
-  // stratification. XNLI test has 5010 rows total per language; balanced
-  // across 3 labels ≈ 1670 per class, but we sample from the head, so 600
-  // rows comfortably covers ≥nPerClass=30 of each label.
+  // We don't know the class distribution a priori in pt_mnli; in MNLI the
+  // 3 classes are roughly balanced, so pulling 20x the target per class
+  // is a safe headroom that lets stratification finish in one fetch loop.
   const target = Math.max(600, nPerClass * 20);
-  console.log(`[bench-judge] fetching XNLI test rows (target=${target}) for en + pt…`);
-  const [enRows, ptRows] = await Promise.all([
-    fetchXnliRows('en', target),
-    fetchXnliRows('pt', target),
-  ]);
-  console.log(`[bench-judge] fetched: en=${enRows.length} pt=${ptRows.length}`);
-
-  // Index by row_idx in case ordering ever drifts; XNLI is parallel so
-  // row_idx i across configs refers to the same example.
-  const ptByIdx = new Map<number, XnliRow>();
-  for (const r of ptRows) ptByIdx.set(r.row_idx, r);
-
-  const joined: JoinedPair[] = [];
-  for (const en of enRows) {
-    const pt = ptByIdx.get(en.row_idx);
-    if (!pt) continue;
-    if (en.row.label !== pt.row.label) continue;  // sanity: should always match
-    joined.push({
-      rowIdx: en.row_idx,
-      premise_en: en.row.premise,
-      hypothesis_pt: pt.row.hypothesis,
-      trueLabel: LABEL_NAMES[en.row.label],
-    });
-  }
+  console.log(`[bench-judge] fetching MoritzLaurer multilingual-NLI pt_mnli rows (target=${target})…`);
+  const rows = await fetchNliRows(target);
+  console.log(`[bench-judge] fetched: ${rows.length} rows`);
 
   const byClass: Record<'supported' | 'neutral' | 'contradicted', JoinedPair[]> = {
     supported: [],
     neutral: [],
     contradicted: [],
   };
-  for (const j of joined) byClass[j.trueLabel].push(j);
+  for (const r of rows) {
+    const trueLabel = LABEL_NAMES[r.row.label];
+    if (!trueLabel) continue;
+    byClass[trueLabel].push({
+      rowIdx: r.row_idx,
+      premise_en: r.row.premise_original,
+      hypothesis_pt: r.row.hypothesis,
+      trueLabel,
+    });
+  }
 
   const sample = [
     ...byClass.supported.slice(0, nPerClass),
