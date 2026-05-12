@@ -321,11 +321,6 @@ export function Dashboard() {
                         className="border-t border-gray-200 p-6"
                       >
                         <div className="flex flex-wrap items-center gap-2 mb-4">
-                          {latestSummary.modelLabel && (
-                            <span className="bg-gray-100 text-gray-600 text-xs font-medium rounded-full px-2.5 py-0.5">
-                              {latestSummary.modelLabel}
-                            </span>
-                          )}
                           {latestSummary.profile && (
                             <>
                               <span className="bg-blue-50 text-[#2563eb] text-xs font-medium rounded-full px-2.5 py-0.5">

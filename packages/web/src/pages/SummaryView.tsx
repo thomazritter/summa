@@ -241,15 +241,10 @@ export function SummaryView() {
           />
         </div>
 
-        {/* Technical metrics */}
+        {/* Factuality breakdown */}
         <MetricsPanel
           factualityScore={displaySummary.factualityScore}
           factualityDetails={displaySummary.factualityDetails}
-          rouge1={displaySummary.rouge1}
-          rouge2={displaySummary.rouge2}
-          rougeL={displaySummary.rougeL}
-          bertScore={displaySummary.bertScore}
-          pAccuracy={foundArticle.pAccuracy}
         />
 
         {/* Guided regeneration by factuality */}
