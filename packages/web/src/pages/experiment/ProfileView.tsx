@@ -7,17 +7,21 @@ import { PROFILE_DIMENSIONS, FORMAT_DIMENSIONS } from '../../constants/profileDi
 const DIMENSIONS = [...PROFILE_DIMENSIONS, ...FORMAT_DIMENSIONS];
 
 const SOURCE_BADGES: Record<string, { label: string; classes: string }> = {
+  // 'questionnaire' and 'cv' (CV-inferred) share the same neutral "Derivado"
+  // label — the distinction at the badge level was confusing users and the
+  // backend already exposes the underlying source via `profile.profileSource`
+  // when the page needs it.
   questionnaire: {
-    label: 'Derivado do questionário',
+    label: 'Derivado',
+    classes: 'bg-blue-100 text-[#2563eb]',
+  },
+  cv: {
+    label: 'Derivado',
     classes: 'bg-blue-100 text-[#2563eb]',
   },
   manual: {
     label: 'Editado manualmente',
     classes: 'bg-amber-100 text-[#d97706]',
-  },
-  inferred: {
-    label: 'Inferido do currículo',
-    classes: 'bg-purple-100 text-purple-700',
   },
 };
 
