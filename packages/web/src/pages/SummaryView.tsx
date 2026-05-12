@@ -307,6 +307,15 @@ export function SummaryView() {
             const factualityHighEnough =
               displaySummary.factualityScore !== null
               && displaySummary.factualityScore >= 0.70;
+            // Soft warning band: between 0.65 and 0.70 the regen bench shows
+            // the smallest marginal gains and the highest relative regression
+            // risk. The action stays enabled (the user always has the original
+            // to fall back to), but we surface the expectation up-front so a
+            // 0.68 → 0.65 result does not feel like a bug.
+            const isLowExpectedGain =
+              displaySummary.factualityScore !== null
+              && displaySummary.factualityScore >= 0.65
+              && displaySummary.factualityScore < 0.70;
             // One regen per parent: disable once a child summary exists in the
             // article (either tracked in local `regenerated` state from this
             // session, or persisted from a previous session).
@@ -349,6 +358,11 @@ export function SummaryView() {
                           ? 'Regenerar com foco em factualidade'
                           : `Regenerar com foco em factualidade (${flaggedCount} frase${flaggedCount === 1 ? '' : 's'} sinalizada${flaggedCount === 1 ? '' : 's'})`}
                 </button>
+                {isLowExpectedGain && !disabled && (
+                  <p className="mt-2 text-xs text-amber-700">
+                    Atenção: nesta faixa de factualidade (65–70%), o ganho médio observado é pequeno e há chance de o resumo regenerado piorar. Você pode comparar as duas versões antes de decidir qual manter.
+                  </p>
+                )}
                 {regenError && (
                   <p className="mt-2 text-xs text-red-700">{regenError}</p>
                 )}
