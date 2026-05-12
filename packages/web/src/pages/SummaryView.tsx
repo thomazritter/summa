@@ -298,6 +298,15 @@ export function SummaryView() {
               ? displaySummary.factualityDetails.filter((d) => d.label !== 'supported').length
               : 0;
             const noFlagged = flaggedCount === 0;
+            // Empirical guard: the regen bench (Appendix G of the thesis,
+            // Llama 4 Scout N=20) shows mean improvement collapses to ~+0.015
+            // once factuality crosses 0.70, with non-trivial probability of
+            // regressing. Below 0.70, 14 of 16 cases improved (mean +0.07).
+            // Block the action above that threshold so the user does not
+            // pay an LLM call to most likely make things worse.
+            const factualityHighEnough =
+              displaySummary.factualityScore !== null
+              && displaySummary.factualityScore >= 0.70;
             // One regen per parent: disable once a child summary exists in the
             // article (either tracked in local `regenerated` state from this
             // session, or persisted from a previous session).
@@ -307,12 +316,15 @@ export function SummaryView() {
                   .some((s) => s.parentSummaryId === displaySummary.id)
                 ?? false
               ) : false);
-            const disabled = noFlagged || regenLoading || alreadyRegenerated;
+            const disabled =
+              noFlagged || regenLoading || alreadyRegenerated || factualityHighEnough;
             const buttonTitle = alreadyRegenerated
               ? 'Este resumo já foi regenerado uma vez. Apenas uma regeneração por resumo é permitida.'
-              : noFlagged
-                ? 'Nenhuma frase deste resumo foi sinalizada como não apoiada pelo artigo.'
-                : `Reprocessa o resumo usando os trechos do artigo correspondentes às ${flaggedCount} frase(s) sinalizadas.`;
+              : factualityHighEnough
+                ? 'Factualidade já está alta (≥ 70%). Nos testes deste trabalho, regenerar acima desse limiar tende a não melhorar e pode piorar o resumo.'
+                : noFlagged
+                  ? 'Nenhuma frase deste resumo foi sinalizada como não apoiada pelo artigo.'
+                  : `Reprocessa o resumo usando os trechos do artigo correspondentes às ${flaggedCount} frase(s) sinalizadas.`;
 
             return (
               <div className="mt-5 pt-4 border-t border-gray-100">
@@ -331,9 +343,11 @@ export function SummaryView() {
                     ? 'Regenerando…'
                     : alreadyRegenerated
                       ? 'Já regenerado'
-                      : noFlagged
-                        ? 'Regenerar com foco em factualidade'
-                        : `Regenerar com foco em factualidade (${flaggedCount} frase${flaggedCount === 1 ? '' : 's'} sinalizada${flaggedCount === 1 ? '' : 's'})`}
+                      : factualityHighEnough
+                        ? 'Factualidade já está alta'
+                        : noFlagged
+                          ? 'Regenerar com foco em factualidade'
+                          : `Regenerar com foco em factualidade (${flaggedCount} frase${flaggedCount === 1 ? '' : 's'} sinalizada${flaggedCount === 1 ? '' : 's'})`}
                 </button>
                 {regenError && (
                   <p className="mt-2 text-xs text-red-700">{regenError}</p>
