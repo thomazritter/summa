@@ -53,6 +53,11 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_context TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
 
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_expertise TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_focus TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_depth TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_context TEXT;
+
     ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
 
     ALTER TABLE articles ADD COLUMN IF NOT EXISTS uploaded_by INTEGER;
@@ -89,6 +94,28 @@ export async function runMigrations(): Promise<void> {
   `;
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');
+
+  // Backfill: legacy CV participants stored inferred values in override_*.
+  // Move them to cv_* and clear the overrides so the UI labels them as
+  // "Inferido do currículo" instead of "Editado manualmente". Idempotent.
+  await query(`
+    UPDATE participants
+    SET
+      cv_expertise = COALESCE(cv_expertise, override_expertise),
+      cv_focus     = COALESCE(cv_focus,     override_focus),
+      cv_depth     = COALESCE(cv_depth,     override_depth),
+      cv_context   = COALESCE(cv_context,   override_context),
+      override_expertise = NULL,
+      override_focus     = NULL,
+      override_depth     = NULL,
+      override_context   = NULL
+    WHERE profile_source = 'cv'
+      AND (override_expertise IS NOT NULL
+        OR override_focus     IS NOT NULL
+        OR override_depth     IS NOT NULL
+        OR override_context   IS NOT NULL);
+  `);
+  console.log('[auto-migrate] CV-inferred override values backfilled into cv_* columns.');
 
   // 2d. Add index for email lookups on access_codes
   await query('CREATE INDEX IF NOT EXISTS idx_access_codes_email ON access_codes(email);');

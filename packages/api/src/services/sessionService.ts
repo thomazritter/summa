@@ -56,30 +56,37 @@ export function computeProfileDimensions(participant: ParticipantRow): ProfileDi
     || config.dimensions.focus;
 
   return {
-    expertise: (participant.override_expertise as ProfileDimensions['expertise']) || config.dimensions.expertise,
-    focus: (participant.override_focus as ProfileDimensions['focus']) || focus,
-    depth: (participant.override_depth as ProfileDimensions['depth']) || depth,
-    context: (participant.override_context as ProfileDimensions['context']) || config.dimensions.context,
+    expertise: (participant.override_expertise
+      || participant.cv_expertise
+      || config.dimensions.expertise) as ProfileDimensions['expertise'],
+    focus: (participant.override_focus
+      || participant.cv_focus
+      || focus) as ProfileDimensions['focus'],
+    depth: (participant.override_depth
+      || participant.cv_depth
+      || depth) as ProfileDimensions['depth'],
+    context: (participant.override_context
+      || participant.cv_context
+      || config.dimensions.context) as ProfileDimensions['context'],
   };
 }
 
 /**
- * Compute per-dimension sources to show whether a value comes from
- * the questionnaire, manual override, or CV analysis.
+ * Compute per-dimension sources so the UI can distinguish a value that came
+ * from the questionnaire, a manual edit, or a CV inference.
  */
 export function computeProfileSources(participant: ParticipantRow): Record<string, string> {
-  const profileSource = participant.profile_source || 'questionnaire';
-  const sourceLabel = (override: string | null): string => {
+  const sourceLabel = (override: string | null, cv: string | null): string => {
     if (override) return 'manual';
-    if (profileSource === 'cv') return 'cv';
+    if (cv) return 'cv';
     return 'questionnaire';
   };
 
   return {
-    expertise: sourceLabel(participant.override_expertise),
-    focus: sourceLabel(participant.override_focus),
-    depth: sourceLabel(participant.override_depth),
-    context: sourceLabel(participant.override_context),
+    expertise: sourceLabel(participant.override_expertise, participant.cv_expertise),
+    focus: sourceLabel(participant.override_focus, participant.cv_focus),
+    depth: sourceLabel(participant.override_depth, participant.cv_depth),
+    context: sourceLabel(participant.override_context, participant.cv_context),
     structurePreference: 'questionnaire',
   };
 }

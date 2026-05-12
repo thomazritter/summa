@@ -453,6 +453,30 @@ export const experimentApi = {
       method: 'POST',
     }),
 
+  refreshProfileFromCv: async (file: File): Promise<{
+    dimensions: Record<string, string | null>;
+    sources: Record<string, string>;
+    profileSource: string;
+  }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const headers: Record<string, string> = {};
+    const code = sessionStorage.getItem('accessCode');
+    if (code) {
+      headers['x-access-code'] = code;
+    }
+    const response = await fetch(`${API_BASE}/experiment/profile/refresh-from-cv`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Falha ao atualizar perfil via CV' }));
+      throw new Error(error.error || 'Falha ao atualizar perfil via CV');
+    }
+    return response.json();
+  },
+
   regenerateSummaryWithEvidence: (summaryId: number) =>
     apiRequest<{
       id: number;

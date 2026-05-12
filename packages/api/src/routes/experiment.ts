@@ -438,7 +438,7 @@ experimentRoutes.post('/participants/from-cv', asyncHandler(async (req: Request,
   const row = await queryOne<ParticipantRow>(`
     INSERT INTO participants (
       name, experience_level, years_experience, reading_frequency, topic_familiarity,
-      override_expertise, override_focus, override_depth, override_context,
+      cv_expertise, cv_focus, cv_depth, cv_context,
       structure_preference, profile_source
     )
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -570,6 +570,79 @@ experimentRoutes.post('/profile/reset', asyncHandler(async (req: Request, res: R
     profileSource: participant.profile_source || 'questionnaire',
   });
 }));
+
+// POST /api/experiment/profile/refresh-from-cv
+// Re-runs CV inference for the current participant and replaces the cv_*
+// values. Manual overrides (override_*) are preserved; the UI can still
+// reset them via POST /profile/reset if the user wants the new CV values
+// to take effect.
+experimentRoutes.post(
+  '/profile/refresh-from-cv',
+  cvUpload.single('file'),
+  handleCvMulterError,
+  asyncHandler(async (req: Request, res: Response) => {
+    const participantId = req.accessCode?.participantId;
+    if (!participantId) {
+      return res.status(400).json({ error: 'Nenhum participante vinculado a este codigo de acesso' });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nenhum arquivo PDF enviado' });
+    }
+
+    const outcome = await inferProfileFromCv(req.file.buffer);
+    switch (outcome.kind) {
+      case 'not_cv':
+        return res.status(422).json({
+          error: `O documento enviado nao parece ser um curriculo profissional. ${outcome.reason}`,
+          kind: 'not_cv',
+        });
+      case 'insufficient_text':
+        return res.status(422).json({
+          error: 'O PDF enviado contem pouco ou nenhum texto extraivel. Verifique se o arquivo nao e uma imagem digitalizada e tente novamente.',
+          kind: 'insufficient_text',
+        });
+      case 'parse_failed':
+        return res.status(422).json({
+          error: 'Nao foi possivel inferir o perfil a partir do curriculo. Tente um PDF com seu historico profissional em formato textual.',
+          kind: 'parse_failed',
+        });
+    }
+
+    const { dimensions, experienceLevel, domain } = outcome.profile;
+
+    await execute(
+      `UPDATE participants
+       SET cv_expertise = $1,
+           cv_focus     = $2,
+           cv_depth     = $3,
+           cv_context   = $4,
+           experience_level = $5,
+           domain       = COALESCE($6, domain),
+           profile_source = 'cv'
+       WHERE id = $7`,
+      [
+        dimensions.expertise,
+        dimensions.focus,
+        dimensions.depth,
+        dimensions.context,
+        experienceLevel,
+        domain,
+        participantId,
+      ],
+    );
+
+    const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
+    if (!participant) {
+      return res.status(404).json({ error: 'Participante nao encontrado' });
+    }
+
+    res.json({
+      dimensions: serializeProfileForApi(participant),
+      sources: computeProfileSources(participant),
+      profileSource: participant.profile_source || 'questionnaire',
+    });
+  }),
+);
 
 // GET /api/experiment/articles — list available articles for the experiment
 experimentRoutes.get('/articles', asyncHandler(async (_req: Request, res: Response) => {

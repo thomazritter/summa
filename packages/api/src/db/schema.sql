@@ -229,6 +229,14 @@ ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_focus TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_depth TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_context TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
+
+-- Values inferred from CV are stored separately from manual overrides so the
+-- UI can distinguish "inferido do currículo" from "editado manualmente".
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_expertise TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_focus TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_depth TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_context TEXT;
+
 ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
 
 -- ─── Domain & Current Project ─────────────────────────────────────

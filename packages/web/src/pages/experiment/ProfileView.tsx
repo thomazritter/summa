@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { experimentApi } from '../../api/client';
@@ -33,7 +33,7 @@ export function ProfileView() {
   const [currentProject, setCurrentProject] = useState('');
   const [originalCurrentProject, setOriginalCurrentProject] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
-  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!participantId) {
@@ -76,15 +76,22 @@ export function ProfileView() {
     },
   });
 
-  const resetMutation = useMutation({
-    mutationFn: () => experimentApi.resetProfile(),
+  const refreshFromCvMutation = useMutation({
+    mutationFn: (file: File) => experimentApi.refreshProfileFromCv(file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['experiment-profile'] });
-      setShowResetConfirm(false);
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     },
   });
+
+  const handleCvFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      refreshFromCvMutation.mutate(file);
+    }
+    e.target.value = '';
+  };
 
   if (!participantId) {
     return null;
@@ -97,10 +104,6 @@ export function ProfileView() {
     hasDimensionChanges ||
     domain !== originalDomain ||
     currentProject !== originalCurrentProject;
-
-  const hasOverrides = profile?.sources
-    ? Object.values(profile.sources).some((source) => source === 'manual')
-    : false;
 
   const handleSave = () => {
     const overrides: Record<string, string> = {};
@@ -176,9 +179,9 @@ export function ProfileView() {
           </div>
         )}
 
-        {resetMutation.error && (
+        {refreshFromCvMutation.error && (
           <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-6" role="alert">
-            Erro ao resetar: {(resetMutation.error as Error).message}
+            {(refreshFromCvMutation.error as Error).message}
           </div>
         )}
 
@@ -305,36 +308,24 @@ export function ProfileView() {
                 {updateMutation.isPending ? 'Salvando...' : 'Salvar'}
               </button>
 
-              {hasOverrides && !showResetConfirm && (
-                <button
-                  type="button"
-                  onClick={() => setShowResetConfirm(true)}
-                  className="py-3 px-6 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:border-gray-400 transition-colors"
-                >
-                  Resetar padrões
-                </button>
-              )}
-
-              {showResetConfirm && (
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-gray-600">Tem certeza?</span>
-                  <button
-                    type="button"
-                    onClick={() => resetMutation.mutate()}
-                    disabled={resetMutation.isPending}
-                    className="py-2 px-4 bg-red-600 text-white text-sm font-semibold rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
-                  >
-                    {resetMutation.isPending ? 'Resetando...' : 'Confirmar'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowResetConfirm(false)}
-                    className="py-2 px-4 border border-gray-300 text-gray-700 text-sm rounded-lg hover:border-gray-400 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={refreshFromCvMutation.isPending}
+                className="py-3 px-6 border border-gray-300 text-gray-700 font-semibold rounded-lg hover:border-gray-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                title="Reenvia seu currículo em PDF para inferir o perfil novamente."
+              >
+                {refreshFromCvMutation.isPending
+                  ? 'Analisando currículo...'
+                  : 'Atualizar via novo currículo'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                className="hidden"
+                onChange={handleCvFile}
+              />
             </div>
           </>
         )}

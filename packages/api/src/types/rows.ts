@@ -45,6 +45,10 @@ export interface ParticipantRow {
   override_focus: string | null;
   override_depth: string | null;
   override_context: string | null;
+  cv_expertise: string | null;
+  cv_focus: string | null;
+  cv_depth: string | null;
+  cv_context: string | null;
   domain: string | null;
   current_project: string | null;
   profile_source: string;
