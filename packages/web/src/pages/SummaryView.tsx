@@ -241,7 +241,7 @@ export function SummaryView() {
                   {displaySummary.modelLabel}
                 </span>
               )}
-              {displaySummary.factualityScore !== null && (
+              {displaySummary.factualityScore !== null ? (
                 <span className={`px-3 py-1 text-xs rounded-full ${
                   displaySummary.factualityScore >= 0.8
                     ? 'bg-green-100 text-green-700'
@@ -250,6 +250,10 @@ export function SummaryView() {
                     : 'bg-red-100 text-red-700'
                 }`}>
                   Factualidade: {(displaySummary.factualityScore * 100).toFixed(0)}%
+                </span>
+              ) : (
+                <span className="px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
+                  Verificando factualidade...
                 </span>
               )}
             </div>
