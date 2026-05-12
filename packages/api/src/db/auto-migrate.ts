@@ -116,6 +116,10 @@ export async function runMigrations(): Promise<void> {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_variant ON summaries(article_id, profile_id) WHERE profile_id IN (98, 99);
     -- One product rating per (participant, summary) pair.
     CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_product_rating ON summary_ratings(participant_id, summary_id) WHERE source = 'product';
+    -- Lookup index for product ratings by participant (moved here from
+    -- schema.sql because the WHERE clause references the source column,
+    -- which only exists after the ALTER TABLE above).
+    CREATE INDEX IF NOT EXISTS idx_summary_ratings_participant ON summary_ratings(participant_id) WHERE source = 'product';
   `;
   await query(uniqueConstraints);
   console.log('[auto-migrate] Unique constraints ensured.');

@@ -189,7 +189,9 @@ CREATE TABLE IF NOT EXISTS summary_ratings (
   FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_summary_ratings_session ON summary_ratings(session_id);
-CREATE INDEX IF NOT EXISTS idx_summary_ratings_participant ON summary_ratings(participant_id) WHERE source = 'product';
+-- idx_summary_ratings_participant (WHERE source = 'product') is created in
+-- auto-migrate.ts AFTER the source column is added via ALTER TABLE, to remain
+-- compatible with pre-existing databases where the column did not yet exist.
 
 -- Post-test responses (replaces Google Forms)
 CREATE TABLE IF NOT EXISTS post_test_responses (
