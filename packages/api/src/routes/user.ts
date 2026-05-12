@@ -300,6 +300,25 @@ userRoutes.delete('/summaries/:id', asyncHandler(async (req: Request, res: Respo
   }
 
   await execute('DELETE FROM summaries WHERE id = $1', [summaryId]);
+
+  // If that was the user's last summary for this article AND the article
+  // is not referenced by any experiment session, drop the article too so
+  // the dashboard doesn't keep showing "Sem resumo disponível" cards.
+  const remaining = await queryOne<{ count: string }>(
+    'SELECT COUNT(*)::text AS count FROM summaries WHERE article_id = $1',
+    [summary.article_id],
+  );
+  const inExperiment = await queryOne<{ id: number }>(
+    `SELECT id FROM experiment_sessions
+     WHERE personalized_summary_id IN (SELECT id FROM summaries WHERE article_id = $1)
+        OR generic_summary_id IN (SELECT id FROM summaries WHERE article_id = $1)
+     LIMIT 1`,
+    [summary.article_id],
+  );
+  if (remaining && Number(remaining.count) === 0 && !inExperiment) {
+    await execute('DELETE FROM articles WHERE id = $1', [summary.article_id]);
+  }
+
   res.json({ success: true });
 }));
 
