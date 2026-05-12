@@ -41,6 +41,7 @@ export function CvUpload() {
   const [structurePreference, setStructurePreference] = useState('');
   const [name, setName] = useState('');
   const [inferredDomain, setInferredDomain] = useState('');
+  const [currentProject, setCurrentProject] = useState('');
 
   // Cycle loading messages every 2 seconds
   useEffect(() => {
@@ -70,11 +71,15 @@ export function CvUpload() {
       experienceLevel: string;
       structurePreference: string;
       dimensions: Record<string, string>;
+      domain?: string;
+      currentProject?: string;
     }) => experimentApi.registerFromCv({
       name: data.name,
       experienceLevel: data.experienceLevel,
       dimensions: data.dimensions,
       structurePreference: data.structurePreference,
+      ...(data.domain ? { domain: data.domain } : {}),
+      ...(data.currentProject ? { currentProject: data.currentProject } : {}),
     }),
     onSuccess: (participant) => {
       sessionStorage.setItem('experimentParticipantId', String(participant.id));
@@ -165,8 +170,9 @@ export function CvUpload() {
       structurePreference,
       dimensions: selections,
       ...(inferredDomain.trim() ? { domain: inferredDomain.trim() } : {}),
+      ...(currentProject.trim() ? { currentProject: currentProject.trim() } : {}),
     });
-  }, [name, structurePreference, selections, inferredDomain, registerMutation]);
+  }, [name, structurePreference, selections, inferredDomain, currentProject, registerMutation]);
 
   const isResultsValid =
     name.trim().length > 0 &&
@@ -454,6 +460,31 @@ export function CvUpload() {
                 />
               </div>
             )}
+
+            {/* Current project (manual; not inferred from CV) */}
+            <div className="bg-white border border-gray-200 rounded-lg p-6 mb-8">
+              <label
+                htmlFor="cv-current-project"
+                className="block text-sm font-medium text-gray-700 mb-1"
+              >
+                Projeto Atual <span className="text-gray-400 font-normal">(opcional)</span>
+              </label>
+              <p className="text-xs text-gray-500 mb-3 italic">
+                Descreva brevemente o que você está trabalhando para personalizarmos os resumos.
+              </p>
+              <textarea
+                id="cv-current-project"
+                value={currentProject}
+                onChange={(e) => setCurrentProject(e.target.value)}
+                placeholder="Ex: estudo de algoritmos de NLI multilíngue para sumarização científica..."
+                maxLength={2000}
+                rows={3}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb] resize-none"
+              />
+              <p className="text-xs text-gray-400 text-right mt-1">
+                {currentProject.length}/2000
+              </p>
+            </div>
 
             {/* Separator */}
             <div className="border-t border-gray-200 my-8" />

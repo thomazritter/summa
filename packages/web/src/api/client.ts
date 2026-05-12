@@ -341,6 +341,7 @@ export const experimentApi = {
     dimensions: Record<string, string>;
     structurePreference: string;
     domain?: string;
+    currentProject?: string;
   }) =>
     apiRequest<{ id: number; name: string; experienceLevel: string }>('/experiment/participants/from-cv', {
       method: 'POST',

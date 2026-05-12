@@ -85,6 +85,8 @@ const registerFromCvSchema = z.object({
   }),
   experienceLevel: z.enum(['junior', 'pleno', 'senior']),
   structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
+  domain: z.string().max(500).optional(),
+  currentProject: z.string().max(2000).optional(),
 });
 
 // ─── CV Upload (Multer) ────────────────────────────────────────────
@@ -433,15 +435,15 @@ experimentRoutes.post('/participants/from-cv', asyncHandler(async (req: Request,
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
-  const { name, dimensions, experienceLevel, structurePreference } = validation.data;
+  const { name, dimensions, experienceLevel, structurePreference, domain, currentProject } = validation.data;
 
   const row = await queryOne<ParticipantRow>(`
     INSERT INTO participants (
       name, experience_level, years_experience, reading_frequency, topic_familiarity,
       cv_expertise, cv_focus, cv_depth, cv_context,
-      structure_preference, profile_source
+      structure_preference, domain, current_project, profile_source
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     RETURNING *
   `, [
     name,
@@ -454,6 +456,8 @@ experimentRoutes.post('/participants/from-cv', asyncHandler(async (req: Request,
     dimensions.depth,
     dimensions.context,
     structurePreference || null,
+    domain?.trim() || null,
+    currentProject?.trim() || null,
     'cv',
   ]);
 
