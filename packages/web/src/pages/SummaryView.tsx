@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { userApi, experimentApi } from '../api/client';
 import { FactualityHighlightedMarkdown } from '../components/FactualityHighlightedMarkdown';
 import type { FactualitySentence } from '../components/FactualityHighlightedMarkdown';
-import { MetricsPanel } from '../components/MetricsPanel';
 import { SummaryRatingPanel } from '../components/SummaryRatingPanel';
 
 interface RegeneratedSummary {
@@ -292,63 +291,57 @@ export function SummaryView() {
             content={displaySummary.content}
             factualityDetails={displaySummary.factualityDetails}
           />
+
+          {/* Guided regeneration by factuality, attached to the primary summary card */}
+          {(() => {
+            const flaggedCount = displaySummary.factualityDetails
+              ? displaySummary.factualityDetails.filter((d) => d.label !== 'supported').length
+              : 0;
+            const noFlagged = flaggedCount === 0;
+            // One regen per parent: disable once a child summary exists in the
+            // article (either tracked in local `regenerated` state from this
+            // session, or persisted from a previous session).
+            const alreadyRegenerated = regenerated !== null
+              || (foundArticle ? (
+                articles?.find((a) => a.id === foundArticle.id)?.summaries
+                  .some((s) => s.parentSummaryId === displaySummary.id)
+                ?? false
+              ) : false);
+            const disabled = noFlagged || regenLoading || alreadyRegenerated;
+            const buttonTitle = alreadyRegenerated
+              ? 'Este resumo já foi regenerado uma vez. Apenas uma regeneração por resumo é permitida.'
+              : noFlagged
+                ? 'Nenhuma frase deste resumo foi sinalizada como não apoiada pelo artigo.'
+                : `Reprocessa o resumo usando os trechos do artigo correspondentes às ${flaggedCount} frase(s) sinalizadas.`;
+
+            return (
+              <div className="mt-5 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={handleRegenerateWithEvidence}
+                  disabled={disabled}
+                  title={buttonTitle}
+                  className={`text-sm transition-colors ${
+                    disabled
+                      ? 'text-gray-400 cursor-not-allowed'
+                      : 'text-[#2563eb] hover:text-[#1d4ed8] hover:underline'
+                  }`}
+                >
+                  {regenLoading
+                    ? 'Regenerando…'
+                    : alreadyRegenerated
+                      ? 'Já regenerado'
+                      : noFlagged
+                        ? 'Regenerar com foco em factualidade'
+                        : `Regenerar com foco em factualidade (${flaggedCount} frase${flaggedCount === 1 ? '' : 's'} sinalizada${flaggedCount === 1 ? '' : 's'})`}
+                </button>
+                {regenError && (
+                  <p className="mt-2 text-xs text-red-700">{regenError}</p>
+                )}
+              </div>
+            );
+          })()}
         </div>
-
-        {/* Factuality breakdown */}
-        <MetricsPanel
-          factualityScore={displaySummary.factualityScore}
-          factualityDetails={displaySummary.factualityDetails}
-        />
-
-        {/* Guided regeneration by factuality */}
-        {(() => {
-          const flaggedCount = displaySummary.factualityDetails
-            ? displaySummary.factualityDetails.filter((d) => d.label !== 'supported').length
-            : 0;
-          const noFlagged = flaggedCount === 0;
-          // One regen per parent: disable once a child summary exists in the
-          // article (either tracked in local `regenerated` state from this
-          // session, or persisted from a previous session).
-          const alreadyRegenerated = regenerated !== null
-            || (foundArticle ? (
-              articles?.find((a) => a.id === foundArticle.id)?.summaries
-                .some((s) => s.parentSummaryId === displaySummary.id)
-              ?? false
-            ) : false);
-          const disabled = noFlagged || regenLoading || alreadyRegenerated;
-          const buttonTitle = alreadyRegenerated
-            ? 'Este resumo já foi regenerado uma vez. Apenas uma regeneração por resumo é permitida.'
-            : noFlagged
-              ? 'Nenhuma frase deste resumo foi sinalizada como não apoiada pelo artigo.'
-              : `Reprocessa o resumo usando os trechos do artigo correspondentes às ${flaggedCount} frase(s) sinalizadas.`;
-
-          return (
-            <div className="mt-3">
-              <button
-                type="button"
-                onClick={handleRegenerateWithEvidence}
-                disabled={disabled}
-                title={buttonTitle}
-                className={`text-sm transition-colors ${
-                  disabled
-                    ? 'text-gray-400 cursor-not-allowed'
-                    : 'text-[#2563eb] hover:text-[#1d4ed8] hover:underline'
-                }`}
-              >
-                {regenLoading
-                  ? 'Regenerando…'
-                  : alreadyRegenerated
-                    ? 'Já regenerado'
-                    : noFlagged
-                      ? 'Regenerar com foco em factualidade'
-                      : `Regenerar com foco em factualidade (${flaggedCount} frase${flaggedCount === 1 ? '' : 's'} sinalizada${flaggedCount === 1 ? '' : 's'})`}
-              </button>
-              {regenError && (
-                <p className="mt-2 text-xs text-red-700">{regenError}</p>
-              )}
-            </div>
-          );
-        })()}
 
         {/* Regenerated summary side-by-side */}
         {regenerated && (
