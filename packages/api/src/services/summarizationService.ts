@@ -485,13 +485,16 @@ ATENÇÃO: O resumo anterior continha afirmações sinalizadas como NÃO APOIADA
 FRASES SINALIZADAS E TRECHOS-ÂNCORA:
 ${evidenceLines.join('\n')}`;
 
-  // Regen uses a different model than first-gen by default. The empirical
-  // benchmark in §6.7 of the thesis shows Qwen 3 32B improves factuality on
-  // 5/5 flagged summaries (avg delta +0.143), versus llama-3.1-8b-instant
-  // (the first-gen default) which actually *worsens* factuality on the regen
-  // task (0/5 improved, avg delta -0.050). The override can be set per
-  // deployment via GROQ_REGEN_MODEL.
-  const effectiveModel = process.env.GROQ_REGEN_MODEL || 'qwen/qwen3-32b';
+  // Regen uses a different model than first-gen by default. Appendix F of the
+  // thesis cross-validates the regen pick across two scenarios: an N=20 run
+  // over lowest-fact-globals, and an N=5 run stratified by distinct articles.
+  // Llama 4 Scout 17B is the only model that improves factuality consistently
+  // in both rounds (Δ +0.045 / 15-of-20 and Δ +0.056 / 4-of-5), with the
+  // lowest latency among contenders (~24s). Qwen 3 32B, which led the first
+  // round, regressed under stratification (Δ -0.044, 1-of-5) — its initial
+  // lead did not generalise out of the original article set. The override can
+  // be set per deployment via GROQ_REGEN_MODEL.
+  const effectiveModel = process.env.GROQ_REGEN_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
   let summaryContent: string;
   try {
     summaryContent = await generateCompletion({
@@ -500,7 +503,9 @@ ${evidenceLines.join('\n')}`;
       maxTokens: getMaxOutputTokens(),
       model: effectiveModel,
     });
-    // Strip Qwen-style chain-of-thought blocks if present.
+    // Strip Qwen-style chain-of-thought blocks if the override picks a reasoning
+    // model. The default (Llama 4 Scout) does not emit <think> tags, so this is
+    // a no-op for it but keeps GROQ_REGEN_MODEL overrides safe.
     summaryContent = summaryContent.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
   } catch (error) {
     if (error instanceof LLMError) {
