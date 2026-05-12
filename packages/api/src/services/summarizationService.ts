@@ -354,6 +354,25 @@ export const regenerateSummaryWithEvidence = async (summaryId: number): Promise<
     throw new NotFoundError('Summary not found');
   }
 
+  // Reject if this summary already has a regenerated child (one regen per
+  // parent). Also reject if this summary IS itself a regen (no
+  // regen-of-regen). The UI hides the button in both cases; the server
+  // enforces the rule as the source of truth.
+  if (existing.parent_summary_id) {
+    throw new NoFlaggedSentencesError(
+      'Esta versão já é uma regeneração. Apenas uma regeneração por resumo é permitida.'
+    );
+  }
+  const existingChild = await queryOne<{ id: number }>(
+    'SELECT id FROM summaries WHERE parent_summary_id = $1 LIMIT 1',
+    [summaryId],
+  );
+  if (existingChild) {
+    throw new NoFlaggedSentencesError(
+      'Este resumo já foi regenerado. Apenas uma regeneração por resumo é permitida.'
+    );
+  }
+
   const factualityDetails = safeJsonParse<Array<{
     sentence: string;
     label: 'supported' | 'neutral' | 'contradicted';

@@ -125,7 +125,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
       // for historical rows generated before that column existed.
       `SELECT DISTINCT s.id, s.article_id, s.content, s.factuality_score, s.factuality_details,
               s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score,
-              s.model_id, s.generated_at,
+              s.model_id, s.generated_at, s.parent_summary_id,
               COALESCE(s.profile_snapshot, es.profile_snapshot) AS profile_snapshot
        FROM summaries s
        LEFT JOIN experiment_sessions es ON es.personalized_summary_id = s.id
@@ -162,7 +162,14 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
             avgPairwiseRougeL: pAccuracyRow.avg_pairwise_rouge_l,
           }
         : null,
-      summaries: summaryRows.map((s) => {
+      summaries: summaryRows.map((s: UserSummaryRow & {
+        factuality_details: string | null;
+        rouge_1: number | null;
+        rouge_2: number | null;
+        rouge_l: number | null;
+        bert_score: number | null;
+        parent_summary_id?: number | null;
+      }) => {
         const modelInfo = AVAILABLE_MODELS.find((m) => m.id === s.model_id);
         // Accept both snapshot shapes:
         //   new (per-summary): { dimensions: {...}, preferences: {...} }
@@ -188,6 +195,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
           bertScore: s.bert_score,
           modelId: s.model_id,
           modelLabel: modelInfo?.name || s.model_id || 'Desconhecido',
+          parentSummaryId: s.parent_summary_id ?? null,
           profile: dims ? {
             expertise: dims.expertise,
             focus: dims.focus,

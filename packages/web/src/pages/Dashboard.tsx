@@ -25,6 +25,7 @@ interface UserArticle {
       domain?: string | null;
       currentProject?: string | null;
     } | null;
+    parentSummaryId?: number | null;
     generatedAt: string;
   }>;
 }

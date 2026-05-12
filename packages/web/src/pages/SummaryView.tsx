@@ -287,9 +287,21 @@ export function SummaryView() {
             ? displaySummary.factualityDetails.filter((d) => d.label !== 'supported').length
             : 0;
           const noFlagged = flaggedCount === 0;
-          const buttonTitle = noFlagged
-            ? 'Nenhuma frase deste resumo foi sinalizada como não apoiada pelo artigo.'
-            : `Reprocessa o resumo usando os trechos do artigo correspondentes às ${flaggedCount} frase(s) sinalizadas.`;
+          // One regen per parent: disable once a child summary exists in the
+          // article (either tracked in local `regenerated` state from this
+          // session, or persisted from a previous session).
+          const alreadyRegenerated = regenerated !== null
+            || (foundArticle ? (
+              articles?.find((a) => a.id === foundArticle.id)?.summaries
+                .some((s) => s.parentSummaryId === displaySummary.id)
+              ?? false
+            ) : false);
+          const disabled = noFlagged || regenLoading || alreadyRegenerated;
+          const buttonTitle = alreadyRegenerated
+            ? 'Este resumo já foi regenerado uma vez. Apenas uma regeneração por resumo é permitida.'
+            : noFlagged
+              ? 'Nenhuma frase deste resumo foi sinalizada como não apoiada pelo artigo.'
+              : `Reprocessa o resumo usando os trechos do artigo correspondentes às ${flaggedCount} frase(s) sinalizadas.`;
 
           return (
             <div className="mt-4 border border-gray-200 rounded-lg bg-white p-4">
@@ -299,23 +311,25 @@ export function SummaryView() {
                     Regeneração guiada por factualidade
                   </h3>
                   <p className="text-xs text-gray-600 mt-1">
-                    {noFlagged
-                      ? 'Todas as frases verificadas têm suporte direto no artigo.'
-                      : `${flaggedCount} frase(s) sem suporte direto no artigo. Você pode reprocessar o resumo com as evidências em mãos.`}
+                    {alreadyRegenerated
+                      ? 'Este resumo já foi regenerado uma vez. A versão reescrita está disponível abaixo.'
+                      : noFlagged
+                        ? 'Todas as frases verificadas têm suporte direto no artigo.'
+                        : `${flaggedCount} frase(s) sem suporte direto no artigo. Você pode reprocessar o resumo com as evidências em mãos.`}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={handleRegenerateWithEvidence}
-                  disabled={noFlagged || regenLoading}
+                  disabled={disabled}
                   title={buttonTitle}
                   className={`py-2.5 px-5 text-sm font-semibold rounded-lg transition-colors ${
-                    noFlagged || regenLoading
+                    disabled
                       ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       : 'bg-[#2563eb] text-white hover:bg-[#1d4ed8]'
                   }`}
                 >
-                  {regenLoading ? 'Regenerando...' : 'Regenerar com foco em factualidade'}
+                  {regenLoading ? 'Regenerando...' : alreadyRegenerated ? 'Já regenerado' : 'Regenerar com foco em factualidade'}
                 </button>
               </div>
               {regenError && (

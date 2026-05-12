@@ -243,6 +243,7 @@ export const userApi = {
         rouge2: number | null;
         rougeL: number | null;
         bertScore: number | null;
+        parentSummaryId: number | null;
         profile: {
           expertise: string;
           focus: string;
