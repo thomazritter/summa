@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { userApi, experimentApi } from '../api/client';
@@ -129,6 +129,56 @@ export function SummaryView() {
       setRegenLoading(false);
     }
   };
+
+  // Poll for the regen's factuality score until the background NLI job
+  // finishes. The endpoint returns the row immediately after INSERT, so
+  // factualityScore starts null and only fills in once checkFactuality
+  // completes asynchronously. Without this loop, the "Verificando..."
+  // label would stay forever even after the score is ready.
+  useEffect(() => {
+    if (!regenerated) return;
+    if (regenerated.factualityScore !== null) return;
+
+    let cancelled = false;
+    let pollCount = 0;
+    const maxPolls = 24; // 24 × 5s = 2 min hard ceiling
+
+    const tick = async () => {
+      if (cancelled) return;
+      pollCount += 1;
+      try {
+        const fresh = await userApi.getArticles();
+        if (cancelled) return;
+        for (const article of fresh) {
+          const match = article.summaries.find((s) => s.id === regenerated.id);
+          if (match && match.factualityScore !== null) {
+            setRegenerated({
+              id: match.id,
+              content: match.content,
+              factualityScore: match.factualityScore,
+              factualityDetails: match.factualityDetails,
+              modelId: match.modelId,
+            });
+            queryClient.setQueryData(['user-articles'], fresh);
+            return;
+          }
+        }
+        if (pollCount < maxPolls) {
+          setTimeout(tick, 5000);
+        }
+      } catch {
+        if (pollCount < maxPolls) {
+          setTimeout(tick, 5000);
+        }
+      }
+    };
+
+    const initial = setTimeout(tick, 5000);
+    return () => {
+      cancelled = true;
+      clearTimeout(initial);
+    };
+  }, [regenerated?.id, regenerated?.factualityScore, queryClient]);
 
   if (isLoading) {
     return (

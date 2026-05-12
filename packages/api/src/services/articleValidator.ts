@@ -52,41 +52,28 @@ export function validatePostStructuring(
 ): ValidationResult {
   const warnings: string[] = [];
 
-  // Check which sections were found
+  // Section-level warnings have been intentionally suppressed: the LLM
+  // structurer's section detection is imprecise enough that "missing"
+  // warnings often fire on articles where the section is actually present
+  // but was misclassified, misleading the user. The structurer's output
+  // still feeds factuality anchoring and metric selection, but is no
+  // longer surfaced as guidance in the UI.
   const found: SectionKey[] = [];
-  const missing: SectionKey[] = [];
-
   for (const section of SECTION_KEYS) {
     const content = structuredContent[section];
     if (content && content.length > MIN_SECTION_LENGTH) {
       found.push(section);
-    } else {
-      missing.push(section);
     }
   }
 
-  if (found.length < 2) {
+  // Only warn in the truly degenerate case where structuring extracted
+  // nothing usable — that's a real signal that the summary may be weak.
+  if (found.length === 0) {
     warnings.push(
-      `Apenas ${found.length} seção(ões) foram identificadas. ` +
-      'O resumo pode ser menos preciso sem uma estrutura clara do artigo.'
+      'Nenhuma seção pôde ser identificada com confiança no artigo enviado. ' +
+      'A geração do resumo permanece habilitada, mas a verificação de factualidade ' +
+      'pode ficar menos precisa.'
     );
-  }
-
-  if (missing.length > 0) {
-    warnings.push(
-      `Seções não encontradas: ${missing.join(', ')}. ` +
-      'Isso não impede a geração do resumo.'
-    );
-  }
-
-  // Check for very short sections
-  for (const section of found) {
-    const content = structuredContent[section];
-    if (content && content.length < SHORT_SECTION_THRESHOLD) {
-      warnings.push(
-        `A seção "${section}" parece muito curta (${content.length} caracteres).`
-      );
-    }
   }
 
   return { valid: true, errors: [], warnings };

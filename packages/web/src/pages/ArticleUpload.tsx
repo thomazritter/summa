@@ -9,15 +9,6 @@ type Phase = 'upload' | 'loading' | 'results';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
-const ALL_SECTIONS = [
-  { key: 'abstract', label: 'Abstract' },
-  { key: 'introduction', label: 'Introdução' },
-  { key: 'methodology', label: 'Metodologia' },
-  { key: 'results', label: 'Resultados' },
-  { key: 'discussion', label: 'Discussão' },
-  { key: 'conclusion', label: 'Conclusão' },
-] as const;
-
 const LOADING_MESSAGES = [
   'Extraindo texto do PDF...',
   'Identificando seções do artigo...',
@@ -152,8 +143,6 @@ export function ArticleUpload() {
 
   const hasErrors = (uploadResult?.validation.errors?.length ?? 0) > 0;
   const hasWarnings = (uploadResult?.validation.warnings?.length ?? 0) > 0;
-  const sectionsFound = uploadResult?.validation.sectionsFound ?? [];
-  const sectionsFoundCount = sectionsFound.length;
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -410,63 +399,11 @@ export function ArticleUpload() {
               </dl>
             </div>
 
-            {/* Section detection */}
-            <div className="bg-white border border-gray-200 rounded-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">
-                  Seções detectadas
-                </h2>
-                <span className="text-sm text-gray-500">
-                  {sectionsFoundCount} de {ALL_SECTIONS.length} encontradas
-                </span>
-              </div>
-              <ul className="space-y-2" aria-label="Lista de seções detectadas no artigo">
-                {ALL_SECTIONS.map((section) => {
-                  const found = sectionsFound.includes(section.key);
-                  return (
-                    <li key={section.key} className="flex items-center gap-3">
-                      {found ? (
-                        <svg
-                          className="h-5 w-5 text-green-500 shrink-0"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                      ) : (
-                        <svg
-                          className="h-5 w-5 text-gray-400 shrink-0"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          aria-hidden="true"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      )}
-                      <span className={found ? 'text-gray-900' : 'text-gray-400'}>
-                        {section.label}
-                      </span>
-                      <span className="sr-only">
-                        {found ? '- detectada' : '- não detectada'}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+            {/* Section detection panel suppressed: the LLM structurer is not
+                reliable enough at the section level to surface a per-section
+                "found / not found" list without misleading the reader. The
+                structurer's output continues to feed factuality anchoring and
+                metric selection internally. */}
 
             {/* Errors card */}
             {hasErrors && (
