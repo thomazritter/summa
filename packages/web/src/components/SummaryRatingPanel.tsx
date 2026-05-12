@@ -59,6 +59,7 @@ export function SummaryRatingPanel({ summaryId }: Props) {
     factualidade_percebida: null,
   });
   const [comment, setComment] = useState('');
+  const [open, setOpen] = useState(false);
 
   const mutation = useMutation({
     mutationFn: () => {
@@ -124,63 +125,81 @@ export function SummaryRatingPanel({ summaryId }: Props) {
     && !mutation.isPending;
 
   return (
-    <div className="mt-8 p-5 bg-white border border-gray-200 rounded-lg">
-      <h3 className="text-base font-semibold text-gray-900 mb-1">
-        Avaliar este resumo
-      </h3>
-      <p className="text-sm text-gray-600 mb-5">
-        Avalie cada dimensão em uma escala de 1 a 5. Sua resposta é opcional e
-        ajuda a refinar a personalização em versões futuras do sistema.
-      </p>
-
-      <div className="space-y-2">
-        {DIMENSIONS.map((d) => (
-          <div key={d.key}>
-            <p className="text-xs text-gray-500 mb-1">{d.description}</p>
-            <LikertScale
-              label={d.label}
-              value={scores[d.key]}
-              onChange={(v) => setScores((s) => ({ ...s, [d.key]: v }))}
-              lowLabel={d.lowLabel}
-              highLabel={d.highLabel}
-            />
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4">
-        <label className="block mb-2 font-medium text-sm text-gray-700">
-          Comentário (opcional)
-        </label>
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          rows={3}
-          maxLength={2000}
-          placeholder="O que motivou suas notas? O que mudaria?"
-          className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
-        />
-        <div className="text-xs text-gray-400 text-right mt-1">
-          {comment.length} / 2000
-        </div>
-      </div>
-
-      {mutation.isError && (
-        <p className="text-sm text-red-600 mt-3">
-          {mutation.error instanceof Error
-            ? mutation.error.message
-            : 'Erro ao enviar avaliação.'}
-        </p>
-      )}
-
+    <div className="mt-8 bg-white border border-gray-200 rounded-lg">
       <button
         type="button"
-        onClick={() => mutation.mutate()}
-        disabled={!canSubmit}
-        className="mt-4 py-2.5 px-5 bg-[#2563eb] text-white font-medium text-sm rounded-lg hover:bg-[#1d4ed8] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors rounded-lg"
+        aria-expanded={open}
       >
-        {mutation.isPending ? 'Enviando…' : 'Enviar avaliação'}
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">
+            Avaliar este resumo
+          </h3>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Opcional. Avalie 4 dimensões em escala de 1 a 5.
+          </p>
+        </div>
+        <span className="text-xs text-gray-500">{open ? '▼' : '▶'}</span>
       </button>
+
+      {open && (
+        <div className="px-5 pb-5 pt-1 border-t border-gray-200">
+          <p className="text-sm text-gray-600 mb-5">
+            Sua resposta é opcional e ajuda a refinar a personalização em
+            versões futuras do sistema.
+          </p>
+
+          <div className="space-y-2">
+            {DIMENSIONS.map((d) => (
+              <div key={d.key}>
+                <p className="text-xs text-gray-500 mb-1">{d.description}</p>
+                <LikertScale
+                  label={d.label}
+                  value={scores[d.key]}
+                  onChange={(v) => setScores((s) => ({ ...s, [d.key]: v }))}
+                  lowLabel={d.lowLabel}
+                  highLabel={d.highLabel}
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4">
+            <label className="block mb-2 font-medium text-sm text-gray-700">
+              Comentário (opcional)
+            </label>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              placeholder="O que motivou suas notas? O que mudaria?"
+              className="w-full p-3 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-blue-500"
+            />
+            <div className="text-xs text-gray-400 text-right mt-1">
+              {comment.length} / 2000
+            </div>
+          </div>
+
+          {mutation.isError && (
+            <p className="text-sm text-red-600 mt-3">
+              {mutation.error instanceof Error
+                ? mutation.error.message
+                : 'Erro ao enviar avaliação.'}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => mutation.mutate()}
+            disabled={!canSubmit}
+            className="mt-4 py-2.5 px-5 bg-[#2563eb] text-white font-medium text-sm rounded-lg hover:bg-[#1d4ed8] disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            {mutation.isPending ? 'Enviando…' : 'Enviar avaliação'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

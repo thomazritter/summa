@@ -311,38 +311,28 @@ export function SummaryView() {
               : `Reprocessa o resumo usando os trechos do artigo correspondentes às ${flaggedCount} frase(s) sinalizadas.`;
 
           return (
-            <div className="mt-4 border border-gray-200 rounded-lg bg-white p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-900">
-                    Regeneração guiada por factualidade
-                  </h3>
-                  <p className="text-xs text-gray-600 mt-1">
-                    {alreadyRegenerated
-                      ? 'Este resumo já foi regenerado uma vez. A versão reescrita está disponível abaixo.'
-                      : noFlagged
-                        ? 'Todas as frases verificadas têm suporte direto no artigo.'
-                        : `${flaggedCount} frase(s) sem suporte direto no artigo. Você pode reprocessar o resumo com as evidências em mãos.`}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleRegenerateWithEvidence}
-                  disabled={disabled}
-                  title={buttonTitle}
-                  className={`py-2.5 px-5 text-sm font-semibold rounded-lg transition-colors ${
-                    disabled
-                      ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                      : 'bg-[#2563eb] text-white hover:bg-[#1d4ed8]'
-                  }`}
-                >
-                  {regenLoading ? 'Regenerando...' : alreadyRegenerated ? 'Já regenerado' : 'Regenerar com foco em factualidade'}
-                </button>
-              </div>
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={handleRegenerateWithEvidence}
+                disabled={disabled}
+                title={buttonTitle}
+                className={`text-sm transition-colors ${
+                  disabled
+                    ? 'text-gray-400 cursor-not-allowed'
+                    : 'text-[#2563eb] hover:text-[#1d4ed8] hover:underline'
+                }`}
+              >
+                {regenLoading
+                  ? 'Regenerando…'
+                  : alreadyRegenerated
+                    ? 'Já regenerado'
+                    : noFlagged
+                      ? 'Regenerar com foco em factualidade'
+                      : `Regenerar com foco em factualidade (${flaggedCount} frase${flaggedCount === 1 ? '' : 's'} sinalizada${flaggedCount === 1 ? '' : 's'})`}
+              </button>
               {regenError && (
-                <p className="mt-3 text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
-                  {regenError}
-                </p>
+                <p className="mt-2 text-xs text-red-700">{regenError}</p>
               )}
             </div>
           );
