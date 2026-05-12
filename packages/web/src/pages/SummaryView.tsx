@@ -26,6 +26,14 @@ interface DisplaySummary {
   bertScore: number | null;
   modelId: string | null;
   modelLabel: string | null;
+  profile: {
+    expertise: string;
+    focus: string;
+    depth: string;
+    context: string;
+    domain?: string | null;
+    currentProject?: string | null;
+  } | null;
 }
 
 export function SummaryView() {
@@ -75,6 +83,7 @@ export function SummaryView() {
           bertScore: match.bertScore,
           modelId: match.modelId,
           modelLabel: match.modelLabel,
+          profile: match.profile,
         };
         foundArticle = {
           id: article.id,
@@ -234,6 +243,38 @@ export function SummaryView() {
               )}
             </div>
           </div>
+
+          {displaySummary.profile && (
+            <div className="mb-5 -mt-2">
+              <div className="text-xs text-gray-500 mb-1.5">
+                Perfil aplicado a este resumo
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="bg-blue-50 text-[#2563eb] text-xs font-medium rounded-full px-2.5 py-0.5">
+                  Expertise: {displaySummary.profile.expertise}
+                </span>
+                <span className="bg-blue-50 text-[#2563eb] text-xs font-medium rounded-full px-2.5 py-0.5">
+                  Foco: {displaySummary.profile.focus}
+                </span>
+                <span className="bg-blue-50 text-[#2563eb] text-xs font-medium rounded-full px-2.5 py-0.5">
+                  Profundidade: {displaySummary.profile.depth}
+                </span>
+                <span className="bg-blue-50 text-[#2563eb] text-xs font-medium rounded-full px-2.5 py-0.5">
+                  Contexto: {displaySummary.profile.context}
+                </span>
+                {displaySummary.profile.domain && (
+                  <span className="bg-purple-50 text-purple-700 text-xs font-medium rounded-full px-2.5 py-0.5">
+                    Domínio: {displaySummary.profile.domain}
+                  </span>
+                )}
+                {displaySummary.profile.currentProject && (
+                  <span className="bg-purple-50 text-purple-700 text-xs font-medium rounded-full px-2.5 py-0.5">
+                    Projeto: {displaySummary.profile.currentProject}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           <FactualityHighlightedMarkdown
             content={displaySummary.content}

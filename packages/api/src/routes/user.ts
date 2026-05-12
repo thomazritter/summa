@@ -177,6 +177,12 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
         const dims = (snapshot && typeof snapshot === 'object' && 'dimensions' in snapshot
           ? (snapshot.dimensions as Record<string, string>)
           : (snapshot as Record<string, string> | null)) ?? null;
+        // Auxiliary participant prefs (domain / currentProject) live under
+        // `preferences` only in the new snapshot shape; legacy rows return
+        // null here.
+        const prefs = (snapshot && typeof snapshot === 'object' && 'preferences' in snapshot
+          ? (snapshot.preferences as Record<string, string> | null)
+          : null);
         const factualityDetails = s.factuality_details ? safeJsonParse(s.factuality_details) : null;
         return {
           id: s.id,
@@ -200,6 +206,8 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
             focus: dims.focus,
             depth: dims.depth,
             context: dims.context,
+            domain: prefs?.domain ?? null,
+            currentProject: prefs?.currentProject ?? null,
           } : null,
           generatedAt: s.generated_at,
         };
