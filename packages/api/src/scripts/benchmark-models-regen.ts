@@ -30,7 +30,26 @@ import type { ArticleStructure, FactualityResult, Profile } from '@summarizer/sh
 const BASE_URL = process.env.BASE_URL || 'https://summa.thomazritter.com.br';
 const ADMIN_CODE = process.env.ADMIN_CODE || 'SUMMA-ADMIN';
 const N_PARENTS = Number(process.env.N_PARENTS || 5);
-const MODELS = AVAILABLE_MODELS.map(m => m.id);
+// Optional: comma-separated list of article IDs to stratify the parent
+// sample. When set, the bench picks the lowest-factuality eligible parent
+// from EACH listed article (one per article). Useful for cross-domain
+// runs, e.g. ARTICLE_IDS="1,2,15,16,17" mixes Code Review parents with
+// NLI/SNLI parents to surface domain-dependent regen behaviour. When
+// unset, the original "top N_PARENTS lowest factuality globally" rule
+// remains in force.
+const ARTICLE_IDS = (process.env.ARTICLE_IDS || '')
+  .split(',')
+  .map(s => Number(s.trim()))
+  .filter(n => Number.isFinite(n) && n > 0);
+// Optional: restrict the model sweep. Comma-separated REGEN_MODELS env.
+// When empty/unset, all AVAILABLE_MODELS run.
+const requestedModels = (process.env.REGEN_MODELS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+const MODELS = requestedModels.length > 0
+  ? requestedModels
+  : AVAILABLE_MODELS.map(m => m.id);
 
 const stripThinking = (raw: string): string =>
   raw.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
@@ -111,12 +130,39 @@ async function fetchParents(): Promise<ManagerSummary[]> {
   const res = await fetch(`${BASE_URL}/api/manager/summaries`, { headers: { 'x-access-code': ADMIN_CODE } });
   if (!res.ok) throw new Error(`manager summaries failed: ${res.status}`);
   const data = (await res.json()) as { summaries: ManagerSummary[] };
-  // Filter: factualityScore < 1.0 + article has abstract (proxy: another summary of same article has rougeL)
-  const articlesWithAbstract = new Set(data.summaries.filter(s => s.rougeL !== null).map(s => s.articleId));
-  const flagged = data.summaries
-    .filter(s => s.factualityScore !== null && s.factualityScore < 1.0 && articlesWithAbstract.has(s.articleId))
-    .sort((a, b) => (a.factualityScore ?? 1) - (b.factualityScore ?? 1));
-  return flagged.slice(0, N_PARENTS);
+
+  // Default mode (global lowest-factuality, requires the article to have at
+  // least one summary with rougeL so we know an abstract was identifiable):
+  // keep the original §6.7 bench behaviour exactly so the headline numbers
+  // remain comparable when ARTICLE_IDS is not provided.
+  if (ARTICLE_IDS.length === 0) {
+    const articlesWithAbstract = new Set(data.summaries.filter(s => s.rougeL !== null).map(s => s.articleId));
+    const flagged = data.summaries
+      .filter(s => s.factualityScore !== null && s.factualityScore < 1.0 && articlesWithAbstract.has(s.articleId))
+      .sort((a, b) => (a.factualityScore ?? 1) - (b.factualityScore ?? 1));
+    return flagged.slice(0, N_PARENTS);
+  }
+
+  // Stratified mode: take the lowest-factuality eligible parent per
+  // requested article. Drops the rougeL gate because articles that lack a
+  // detected abstract should still be testable for regen factuality
+  // (factuality verification doesn't need an abstract — it pairs each
+  // claim against article paragraphs directly).
+  const eligible = data.summaries.filter(
+    s => s.factualityScore !== null && s.factualityScore < 1.0,
+  );
+  const picked: ManagerSummary[] = [];
+  for (const articleId of ARTICLE_IDS) {
+    const candidates = eligible
+      .filter(s => s.articleId === articleId)
+      .sort((a, b) => (a.factualityScore ?? 1) - (b.factualityScore ?? 1));
+    if (candidates.length === 0) {
+      console.warn(`[bench-regen] article ${articleId} has no eligible parent (skipped)`);
+      continue;
+    }
+    picked.push(candidates[0]);
+  }
+  return picked;
 }
 
 async function fetchArticle(id: number): Promise<ArticleResp> {
@@ -161,9 +207,15 @@ async function runOne(parent: ParentInfo, modelId: string): Promise<BenchRow> {
   }
   const summary = stripThinking(raw);
 
-  const fact = await checkFactuality(summary, parent.article.structuredContent, parent.article.rawText).catch(() => ({
-    score: 0, results: [] as FactualityResult[],
-  }));
+  // checkFactuality returns score=null when no verifiable claims survive
+  // the pre-NLI filter. The catch below maps a SERVICE FAILURE (NLI down,
+  // network error) to a null score too, so the bench row is excluded from
+  // aggregate statistics downstream instead of poisoning them with a
+  // false-zero "catastrophic regression".
+  const fact = await checkFactuality(summary, parent.article.structuredContent, parent.article.rawText).catch((err) => {
+    console.warn(`  [bench] checkFactuality failed for ${modelId}: ${err instanceof Error ? err.message : String(err)} — score null`);
+    return { score: null as number | null, results: [] as FactualityResult[] };
+  });
   const total = fact.results.length || 1;
   const supported = fact.results.filter(r => r.label === 'supported').length;
   const neutral = fact.results.filter(r => r.label === 'neutral').length;
@@ -195,6 +247,13 @@ async function runOne(parent: ParentInfo, modelId: string): Promise<BenchRow> {
 }
 
 async function main() {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error('GROQ_API_KEY not set in environment; aborting before any LLM calls are wasted.');
+  }
+  const invalidModels = MODELS.filter(id => !AVAILABLE_MODELS.some(m => m.id === id));
+  if (invalidModels.length > 0) {
+    throw new Error(`REGEN_MODELS contains unknown model id(s): ${invalidModels.join(', ')}. Allowed: ${AVAILABLE_MODELS.map(m => m.id).join(', ')}`);
+  }
   console.log('\n=== Regen-with-evidence model benchmark ===');
   const candidates = await fetchParents();
   if (candidates.length === 0) {
