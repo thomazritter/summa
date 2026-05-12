@@ -42,6 +42,7 @@ export function SummaryView() {
   const [regenerated, setRegenerated] = useState<RegeneratedSummary | null>(null);
   const [regenLoading, setRegenLoading] = useState(false);
   const [regenError, setRegenError] = useState<string | null>(null);
+  const [factInfoOpen, setFactInfoOpen] = useState<'primary' | 'regen' | null>(null);
   const regenPanelRef = useRef<HTMLDivElement | null>(null);
 
   // Scroll the regen panel into view once it appears. Without this, users
@@ -242,15 +243,46 @@ export function SummaryView() {
                 </span>
               )}
               {displaySummary.factualityScore !== null ? (
-                <span className={`px-3 py-1 text-xs rounded-full ${
-                  displaySummary.factualityScore >= 0.8
-                    ? 'bg-green-100 text-green-700'
-                    : displaySummary.factualityScore >= 0.6
-                    ? 'bg-amber-100 text-amber-700'
-                    : 'bg-red-100 text-red-700'
-                }`}>
-                  Factualidade: {(displaySummary.factualityScore * 100).toFixed(0)}%
-                </span>
+                <div className="relative flex items-center gap-1">
+                  <span className={`px-3 py-1 text-xs rounded-full ${
+                    displaySummary.factualityScore >= 0.8
+                      ? 'bg-green-100 text-green-700'
+                      : displaySummary.factualityScore >= 0.6
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-red-100 text-red-700'
+                  }`}>
+                    Factualidade: {(displaySummary.factualityScore * 100).toFixed(0)}%
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setFactInfoOpen(factInfoOpen === 'primary' ? null : 'primary')}
+                    aria-label="Como interpretar o score de factualidade"
+                    className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-xs font-semibold"
+                  >
+                    ?
+                  </button>
+                  {factInfoOpen === 'primary' && (
+                    <div
+                      role="tooltip"
+                      className="absolute right-0 top-full mt-2 w-80 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-xs text-gray-700 leading-relaxed"
+                    >
+                      <p className="font-semibold text-gray-900 mb-2">Sobre o score de factualidade</p>
+                      <p className="mb-2">
+                        É uma estimativa automática feita por um modelo de NLI multilíngue, que compara
+                        cada frase do resumo com parágrafos do artigo original.
+                      </p>
+                      <p className="mb-2">
+                        O score pode errar, principalmente em paráfrases legítimas, sínteses que juntam
+                        ideias de trechos diferentes ou frases definicionais escritas em português a
+                        partir de um artigo em inglês.
+                      </p>
+                      <p>
+                        Use o score como um indicador de quais frases vale a pena conferir, não como
+                        veredito automático sobre o resumo.
+                      </p>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <span className="px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
                   Verificando factualidade...
@@ -384,15 +416,46 @@ export function SummaryView() {
               </h2>
               <div className="flex items-center gap-3">
                 {regenerated.factualityScore !== null ? (
-                  <span className={`px-3 py-1 text-xs rounded-full ${
-                    regenerated.factualityScore >= 0.8
-                      ? 'bg-green-100 text-green-700'
-                      : regenerated.factualityScore >= 0.6
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}>
-                    Factualidade: {(regenerated.factualityScore * 100).toFixed(0)}%
-                  </span>
+                  <div className="relative flex items-center gap-1">
+                    <span className={`px-3 py-1 text-xs rounded-full ${
+                      regenerated.factualityScore >= 0.8
+                        ? 'bg-green-100 text-green-700'
+                        : regenerated.factualityScore >= 0.6
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}>
+                      Factualidade: {(regenerated.factualityScore * 100).toFixed(0)}%
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFactInfoOpen(factInfoOpen === 'regen' ? null : 'regen')}
+                      aria-label="Como interpretar o score de factualidade"
+                      className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-xs font-semibold"
+                    >
+                      ?
+                    </button>
+                    {factInfoOpen === 'regen' && (
+                      <div
+                        role="tooltip"
+                        className="absolute right-0 top-full mt-2 w-80 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-xs text-gray-700 leading-relaxed"
+                      >
+                        <p className="font-semibold text-gray-900 mb-2">Sobre o score de factualidade</p>
+                        <p className="mb-2">
+                          É uma estimativa automática feita por um modelo de NLI multilíngue, que compara
+                          cada frase do resumo com parágrafos do artigo original.
+                        </p>
+                        <p className="mb-2">
+                          O score pode errar, principalmente em paráfrases legítimas, sínteses que juntam
+                          ideias de trechos diferentes ou frases definicionais escritas em português a
+                          partir de um artigo em inglês.
+                        </p>
+                        <p>
+                          Use o score como um indicador de quais frases vale a pena conferir, não como
+                          veredito automático sobre o resumo.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <span className="px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
                     Verificando factualidade...
