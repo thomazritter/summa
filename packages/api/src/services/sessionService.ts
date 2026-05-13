@@ -76,18 +76,32 @@ export function computeProfileDimensions(participant: ParticipantRow): ProfileDi
  * from the questionnaire, a manual edit, or a CV inference.
  */
 export function computeProfileSources(participant: ParticipantRow): Record<string, string> {
-  const sourceLabel = (override: string | null, cv: string | null): string => {
+  // Main dimensions keep cv_X + override_X columns, so 'manual' is derived
+  // from override_X IS NOT NULL.
+  const dimensionSource = (override: string | null, cv: string | null): string => {
     if (override) return 'manual';
     if (cv) return 'cv';
     return 'questionnaire';
   };
 
+  // Aux fields have a single value column + a boolean manual flag. The
+  // initial origin (questionnaire vs cv) comes from profile_source on the
+  // participant row; the moment the user touches /profile, the flag flips
+  // to true and the UI shows "Editado manualmente".
+  const auxSource = (value: string | null, manualFlag: boolean | null): string => {
+    if (manualFlag) return 'manual';
+    if (!value) return 'questionnaire';
+    return participant.profile_source === 'cv' ? 'cv' : 'questionnaire';
+  };
+
   return {
-    expertise: sourceLabel(participant.override_expertise, participant.cv_expertise),
-    focus: sourceLabel(participant.override_focus, participant.cv_focus),
-    depth: sourceLabel(participant.override_depth, participant.cv_depth),
-    context: sourceLabel(participant.override_context, participant.cv_context),
-    structurePreference: 'questionnaire',
+    expertise: dimensionSource(participant.override_expertise, participant.cv_expertise),
+    focus: dimensionSource(participant.override_focus, participant.cv_focus),
+    depth: dimensionSource(participant.override_depth, participant.cv_depth),
+    context: dimensionSource(participant.override_context, participant.cv_context),
+    structurePreference: auxSource(participant.structure_preference, participant.structure_preference_manual),
+    domain: auxSource(participant.domain, participant.domain_manual),
+    currentProject: auxSource(participant.current_project, participant.current_project_manual),
   };
 }
 

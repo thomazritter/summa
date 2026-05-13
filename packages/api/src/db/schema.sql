@@ -244,6 +244,17 @@ ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
 
+-- ─── Manual-edit flags for aux fields ────────────────────────────
+-- The four main dimensions (expertise/focus/depth/context) already
+-- separate cv_X from override_X, so 'manual' can be derived from
+-- override_X IS NOT NULL. The three auxiliary fields below have a
+-- single column each (structure_preference, domain, current_project),
+-- so we need explicit flags to tell the UI when the value originated
+-- from a manual /profile edit vs. CV inference or questionnaire.
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS structure_preference_manual BOOLEAN DEFAULT FALSE;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain_manual BOOLEAN DEFAULT FALSE;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project_manual BOOLEAN DEFAULT FALSE;
+
 -- ─── Model Tracking ───────────────────────────────────────────────
 
 ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;

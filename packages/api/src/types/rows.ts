@@ -51,6 +51,9 @@ export interface ParticipantRow {
   cv_context: string | null;
   domain: string | null;
   current_project: string | null;
+  structure_preference_manual: boolean | null;
+  domain_manual: boolean | null;
+  current_project_manual: boolean | null;
   profile_source: string;
   created_at: string;
 }

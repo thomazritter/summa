@@ -508,7 +508,15 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
 
   const { overrides } = validation.data;
 
-  // Save dimension overrides to override columns
+  // Save dimension overrides to override columns. The four main dimensions
+  // keep cv_X + override_X side by side; the three aux fields share a
+  // single value column and a boolean *_manual flag that flips to TRUE the
+  // first time the user touches the field through this endpoint, so the UI
+  // can show "Editado manualmente" instead of falling back to "Derivado".
+  const structureManualFlag = overrides.structurePreference !== undefined ? true : null;
+  const domainManualFlag = overrides.domain !== undefined ? true : null;
+  const currentProjectManualFlag = overrides.currentProject !== undefined ? true : null;
+
   await execute(
     `UPDATE participants
      SET override_expertise = COALESCE($1, override_expertise),
@@ -517,8 +525,11 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
          override_context   = COALESCE($4, override_context),
          structure_preference = COALESCE($5, structure_preference),
          domain             = COALESCE($6, domain),
-         current_project    = COALESCE($7, current_project)
-     WHERE id = $8`,
+         current_project    = COALESCE($7, current_project),
+         structure_preference_manual = COALESCE($8, structure_preference_manual),
+         domain_manual               = COALESCE($9, domain_manual),
+         current_project_manual      = COALESCE($10, current_project_manual)
+     WHERE id = $11`,
     [
       overrides.expertise || null,
       overrides.focus || null,
@@ -527,6 +538,9 @@ experimentRoutes.put('/profile', asyncHandler(async (req: Request, res: Response
       overrides.structurePreference || null,
       overrides.domain || null,
       overrides.currentProject || null,
+      structureManualFlag,
+      domainManualFlag,
+      currentProjectManualFlag,
       participantId,
     ],
   );
