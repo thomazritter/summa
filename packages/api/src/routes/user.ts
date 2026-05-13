@@ -94,14 +94,17 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
     return res.json([]);
   }
 
-  // Get all articles uploaded by this user OR that have personalized
-  // summaries linked through experiment sessions for this participant.
+  // Get all articles that have at least one personalized summary belonging
+  // to this user — either uploaded by them with a generated summary, or
+  // linked through experiment sessions. Articles uploaded but never
+  // summarized (user abandoned the flow between upload and generate) are
+  // intentionally excluded so the dashboard does not surface empty rows.
   // Exclude generic profile IDs (99 = keep_english generic, 98 = translate generic).
   const articleRows = await queryAll<UserArticleRow>(
     `SELECT DISTINCT a.id, a.title, a.authors, a.created_at
      FROM articles a
-     LEFT JOIN summaries s ON s.article_id = a.id AND s.profile_id NOT IN (98, 99)
-     WHERE a.uploaded_by = $1
+     INNER JOIN summaries s ON s.article_id = a.id AND s.profile_id NOT IN (98, 99)
+     WHERE (a.uploaded_by = $1)
         OR s.id IN (
           SELECT personalized_summary_id FROM experiment_sessions WHERE participant_id = $1
         )
