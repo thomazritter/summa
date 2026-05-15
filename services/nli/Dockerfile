@@ -10,15 +10,20 @@ RUN apt-get update && \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download both models at build time so cold starts don't pay the download cost:
-# - mDeBERTa NLI (ONNX, ~280MB) for /classify
-# - bert-base-multilingual-cased (~700MB) for BERTScore at /quality and /p-accuracy
+# Pre-download models at build time so cold starts don't pay the download cost:
+# - mDeBERTa NLI (ONNX, ~280MB) for the /classify endpoint (legacy, retained
+#   defensively in case any external caller still hits it)
+# - XLM-RoBERTa-Large (~2.2GB) for BERTScore at /quality. We pin to this
+#   model rather than the bert-score `lang="pt"` default (mBERT, 2018)
+#   because XLM-RoBERTa-Large is the stronger multilingual encoder routinely
+#   adopted by recent cross-lingual evaluation work and is more reliable for
+#   the EN article / PT summary setting of the Summa.
 RUN python -c "from transformers import AutoTokenizer, AutoModel; \
     from huggingface_hub import hf_hub_download; \
     AutoTokenizer.from_pretrained('MoritzLaurer/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7'); \
     hf_hub_download(repo_id='xenova/mDeBERTa-v3-base-xnli-multilingual-nli-2mil7', filename='onnx/model.onnx'); \
-    AutoTokenizer.from_pretrained('bert-base-multilingual-cased'); \
-    AutoModel.from_pretrained('bert-base-multilingual-cased')"
+    AutoTokenizer.from_pretrained('xlm-roberta-large'); \
+    AutoModel.from_pretrained('xlm-roberta-large')"
 
 COPY app.py .
 

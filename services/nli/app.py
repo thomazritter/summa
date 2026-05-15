@@ -43,8 +43,20 @@ def get_bert_scorer():
     global _bert_scorer
     if _bert_scorer is None:
         from bert_score import BERTScorer
-        logger.info("Loading BERTScorer (multilingual)...")
-        _bert_scorer = BERTScorer(lang="pt", rescale_with_baseline=False)
+        # Use XLM-RoBERTa-Large (561M params) explicitly instead of the
+        # bert-score `lang="pt"` default, which falls back to mBERT
+        # (bert-base-multilingual-cased, 110M, 2018). XLM-RoBERTa-Large is
+        # the stronger multilingual encoder commonly adopted in recent
+        # cross-lingual evaluation work and gives more reliable BERTScore
+        # numbers for the EN article / PT summary setting used by the Summa.
+        # `num_layers=17` is the value recommended by the bert-score authors
+        # for xlm-roberta-large (see model2layers in bert_score/utils.py).
+        logger.info("Loading BERTScorer (XLM-RoBERTa-Large, num_layers=17)...")
+        _bert_scorer = BERTScorer(
+            model_type="xlm-roberta-large",
+            num_layers=17,
+            rescale_with_baseline=False,
+        )
         logger.info("BERTScorer loaded.")
     return _bert_scorer
 
