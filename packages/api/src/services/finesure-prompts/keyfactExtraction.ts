@@ -60,11 +60,11 @@ ${summary}
 `;
 }
 
+/** Strip common LLM-output noise. Apostrophes are preserved (see factChecking.ts). */
 function sanitizeJsonish(raw: string): string {
   return raw
     .replace(/```json/g, '')
     .replace(/```/g, '')
-    .replace(/'/g, '"')
     .replace(/,(\s*[\]\}])/g, '$1');
 }
 

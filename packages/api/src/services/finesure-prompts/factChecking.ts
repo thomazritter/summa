@@ -76,12 +76,14 @@ ${joinedSentences}
 `;
 }
 
-/** Strip common LLM-output noise so a JSON-like payload can be parsed. */
+/** Strip common LLM-output noise so a JSON-like payload can be parsed.
+ * Note: we deliberately do NOT replace apostrophes with double quotes — Llama
+ * emits valid JSON with double-quote delimiters, and a naive replace would
+ * corrupt apostrophes inside string values (e.g. "Karo's lawsuit"). */
 function sanitizeJsonish(raw: string): string {
   return raw
     .replace(/```json/g, '')
     .replace(/```/g, '')
-    .replace(/'/g, '"')
     .replace(/,(\s*[\]\}])/g, '$1');
 }
 
