@@ -96,7 +96,6 @@ async function main() {
     n_supported: number;
     n_neutral: number;
     n_contradicted: number;
-    n_cap_exhausted: number;
   };
   const results: Result[] = [];
 
@@ -115,7 +114,6 @@ async function main() {
       const n_supported = details.filter((d) => d.label === 'supported').length;
       const n_neutral = details.filter((d) => d.label === 'neutral').length;
       const n_contradicted = details.filter((d) => d.label === 'contradicted').length;
-      const n_cap_exhausted = details.filter((d) => d.judgedBy === 'cap_exhausted').length;
 
       await pool.query(
         `UPDATE summaries
@@ -135,7 +133,6 @@ async function main() {
         n_supported,
         n_neutral,
         n_contradicted,
-        n_cap_exhausted,
       });
 
       const newLabel = score === null ? 'n/a' : score.toFixed(3);
@@ -185,7 +182,7 @@ async function main() {
 
   const csvPath = join(process.cwd(), `data/recompute-factuality-${Date.now()}.csv`);
   const csv = [
-    'summary_id,profile_id,profile_label,article_id,old_score,new_score,n_sentences,n_supported,n_neutral,n_contradicted,n_cap_exhausted',
+    'summary_id,profile_id,profile_label,article_id,old_score,new_score,n_sentences,n_supported,n_neutral,n_contradicted',
     ...results.map((r) =>
       [
         r.summary_id,
@@ -198,7 +195,6 @@ async function main() {
         r.n_supported,
         r.n_neutral,
         r.n_contradicted,
-        r.n_cap_exhausted,
       ].join(','),
     ),
   ].join('\n');
