@@ -1,20 +1,20 @@
 /**
- * Recompute factuality scores on the summaries that were exercised by real
- * participants during the experiment described in §6.4 of the thesis.
+ * Recompute the FineSurE 3-dim metrics (faithfulness, completeness, conciseness)
+ * on the summaries that were exercised by real participants during the experiment
+ * described in §6.4 of the thesis.
  *
- * Why: the NLI verdict aggregation in `factualityChecker.ts` had two bugs
- *   (C3 / C4 from the business-logic review) that silently routed
- *   contradictions into the "neutral 0.0" placeholder; the meta-sentence
- *   filter (C5) was too aggressive; and the empty-results case (M1)
- *   returned 1.0 instead of null. All three are fixed in the local code.
+ * Why: those summaries were originally scored with the legacy NLI+LLM-judge
+ * pipeline. After the production switch to FineSurE 3-dim (Song et al. 2024),
+ * we want fresh numbers under the same protocol the live system now applies,
+ * so the §6.3 results table compares apples to apples with new summaries.
  *
  * What it does: for each summary referenced by an experiment_session (as
- * either the generic or the personalized variant), runs checkFactuality
- * with the fixed implementation, persists the new score + details (also
- * updates factuality_status to 'complete'), and prints an aggregate
- * comparison table by profile_id.
+ * either the generic or the personalized variant), runs checkFactuality with
+ * the FineSurE pipeline, persists the new faithfulness + per-sentence details
+ * (factuality_status='complete'), and writes a CSV that also records
+ * completeness and conciseness — those two are not persisted in the schema yet.
  *
- * Run with:  npx tsx src/scripts/recompute-factuality.ts
+ * Run with:  railway run -- npx tsx src/scripts/recompute-factuality.ts
  */
 
 import { Pool } from 'pg';
@@ -92,7 +92,10 @@ async function main() {
     article_id: number;
     old_score: number | null;
     new_score: number | null;
+    completeness: number | null;
+    conciseness: number | null;
     n_sentences: number;
+    n_keyfacts: number;
     n_supported: number;
     n_neutral: number;
     n_contradicted: number;
@@ -109,7 +112,8 @@ async function main() {
     );
 
     try {
-      const { score, results: details } = await checkFactuality(s.content, article.structure, article.rawText);
+      const { score, results: details, completeness, conciseness, keyfacts } =
+        await checkFactuality(s.content, article.structure, article.rawText);
 
       const n_supported = details.filter((d) => d.label === 'supported').length;
       const n_neutral = details.filter((d) => d.label === 'neutral').length;
@@ -117,7 +121,7 @@ async function main() {
 
       await pool.query(
         `UPDATE summaries
-         SET factuality_score = $1, factuality_details = $2
+         SET factuality_score = $1, factuality_details = $2, factuality_status = 'complete'
          WHERE id = $3`,
         [score, JSON.stringify(details), s.id],
       );
@@ -129,15 +133,22 @@ async function main() {
         article_id: s.article_id,
         old_score: s.factuality_score,
         new_score: score,
+        completeness,
+        conciseness,
         n_sentences: details.length,
+        n_keyfacts: keyfacts.length,
         n_supported,
         n_neutral,
         n_contradicted,
       });
 
-      const newLabel = score === null ? 'n/a' : score.toFixed(3);
+      const fLabel = score === null ? 'n/a' : score.toFixed(3);
+      const cmpLabel = completeness === null ? 'n/a' : completeness.toFixed(3);
+      const cncLabel = conciseness === null ? 'n/a' : conciseness.toFixed(3);
       const oldLabel = s.factuality_score === null ? 'n/a' : s.factuality_score.toFixed(3);
-      console.log(` ${oldLabel} → ${newLabel} (n=${details.length})`);
+      console.log(
+        ` faith ${oldLabel} → ${fLabel}  comp ${cmpLabel}  conc ${cncLabel}  (n=${details.length}, k=${keyfacts.length})`,
+      );
     } catch (err) {
       console.log(` ERR: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -150,39 +161,34 @@ async function main() {
     byProfile.get(r.profile_id)!.push(r);
   }
 
-  console.log('profile_id | label              | n_summaries | total_sent | %supp | %neu | %contr | mean_score (new) | mean_score (old)');
-  console.log('-----------+--------------------+-------------+------------+-------+------+--------+------------------+-----------------');
+  const mean = (xs: number[]) => (xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length);
+  const fmt = (x: number | null) => (x === null ? 'n/a' : x.toFixed(3));
+
+  console.log('profile_id | label              | n | faith (new) | faith (old) | comp     | conc');
+  console.log('-----------+--------------------+---+-------------+-------------+----------+--------');
   const profileIds = Array.from(byProfile.keys()).sort();
-  let totalSent = 0;
-  let totalSupp = 0;
-  let totalNeu = 0;
-  let totalCon = 0;
   for (const pid of profileIds) {
     const rows = byProfile.get(pid)!;
-    const sent = rows.reduce((s, r) => s + r.n_sentences, 0);
-    const supp = rows.reduce((s, r) => s + r.n_supported, 0);
-    const neu = rows.reduce((s, r) => s + r.n_neutral, 0);
-    const con = rows.reduce((s, r) => s + r.n_contradicted, 0);
-    const validNew = rows.filter((r) => r.new_score !== null);
-    const validOld = rows.filter((r) => r.old_score !== null);
-    const meanNew = validNew.length > 0 ? validNew.reduce((s, r) => s + (r.new_score as number), 0) / validNew.length : null;
-    const meanOld = validOld.length > 0 ? validOld.reduce((s, r) => s + (r.old_score as number), 0) / validOld.length : null;
-    totalSent += sent;
-    totalSupp += supp;
-    totalNeu += neu;
-    totalCon += con;
+    const meanFaithNew = mean(rows.map((r) => r.new_score).filter((x): x is number => x !== null));
+    const meanFaithOld = mean(rows.map((r) => r.old_score).filter((x): x is number => x !== null));
+    const meanComp = mean(rows.map((r) => r.completeness).filter((x): x is number => x !== null));
+    const meanConc = mean(rows.map((r) => r.conciseness).filter((x): x is number => x !== null));
     console.log(
-      `${String(pid).padEnd(11)}| ${rows[0].profile_label.padEnd(19)}| ${String(rows.length).padEnd(12)}| ${String(sent).padEnd(11)}| ${((100 * supp) / sent).toFixed(1).padEnd(6)}| ${((100 * neu) / sent).toFixed(1).padEnd(5)}| ${((100 * con) / sent).toFixed(1).padEnd(7)}| ${(meanNew === null ? 'n/a' : meanNew.toFixed(3)).padEnd(17)}| ${meanOld === null ? 'n/a' : meanOld.toFixed(3)}`,
+      `${String(pid).padEnd(11)}| ${rows[0].profile_label.padEnd(19)}| ${String(rows.length).padEnd(2)}| ${fmt(meanFaithNew).padEnd(12)}| ${fmt(meanFaithOld).padEnd(12)}| ${fmt(meanComp).padEnd(9)}| ${fmt(meanConc)}`,
     );
   }
-  console.log('-----------+--------------------+-------------+------------+-------+------+--------+------------------+-----------------');
+  console.log('-----------+--------------------+---+-------------+-------------+----------+--------');
+  const allFaithNew = mean(results.map((r) => r.new_score).filter((x): x is number => x !== null));
+  const allFaithOld = mean(results.map((r) => r.old_score).filter((x): x is number => x !== null));
+  const allComp = mean(results.map((r) => r.completeness).filter((x): x is number => x !== null));
+  const allConc = mean(results.map((r) => r.conciseness).filter((x): x is number => x !== null));
   console.log(
-    `TOTAL      |                    | ${String(results.length).padEnd(12)}| ${String(totalSent).padEnd(11)}| ${((100 * totalSupp) / totalSent).toFixed(1).padEnd(6)}| ${((100 * totalNeu) / totalSent).toFixed(1).padEnd(5)}| ${((100 * totalCon) / totalSent).toFixed(1).padEnd(7)}|`,
+    `TOTAL      |                    | ${String(results.length).padEnd(2)}| ${fmt(allFaithNew).padEnd(12)}| ${fmt(allFaithOld).padEnd(12)}| ${fmt(allComp).padEnd(9)}| ${fmt(allConc)}`,
   );
 
   const csvPath = join(process.cwd(), `data/recompute-factuality-${Date.now()}.csv`);
   const csv = [
-    'summary_id,profile_id,profile_label,article_id,old_score,new_score,n_sentences,n_supported,n_neutral,n_contradicted',
+    'summary_id,profile_id,profile_label,article_id,old_score,new_score,completeness,conciseness,n_sentences,n_keyfacts,n_supported,n_neutral,n_contradicted',
     ...results.map((r) =>
       [
         r.summary_id,
@@ -191,7 +197,10 @@ async function main() {
         r.article_id,
         r.old_score ?? '',
         r.new_score ?? '',
+        r.completeness ?? '',
+        r.conciseness ?? '',
         r.n_sentences,
+        r.n_keyfacts,
         r.n_supported,
         r.n_neutral,
         r.n_contradicted,

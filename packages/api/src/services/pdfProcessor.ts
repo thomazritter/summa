@@ -80,21 +80,15 @@ export const processPDF = async (buffer: Buffer): Promise<PDFProcessingResult> =
  * Use the LLM to identify and extract article sections from raw text.
  * More accurate than regex for non-standard headers and multilingual articles.
  * Returns null on failure so the caller can fall back to regex.
+ *
+ * Input is passed in full — truncating biases the abstract extraction (and
+ * therefore FineSurE keyfact extraction in §6.3 evaluation). Llama 3.3 70B on
+ * Groq has a 128K-token context window, comfortably above any realistic
+ * scientific paper. If the LLM call fails due to output-token saturation, the
+ * caller falls back to the regex-based structurer.
  */
-const MAX_STRUCTURING_CHARS = 30000;
-
-const truncateAtWordBoundary = (text: string, limit: number): string => {
-  if (text.length <= limit) return text;
-  const cut = text.slice(0, limit);
-  // Back off to the last whitespace so we don't leave a half-word at the end,
-  // which can produce a malformed string inside the requested JSON payload.
-  const lastSpace = cut.lastIndexOf(' ');
-  return lastSpace > limit - 200 ? cut.slice(0, lastSpace) : cut;
-};
-
 const structureWithLLM = async (rawText: string): Promise<ArticleStructure | null> => {
   try {
-    const truncatedText = truncateAtWordBoundary(rawText, MAX_STRUCTURING_CHARS);
     const prompt = `Analise este texto de artigo científico e identifique as seções.
 Retorne APENAS um JSON válido (sem markdown, sem \`\`\`, sem texto antes ou depois):
 {
@@ -110,12 +104,12 @@ IMPORTANTE: COPIE o texto original de cada seção integralmente. NÃO resuma ne
 Use null (sem aspas) para seções não encontradas no texto.
 
 TEXTO DO ARTIGO:
-${truncatedText}`;
+${rawText}`;
 
     const response = await generateCompletion({
       prompt,
       temperature: 0.1,
-      maxTokens: 8192,
+      maxTokens: 32768,
     });
 
     // Strip markdown code fences if present
