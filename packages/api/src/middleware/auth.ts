@@ -1,11 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 import { validateCode } from '../services/authService.js';
 
+// Single source of truth for the role allowlist. The access_codes CHECK
+// constraint already restricts inserts, but enforcing the same set at the
+// middleware layer keeps an unexpected role (constraint drop, manual
+// INSERT bypassing the app) from silently authorising requests.
+const ALLOWED_ROLES = ['participant', 'manager'] as const;
+type AllowedRole = typeof ALLOWED_ROLES[number];
+
 // Extend Express Request
 declare global {
   namespace Express {
     interface Request {
-      accessCode?: { code: string; email: string; role: string; participantId: number | null };
+      accessCode?: { code: string; email: string; role: AllowedRole; participantId: number | null };
     }
   }
 }
@@ -25,10 +32,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     }
   }
 
+  if (!ALLOWED_ROLES.includes(access.role as AllowedRole)) {
+    return res.status(403).json({ error: 'Acesso negado' });
+  }
+
   req.accessCode = {
     code: access.code,
     email: access.email,
-    role: access.role,
+    role: access.role as AllowedRole,
     participantId: access.participant_id,
   };
   next();
