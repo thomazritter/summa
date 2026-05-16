@@ -234,38 +234,3 @@ export const checkFactuality = async (
   };
 };
 
-/**
- * Heuristic retrieval kept for backwards compatibility with benchmark-regen-prompts.
- * Not used by the FineSurE pipeline (the fact-checking prompt receives the full
- * article text as transcript per Figure 3 design), but external scripts still
- * rely on it for paragraph anchoring.
- */
-export const findRelevantContexts = (
-  sentence: string,
-  structure: ArticleStructure,
-  rawText: string,
-): string[] => {
-  const terms = sentence.toLowerCase().split(/\W+/).filter((t) => t.length > 2);
-  const sections = [
-    structure.abstract,
-    structure.results,
-    structure.methodology,
-    structure.discussion,
-    structure.conclusion,
-    structure.introduction,
-  ]
-    .filter(Boolean)
-    .join('\n\n');
-  const searchText = sections || rawText;
-  const paragraphs = searchText.split(/\n\n+/).filter((p) => p.trim().length > 50);
-
-  const scored = paragraphs.map((para) => ({
-    para,
-    score: terms.filter((t) => para.toLowerCase().includes(t)).length,
-  }));
-  scored.sort((a, b) => b.score - a.score);
-  return scored
-    .slice(0, 3)
-    .filter((s) => s.score > 0)
-    .map((s) => s.para.slice(0, 1000));
-};

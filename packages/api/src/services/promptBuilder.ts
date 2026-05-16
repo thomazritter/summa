@@ -101,32 +101,13 @@ const buildInstructions = (profile: Profile, participantPreferences?: Participan
   return parts.join('\n\n');
 };
 
-const buildContentSection = (structure: ArticleStructure, rawText: string): string => {
-  // Always send the full raw text. Section extraction by LLM/regex is imperfect
-  // and historically dropped methodology/results/discussion/conclusion when the
-  // structurer caught only abstract+introduction. The 128K context window of
-  // current models comfortably fits any scientific article, and the
-  // structuredContent is still used elsewhere (ROUGE reference selection, NLI
-  // anchor retrieval) — only the summarizer prompt receives the whole document.
-  // A short header lists the sections the structurer identified so the model has
-  // a navigational hint without us duplicating content.
-  const detectedSections = [
-    structure.abstract && 'abstract',
-    structure.introduction && 'introduction',
-    structure.methodology && 'methodology',
-    structure.results && 'results',
-    structure.discussion && 'discussion',
-    structure.conclusion && 'conclusion',
-  ].filter(Boolean) as string[];
-
-  if (detectedSections.length === 0) {
-    return rawText;
-  }
-
-  return `Seções detectadas pelo pré-processamento: ${detectedSections.join(', ')}.
-
-Texto completo do artigo:
-${rawText}`;
+const buildContentSection = (_structure: ArticleStructure, rawText: string): string => {
+  // Send the full raw text. The 128K context window of current models
+  // comfortably fits any scientific article, and routing only the abstract
+  // risks dropping content. The structurer's output (abstract only) is
+  // consumed elsewhere (FineSurE keyfact extraction); the summarizer prompt
+  // receives the whole document.
+  return rawText;
 };
 
 /**

@@ -1,5 +1,5 @@
 import pdf from 'pdf-parse';
-import type { ArticleStructure, ArticleSection } from '@summarizer/shared';
+import type { ArticleStructure } from '@summarizer/shared';
 import { MAX_PDF_SIZE } from '../utils/validation.js';
 import { generateCompletion } from './groqClient.js';
 
@@ -77,31 +77,26 @@ export const processPDF = async (buffer: Buffer): Promise<PDFProcessingResult> =
 };
 
 /**
- * Use the LLM to identify and extract article sections from raw text.
- * More accurate than regex for non-standard headers and multilingual articles.
- * Returns null on failure so the caller can fall back to regex.
+ * Use the LLM to identify and extract the abstract from raw text. The abstract
+ * is the only section the downstream pipeline (FineSurE keyfact extraction)
+ * consumes, so the structurer extracts only that.
  *
- * Input is passed in full — truncating biases the abstract extraction (and
- * therefore FineSurE keyfact extraction in §6.3 evaluation). Llama 3.3 70B on
- * Groq has a 128K-token context window, comfortably above any realistic
- * scientific paper. If the LLM call fails due to output-token saturation, the
- * caller falls back to the regex-based structurer.
+ * Input is passed in full — truncating biases the abstract identification
+ * (especially for editorial formats that place the abstract between authors
+ * and DOI without an explicit "Abstract:" header). Llama 3.3 70B on Groq has
+ * a 128K-token context window, comfortably above any realistic scientific
+ * paper. Returns null on failure so the caller can fall back to regex.
  */
 const structureWithLLM = async (rawText: string): Promise<ArticleStructure | null> => {
   try {
-    const prompt = `Analise este texto de artigo científico e identifique as seções.
+    const prompt = `Analise este texto de artigo científico e identifique o resumo/abstract do artigo.
 Retorne APENAS um JSON válido (sem markdown, sem \`\`\`, sem texto antes ou depois):
 {
-  "abstract": "texto completo da seção ou null",
-  "introduction": "texto completo da seção ou null",
-  "methodology": "texto completo da seção ou null",
-  "results": "texto completo da seção ou null",
-  "discussion": "texto completo da seção ou null",
-  "conclusion": "texto completo da seção ou null"
+  "abstract": "texto completo do abstract ou null"
 }
 
-IMPORTANTE: COPIE o texto original de cada seção integralmente. NÃO resuma nem altere o conteúdo.
-Use null (sem aspas) para seções não encontradas no texto.
+IMPORTANTE: COPIE o texto original do abstract integralmente. NÃO resuma nem altere o conteúdo.
+Use null (sem aspas) caso o abstract não seja encontrado no texto.
 
 ABSTRACT SEM RÓTULO EXPLÍCITO: alguns artigos (notadamente os do formato
 Nature Communications) não trazem o cabeçalho "Abstract:" antes do resumo
@@ -118,7 +113,7 @@ ${rawText}`;
     const response = await generateCompletion({
       prompt,
       temperature: 0.1,
-      maxTokens: 32768,
+      maxTokens: 8192,
     });
 
     // Strip markdown code fences if present
@@ -136,26 +131,13 @@ ${rawText}`;
     const jsonStr = cleaned.slice(startIdx, endIdx + 1);
     const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
 
-    // Validate: each known field should be a string or null
-    const validKeys = ['abstract', 'introduction', 'methodology', 'results', 'discussion', 'conclusion'] as const;
-    const structure: ArticleStructure = { sections: [] };
-
-    for (const key of validKeys) {
-      const value = parsed[key];
-      if (typeof value === 'string' && value.trim().length > 0) {
-        structure[key] = value;
-      }
-      // null or missing values are left as undefined
-    }
-
-    // Check that at least one section was extracted
-    const hasContent = validKeys.some((key) => structure[key] !== undefined);
-    if (!hasContent) {
-      console.warn('[PDF] LLM structuring returned no sections');
+    const value = parsed.abstract;
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      console.warn('[PDF] LLM structuring returned no abstract');
       return null;
     }
 
-    return structure;
+    return { abstract: value, sections: [] };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.warn('[PDF] LLM structuring failed, will use regex fallback:', message);
@@ -171,53 +153,40 @@ const extractTitleFromText = (text: string): string | undefined => {
   return undefined;
 };
 
+/**
+ * Regex fallback for abstract detection when the LLM call fails. Walks the
+ * text line-by-line and captures everything between an "Abstract"/"Resumo"
+ * header and the next section header (introduction, methodology, etc.).
+ */
 const structureArticleContent = (text: string): ArticleStructure => {
-  const sections: ArticleSection[] = [];
-  const structure: ArticleStructure = { sections };
+  const structure: ArticleStructure = { sections: [] };
 
-  const sectionPatterns = [
-    { pattern: /^(?:\d+[\.\s]+)?(abstract|resumo)[:\s—]*/i, key: 'abstract' as const },
-    { pattern: /^(?:\d+[\.\s]+)?(introduction|introdu[çc][ãa]o)[:\s]*/i, key: 'introduction' as const },
-    { pattern: /^(?:\d+[\.\s]+)?(methodology|methods|materials and methods|metodologia|m[ée]todos|experimental\s+(?:setup|design))[:\s]*/i, key: 'methodology' as const },
-    { pattern: /^(?:\d+[\.\s]+)?(results|resultados|results and discussion)[:\s]*/i, key: 'results' as const },
-    { pattern: /^(?:\d+[\.\s]+)?(discussion|discuss[ãa]o)[:\s]*/i, key: 'discussion' as const },
-    { pattern: /^(?:\d+[\.\s]+)?(conclusion|conclusions|conclus[ãa]o|conclus[õo]es)[:\s]*/i, key: 'conclusion' as const },
-  ];
+  const abstractHeader = /^(?:\d+[\.\s]+)?(abstract|resumo)[:\s—]*/i;
+  const stopHeader = /^(?:\d+[\.\s]+)?(introduction|introdu[çc][ãa]o|methodology|methods|materials and methods|metodologia|m[ée]todos|experimental\s+(?:setup|design)|results|resultados|discussion|discuss[ãa]o|conclusion|conclus[ãa]o|keywords|palavras-chave)[:\s]*/i;
 
   const lines = text.split('\n');
-  let currentSection: ArticleSection | null = null;
-  let currentContent: string[] = [];
-  let currentKey: keyof ArticleStructure | null = null;
+  let capturing = false;
+  const buffer: string[] = [];
 
   for (const line of lines) {
     const trimmedLine = line.trim();
     if (!trimmedLine) continue;
 
-    let isHeader = false;
-    for (const { pattern, key } of sectionPatterns) {
-      if (pattern.test(trimmedLine)) {
-        if (currentSection && currentKey) {
-          currentSection.content = currentContent.join('\n').trim();
-          sections.push(currentSection);
-          structure[currentKey] = currentSection.content;
-        }
-        currentSection = { title: trimmedLine, content: '', level: 1 };
-        currentContent = [];
-        currentKey = key;
-        isHeader = true;
-        break;
-      }
+    if (capturing && stopHeader.test(trimmedLine)) {
+      break;
     }
-
-    if (!isHeader && currentSection) {
-      currentContent.push(trimmedLine);
+    if (abstractHeader.test(trimmedLine)) {
+      capturing = true;
+      continue;
+    }
+    if (capturing) {
+      buffer.push(trimmedLine);
     }
   }
 
-  if (currentSection && currentKey) {
-    currentSection.content = currentContent.join('\n').trim();
-    sections.push(currentSection);
-    structure[currentKey] = currentSection.content;
+  const abstract = buffer.join('\n').trim();
+  if (abstract.length > 0) {
+    structure.abstract = abstract;
   }
 
   return structure;

@@ -64,7 +64,7 @@ const DEPTH_TEXT: Record<Profile['depth'], string> = {
   comprehensive: 'Extensão: abrangente — 7 a 10 parágrafos, aproximadamente 900 palavras. Cubra todos os aspectos relevantes com profundidade.',
 };
 
-const buildContentBlock = (rawText: string): string => `Texto completo do artigo:\n${rawText}`;
+const buildContentBlock = (rawText: string): string => rawText;
 
 const buildProfileBlock = (profile: Profile): string => {
   const parts = [
