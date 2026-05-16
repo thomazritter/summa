@@ -9,6 +9,7 @@ export interface AccessCodeRow {
   participant_id: number | null;
   used_at: string | null;
   expires_at: string | null;
+  consumed_at: string | null;
 }
 
 export async function validateCode(code: string): Promise<AccessCodeRow | null> {
@@ -30,8 +31,15 @@ export function generateCode(): string {
 // quota check and code insertion inside a single advisory-locked transaction.
 
 /**
- * Validate a magic link code, checking expiration.
- * On success, clears expires_at so the code becomes a permanent session token.
+ * Validate a magic link code for the /auth/login exchange.
+ *
+ * Magic links (rows with a non-null expires_at) are single-use: the first
+ * successful call sets consumed_at and clears expires_at, promoting the
+ * code to a permanent session token. Subsequent /auth/login calls with
+ * the same code are rejected so an intercepted link cannot be used twice.
+ *
+ * Permanent codes (no expires_at — e.g. SUMMA-ADMIN) bypass the
+ * single-use rule and stay reusable for emergency access.
  */
 export async function validateMagicLink(code: string): Promise<AccessCodeRow | null> {
   const access = await queryOne<AccessCodeRow>(
@@ -41,20 +49,24 @@ export async function validateMagicLink(code: string): Promise<AccessCodeRow | n
 
   if (!access) return null;
 
-  // If expires_at is set, check it hasn't expired
   if (access.expires_at) {
+    // Originated as a magic link.
+    if (access.consumed_at) {
+      return null; // Already exchanged for a session; reject reuse.
+    }
     const expiresAt = new Date(access.expires_at);
     if (expiresAt < new Date()) {
-      return null; // Expired
+      return null; // Expired before being consumed.
     }
 
-    // Valid magic link — clear expiration to make it a permanent session token
+    // First valid exchange: mark consumed + promote to permanent session token.
     await execute(
-      'UPDATE access_codes SET expires_at = NULL, used_at = CURRENT_TIMESTAMP WHERE id = $1',
+      'UPDATE access_codes SET expires_at = NULL, used_at = CURRENT_TIMESTAMP, consumed_at = CURRENT_TIMESTAMP WHERE id = $1',
       [access.id],
     );
     access.expires_at = null;
-    access.used_at = new Date().toISOString();
+    access.consumed_at = new Date().toISOString();
+    access.used_at = access.consumed_at;
   }
 
   return access;

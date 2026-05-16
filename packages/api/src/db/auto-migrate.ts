@@ -49,6 +49,11 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;
 
     ALTER TABLE access_codes ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+    -- consumed_at marks the moment a magic link is exchanged for a session.
+    -- Magic links (rows with a non-null expires_at) are rejected on
+    -- subsequent /auth/login attempts once consumed_at is set; permanent
+    -- codes (SUMMA-ADMIN, no expires_at) ignore this and stay reusable.
+    ALTER TABLE access_codes ADD COLUMN IF NOT EXISTS consumed_at TIMESTAMP;
 
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
