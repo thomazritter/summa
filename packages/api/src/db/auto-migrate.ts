@@ -81,13 +81,11 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS conciseness_score  REAL;
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS factuality_keyfacts JSONB;
 
-    -- Likert ratings collected outside the experiment flow (product mode).
-    -- session_id and ab_label are NULL for product ratings; participant_id is
-    -- populated instead. source distinguishes the two regimes.
-    ALTER TABLE summary_ratings ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'experiment';
+    -- Likert ratings collected from the product summary view.
+    -- participant_id identifies who rated; source distinguishes legacy
+    -- 'experiment' rows from current 'product' rows.
+    ALTER TABLE summary_ratings ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'product';
     ALTER TABLE summary_ratings ADD COLUMN IF NOT EXISTS participant_id INTEGER REFERENCES participants(id) ON DELETE CASCADE;
-    ALTER TABLE summary_ratings ALTER COLUMN session_id DROP NOT NULL;
-    ALTER TABLE summary_ratings ALTER COLUMN ab_label DROP NOT NULL;
   `;
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');
