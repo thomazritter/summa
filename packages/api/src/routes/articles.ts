@@ -73,16 +73,21 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
   });
 }));
 
-// Download article raw text as file
+// Download article raw text as file. Ownership-scoped.
 articleRoutes.get('/:id/download', asyncHandler(async (req: Request, res: Response) => {
   const id = parseId(req.params.id);
   if (id === null) {
     return res.status(400).json({ error: 'Invalid article ID' });
   }
 
+  const participantId = req.accessCode?.participantId;
+  if (!participantId) {
+    return res.status(404).json({ error: 'Article not found' });
+  }
+
   const article = await queryOne<{ title: string; raw_text: string }>(
-    'SELECT title, raw_text FROM articles WHERE id = $1',
-    [id]
+    'SELECT title, raw_text FROM articles WHERE id = $1 AND uploaded_by = $2',
+    [id, participantId]
   );
 
   if (!article) {
@@ -95,14 +100,22 @@ articleRoutes.get('/:id/download', asyncHandler(async (req: Request, res: Respon
   res.send(article.raw_text);
 }));
 
-// Get article by ID
+// Get article by ID. Ownership-scoped.
 articleRoutes.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   const id = parseId(req.params.id);
   if (id === null) {
     return res.status(400).json({ error: 'Invalid article ID' });
   }
 
-  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [id]);
+  const participantId = req.accessCode?.participantId;
+  if (!participantId) {
+    return res.status(404).json({ error: 'Article not found' });
+  }
+
+  const article = await queryOne<ArticleRow>(
+    'SELECT * FROM articles WHERE id = $1 AND uploaded_by = $2',
+    [id, participantId]
+  );
 
   if (!article) {
     return res.status(404).json({ error: 'Article not found' });
@@ -111,10 +124,15 @@ articleRoutes.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   res.json(mapRowToArticle(article));
 }));
 
-// Get all articles (list view - without full content)
-articleRoutes.get('/', asyncHandler(async (_req: Request, res: Response) => {
+// List articles owned by the requesting participant.
+articleRoutes.get('/', asyncHandler(async (req: Request, res: Response) => {
+  const participantId = req.accessCode?.participantId;
+  if (!participantId) {
+    return res.json([]);
+  }
   const articles = await queryAll<ArticleListRow>(
-    'SELECT id, title, authors, year, doi, url, created_at FROM articles'
+    'SELECT id, title, authors, year, doi, url, created_at FROM articles WHERE uploaded_by = $1',
+    [participantId]
   );
   res.json(articles.map(row => ({
     id: row.id,

@@ -246,6 +246,17 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
 
   const { articleId } = validation.data;
 
+  // Ownership: the article must have been uploaded by this participant.
+  // Without this check any logged-in user could pay the LLM cost of
+  // summarising any article in the database.
+  const article = await queryOne<{ id: number }>(
+    'SELECT id FROM articles WHERE id = $1 AND uploaded_by = $2',
+    [articleId, participantId],
+  );
+  if (!article) {
+    return res.status(404).json({ error: 'Artigo nao encontrado' });
+  }
+
   // Load participant to compute profile dimensions
   const participant = await queryOne<ParticipantRow>(
     'SELECT * FROM participants WHERE id = $1',
