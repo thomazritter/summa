@@ -56,20 +56,10 @@ const magicLinkHtml = (magicLinkUrl: string) => `<!doctype html>
               </td>
             </tr>
             <tr>
-              <td align="center" style="padding:0 32px 24px 32px;">
+              <td align="center" style="padding:0 32px 32px 32px;">
                 <a href="${magicLinkUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
                   Entrar
                 </a>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:0 32px 24px 32px;">
-                <p class="text-faint" style="margin:0 0 6px 0;font-size:12px;line-height:1.6;color:#9ca3af;">
-                  Se o botão não funcionar:
-                </p>
-                <p style="margin:0;font-size:12px;line-height:1.6;word-break:break-all;">
-                  <a href="${magicLinkUrl}" class="link-muted" style="color:#6b7280;">${magicLinkUrl}</a>
-                </p>
               </td>
             </tr>
             <tr>
