@@ -87,13 +87,14 @@ export interface FactualityResult {
   label: 'supported' | 'contradicted' | 'neutral';
   confidence: number;
   sourceSentence?: string;
-  // Records which layer produced the final verdict (Phase C).
-  // 'nli'           — NLI verdict, no LLM-judge pass attempted (non-neutral or cap exhausted).
-  // 'llm'           — LLM-as-judge re-evaluated and (potentially) revised the NLI verdict.
-  // 'cap_exhausted' — neutral that should have been judged by LLM but the per-summary
-  //                   call cap was reached; the NLI verdict is kept as-is.
-  judgedBy?: 'nli' | 'llm' | 'cap_exhausted';
+  // Records which layer produced the final verdict.
+  // 'finesure' — FineSurE 3-dim pipeline (Song et al. 2024) — current production method.
+  // 'nli', 'llm', 'cap_exhausted' — legacy NLI+LLM-judge pipeline, kept for historical
+  //   records still present in the database.
+  judgedBy?: 'finesure' | 'nli' | 'llm' | 'cap_exhausted';
   rationale?: string;
+  /** FineSurE 9-category classification (e.g. "no error", "entity error"). Empty for legacy records. */
+  category?: string;
 }
 
 // API request/response types

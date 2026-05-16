@@ -3,7 +3,7 @@ import { generateCompletion, getActiveModel, LLMError } from './groqClient.js';
 import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxOutputTokens } from './promptBuilder.js';
 import type { ParticipantPreferences } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
-import { checkFactuality, checkNliServiceHealth, findRelevantContexts } from './factualityChecker.js';
+import { checkFactuality, findRelevantContexts } from './factualityChecker.js';
 import { computeRouge, computeBertScore } from './metricsService.js';
 import { recomputePAccuracyForArticle } from './pAccuracyHelper.js';
 import { safeJsonParse } from '../utils/validation.js';
@@ -89,8 +89,10 @@ export const getSummaryById = async (id: number): Promise<Summary | null> => {
 };
 
 /**
- * Run factuality verification in the background without blocking the response.
- * If the NLI service is unavailable or the check fails, it logs a warning and skips.
+ * Run FineSurE 3-dim factuality verification in the background without blocking
+ * the response. On success the per-sentence verdicts + faithfulness score are
+ * persisted; completeness and conciseness are computed in-memory and surfaced
+ * via the script tooling but not yet persisted (requires schema migration).
  */
 const checkFactualityInBackground = (
   summaryId: number,
@@ -101,17 +103,11 @@ const checkFactualityInBackground = (
   // Fire-and-forget: do not await
   (async () => {
     try {
-      const health = await checkNliServiceHealth();
-      if (!health.available) {
-        console.warn(`[factuality] NLI service unavailable – marking summary ${summaryId} as skipped`);
-        await execute(
-          `UPDATE summaries SET factuality_status = 'skipped' WHERE id = $1`,
-          [summaryId],
-        );
-        return;
-      }
-
-      const { score, results } = await checkFactuality(summaryContent, structuredContent, rawText);
+      const { score, results, completeness, conciseness, keyfacts } = await checkFactuality(
+        summaryContent,
+        structuredContent,
+        rawText,
+      );
 
       await execute(
         `UPDATE summaries
@@ -121,7 +117,11 @@ const checkFactualityInBackground = (
       );
 
       const scoreLabel = score === null ? 'n/a (no verifiable claims)' : score.toFixed(3);
-      console.info(`[factuality] Summary ${summaryId} scored ${scoreLabel} (${results.length} claims checked)`);
+      const completenessLabel = completeness === null ? 'n/a' : completeness.toFixed(3);
+      const concisenessLabel = conciseness === null ? 'n/a' : conciseness.toFixed(3);
+      console.info(
+        `[factuality] Summary ${summaryId}: faithfulness=${scoreLabel} completeness=${completenessLabel} conciseness=${concisenessLabel} (${results.length} sentences, ${keyfacts.length} keyfacts)`,
+      );
     } catch (error) {
       console.warn(`[factuality] Background check failed for summary ${summaryId}:`, error);
       // Surface the failure so the UI stops waiting forever.

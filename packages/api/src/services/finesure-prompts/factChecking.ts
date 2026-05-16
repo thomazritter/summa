@@ -35,6 +35,10 @@ export interface FactCheckParseResult {
   predLabels: number[];
   /** Category name as reported by the LLM */
   predTypes: string[];
+  /** Per-sentence reason text as emitted by the LLM (parallel array; empty string if missing) */
+  reasons: string[];
+  /** Per-sentence echoed sentence text as emitted by the LLM (parallel array) */
+  sentences: string[];
 }
 
 /**
@@ -95,22 +99,31 @@ export function parseFactCheckingOutput(output: string): FactCheckParseResult {
 
       const predLabels: number[] = [];
       const predTypes: string[] = [];
+      const reasons: string[] = [];
+      const sentences: string[] = [];
       for (const item of parsed) {
         const category = String(item.category ?? '').replace(/[\[\]\n]/g, '');
         predLabels.push(category.toLowerCase() === 'no error' ? 0 : 1);
         predTypes.push(category);
+        reasons.push(typeof item.reason === 'string' ? item.reason : '');
+        sentences.push(typeof item.sentence === 'string' ? item.sentence : '');
       }
-      return { predLabels, predTypes };
+      return { predLabels, predTypes, reasons, sentences };
     }
 
     const startObj = output.indexOf('{');
     const endObj = output.lastIndexOf('}');
     if (startObj !== -1 && endObj !== -1) {
       const slice = sanitizeJsonish(output.slice(startObj, endObj + 1).replace(/\n/g, ''));
-      const parsed = JSON.parse(slice) as { category?: string };
+      const parsed = JSON.parse(slice) as { category?: string; reason?: string; sentence?: string };
       const category = String(parsed.category ?? '').replace(/[\[\]\n]/g, '');
       const label = category.toLowerCase() === 'no error' ? 0 : 1;
-      return { predLabels: [label], predTypes: [category] };
+      return {
+        predLabels: [label],
+        predTypes: [category],
+        reasons: [typeof parsed.reason === 'string' ? parsed.reason : ''],
+        sentences: [typeof parsed.sentence === 'string' ? parsed.sentence : ''],
+      };
     }
 
     throw new Error('No JSON structure found in fact-checking output');
@@ -131,9 +144,14 @@ export function parseFactCheckingOutput(output: string): FactCheckParseResult {
         predLabels.push(detected ? 1 : 0);
         predTypes.push(detectedType);
       }
-      return { predLabels, predTypes };
+      return {
+        predLabels,
+        predTypes,
+        reasons: predLabels.map(() => ''),
+        sentences: predLabels.map(() => ''),
+      };
     } catch {
-      return { predLabels: [], predTypes: [] };
+      return { predLabels: [], predTypes: [], reasons: [], sentences: [] };
     }
   }
 }
