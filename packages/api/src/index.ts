@@ -5,9 +5,8 @@ import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { articleRoutes } from './routes/articles.js';
-import { experimentRoutes } from './routes/experiment.js';
 import { authRoutes } from './routes/auth.js';
-import { managerRoutes } from './routes/manager.js';
+import { profileRoutes } from './routes/profile.js';
 import { userRoutes } from './routes/user.js';
 import { requireAuth } from './middleware/auth.js';
 import { closeDb } from './db/connection.js';
@@ -86,9 +85,8 @@ app.use('/api/auth/magic-link', magicLinkLimiter);
 
 // Routes
 app.use('/api/articles', requireAuth, articleRoutes);
-app.use('/api/experiment', experimentRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/manager', managerRoutes);
+app.use('/api/profile', profileRoutes);
 app.use('/api/user', requireAuth, userRoutes);
 
 // Serve frontend in production

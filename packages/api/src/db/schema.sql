@@ -103,92 +103,29 @@ CREATE TABLE IF NOT EXISTS participants (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Experiment sessions table (one per participant + article combination)
-CREATE TABLE IF NOT EXISTS experiment_sessions (
-  id SERIAL PRIMARY KEY,
-  participant_id INTEGER NOT NULL,
-  article_id INTEGER NOT NULL,
-  profile_id INTEGER NOT NULL,
-  generic_summary_id INTEGER NOT NULL,
-  personalized_summary_id INTEGER NOT NULL,
-  ab_order TEXT NOT NULL, -- JSON: {"A": "generic"|"personalized", "B": "generic"|"personalized"}
-  preference TEXT CHECK (preference IN ('A', 'B')),
-  preference_rating INTEGER CHECK (preference_rating BETWEEN 1 AND 10),
-  preference_reason TEXT,
-  phase TEXT NOT NULL DEFAULT 'comparison' CHECK (phase IN ('comparison', 'feedback', 'regenerated', 'complete')),
-  created_at TIMESTAMP DEFAULT NOW(),
-  FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE,
-  FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
-  FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE,
-  FOREIGN KEY (generic_summary_id) REFERENCES summaries(id) ON DELETE CASCADE,
-  FOREIGN KEY (personalized_summary_id) REFERENCES summaries(id) ON DELETE CASCADE
-);
-
--- Regenerations table (feedback cycle data)
-CREATE TABLE IF NOT EXISTS regenerations (
-  id SERIAL PRIMARY KEY,
-  session_id INTEGER NOT NULL,
-  feedback_text TEXT NOT NULL,
-  regenerated_summary_id INTEGER NOT NULL,
-  improvement_rating TEXT CHECK (improvement_rating IN ('improved', 'same', 'worse')),
-  satisfaction_rating INTEGER CHECK (satisfaction_rating BETWEEN 1 AND 5),
-  utility_rating INTEGER CHECK (utility_rating BETWEEN 1 AND 5),
-  clarity_rating INTEGER CHECK (clarity_rating BETWEEN 1 AND 5),
-  adequacy_rating INTEGER CHECK (adequacy_rating BETWEEN 1 AND 5),
-  change_description TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  FOREIGN KEY (session_id) REFERENCES experiment_sessions(id) ON DELETE CASCADE,
-  FOREIGN KEY (regenerated_summary_id) REFERENCES summaries(id) ON DELETE CASCADE
-);
-
--- Indexes for experiment tables
-CREATE INDEX IF NOT EXISTS idx_experiment_sessions_participant ON experiment_sessions(participant_id);
-CREATE INDEX IF NOT EXISTS idx_experiment_sessions_article ON experiment_sessions(article_id);
-CREATE INDEX IF NOT EXISTS idx_regenerations_session ON regenerations(session_id);
-
--- Unique constraints to prevent race-condition duplicates
-CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_session_participant_article ON experiment_sessions(participant_id, article_id);
+-- Unique constraint preventing duplicate generic summaries per article.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_variant ON summaries(article_id, profile_id) WHERE profile_id IN (98, 99);
 
 -- ─── Embedded Feedback Tables ──────────────────────────────────────
 
--- Likert ratings per summary.
---   source='experiment': session_id and ab_label are required (Trial page).
---   source='product':    participant_id is required (Summary view in product mode).
+-- Likert ratings per summary, collected from the product summary view.
 CREATE TABLE IF NOT EXISTS summary_ratings (
   id SERIAL PRIMARY KEY,
-  session_id INTEGER,
   summary_id INTEGER NOT NULL,
   participant_id INTEGER,
-  ab_label TEXT CHECK (ab_label IN ('A', 'B')),
-  source TEXT DEFAULT 'experiment',
+  source TEXT DEFAULT 'product',
   utilidade INTEGER NOT NULL CHECK (utilidade BETWEEN 1 AND 5),
   clareza INTEGER NOT NULL CHECK (clareza BETWEEN 1 AND 5),
   adequacao_perfil INTEGER NOT NULL CHECK (adequacao_perfil BETWEEN 1 AND 5),
   factualidade_percebida INTEGER NOT NULL CHECK (factualidade_percebida BETWEEN 1 AND 5),
   comment TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
-  FOREIGN KEY (session_id) REFERENCES experiment_sessions(id) ON DELETE CASCADE,
   FOREIGN KEY (summary_id) REFERENCES summaries(id) ON DELETE CASCADE,
   FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_summary_ratings_session ON summary_ratings(session_id);
 -- idx_summary_ratings_participant (WHERE source = 'product') is created in
 -- auto-migrate.ts AFTER the source column is added via ALTER TABLE, to remain
 -- compatible with pre-existing databases where the column did not yet exist.
-
--- Post-test responses (replaces Google Forms)
-CREATE TABLE IF NOT EXISTS post_test_responses (
-  id SERIAL PRIMARY KEY,
-  participant_id INTEGER NOT NULL UNIQUE,
-  noticed_difference TEXT,
-  difference_type TEXT,
-  would_use_daily TEXT,
-  improvements TEXT,
-  comments TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE
-);
 
 -- ─── Access Codes (Auth) ─────────────────────────────────────────────
 
@@ -220,8 +157,6 @@ ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_expertise TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_focus TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_depth TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_context TEXT;
-
-ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
 
 -- ─── Domain & Current Project ─────────────────────────────────────
 

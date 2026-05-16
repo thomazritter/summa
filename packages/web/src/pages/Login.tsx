@@ -56,11 +56,7 @@ export function Login() {
         sessionStorage.setItem('experimentParticipantId', String(result.participantId));
       }
 
-      if (result.role === 'manager') {
-        navigate('/manager');
-      } else {
-        navigate('/dashboard');
-      }
+      navigate('/dashboard');
     } catch {
       setCodeError('Codigo nao encontrado.');
     } finally {

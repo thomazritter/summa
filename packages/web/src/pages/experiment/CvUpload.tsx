@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { experimentApi } from '../../api/client';
+import { profileApi } from '../../api/client';
 import { PROFILE_DIMENSIONS } from '../../constants/profileDimensions';
 import { formatFileSize } from '../../utils/format';
 
@@ -53,7 +53,7 @@ export function CvUpload() {
   }, [phase]);
 
   const uploadMutation = useMutation({
-    mutationFn: (selectedFile: File) => experimentApi.uploadCv(selectedFile),
+    mutationFn: (selectedFile: File) => profileApi.uploadCv(selectedFile),
     onSuccess: (data: CvProfileResponse) => {
       setCvResult(data);
       setSelections(data.dimensions || {});
@@ -73,7 +73,7 @@ export function CvUpload() {
       dimensions: Record<string, string>;
       domain?: string;
       currentProject?: string;
-    }) => experimentApi.registerFromCv({
+    }) => profileApi.registerFromCv({
       name: data.name,
       experienceLevel: data.experienceLevel,
       dimensions: data.dimensions,

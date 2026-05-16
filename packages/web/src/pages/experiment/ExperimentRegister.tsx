@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { experimentApi } from '../../api/client';
+import { profileApi } from '../../api/client';
 
 interface FormData {
   name: string;
@@ -28,7 +28,7 @@ export function ExperimentRegister() {
   });
 
   const registerMutation = useMutation({
-    mutationFn: (data: FormData) => experimentApi.registerParticipant(data),
+    mutationFn: (data: FormData) => profileApi.registerParticipant(data),
     onSuccess: (participant) => {
       sessionStorage.setItem('experimentParticipantId', String(participant.id));
       sessionStorage.setItem('experimentParticipantName', participant.name);

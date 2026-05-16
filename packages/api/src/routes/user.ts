@@ -11,8 +11,7 @@ import { queryAll, queryOne, execute } from '../db/connection.js';
 import { parseId, safeJsonParse, zodErrorMessage } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { generatePersonalizedSummary, SummarizationError, NotFoundError } from '../services/summarizationService.js';
-import { buildPersonalizationContext } from '../services/sessionService.js';
-import { EXPERIENCE_CONFIG } from '../services/sessionService.js';
+import { buildPersonalizationContext, EXPERIENCE_CONFIG } from '../services/profileService.js';
 import { AVAILABLE_MODELS } from '../services/groqClient.js';
 import type { ParticipantRow } from '../types/rows.js';
 
@@ -104,20 +103,16 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
     return res.json([]);
   }
 
-  // Get all articles that have at least one personalized summary belonging
-  // to this user — either uploaded by them with a generated summary, or
-  // linked through experiment sessions. Articles uploaded but never
-  // summarized (user abandoned the flow between upload and generate) are
-  // intentionally excluded so the dashboard does not surface empty rows.
-  // Exclude generic profile IDs (99 = keep_english generic, 98 = translate generic).
+  // Articles uploaded by this user that have at least one personalized
+  // summary. Articles uploaded but never summarized (user abandoned the
+  // flow between upload and generate) are intentionally excluded so the
+  // dashboard does not surface empty rows. Generic profile IDs (98, 99)
+  // are excluded — those are the control variants, not user-facing.
   const articleRows = await queryAll<UserArticleRow>(
     `SELECT DISTINCT a.id, a.title, a.authors, a.created_at
      FROM articles a
      INNER JOIN summaries s ON s.article_id = a.id AND s.profile_id NOT IN (98, 99)
-     WHERE (a.uploaded_by = $1)
-        OR s.id IN (
-          SELECT personalized_summary_id FROM experiment_sessions WHERE participant_id = $1
-        )
+     WHERE a.uploaded_by = $1
      ORDER BY a.created_at DESC`,
     [participantId],
   );
@@ -135,7 +130,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
       rouge_l: number | null;
       bert_score: number | null;
     }>(
-      `SELECT DISTINCT s.id, s.article_id, s.content, s.factuality_score, s.factuality_details,
+      `SELECT s.id, s.article_id, s.content, s.factuality_score, s.factuality_details,
               s.completeness_score, s.conciseness_score, s.factuality_keyfacts,
               s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score,
               s.model_id, s.generated_at, s.parent_summary_id,
@@ -143,14 +138,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
        FROM summaries s
        WHERE s.article_id = $1
          AND s.profile_id NOT IN (98, 99)
-         AND (
-           s.id IN (
-             SELECT personalized_summary_id FROM experiment_sessions WHERE participant_id = $2
-           )
-           OR s.article_id IN (
-             SELECT id FROM articles WHERE uploaded_by = $2
-           )
-         )
+         AND s.article_id IN (SELECT id FROM articles WHERE uploaded_by = $2)
        ORDER BY s.generated_at DESC`,
       [article.id, participantId],
     );
@@ -326,21 +314,13 @@ userRoutes.delete('/summaries/:id', asyncHandler(async (req: Request, res: Respo
 
   await execute('DELETE FROM summaries WHERE id = $1', [summaryId]);
 
-  // If that was the user's last summary for this article AND the article
-  // is not referenced by any experiment session, drop the article too so
-  // the dashboard doesn't keep showing "Sem resumo disponível" cards.
+  // If that was the user's last summary for this article, drop the article
+  // too so the dashboard does not keep showing "Sem resumo disponível" cards.
   const remaining = await queryOne<{ count: string }>(
     'SELECT COUNT(*)::text AS count FROM summaries WHERE article_id = $1',
     [summary.article_id],
   );
-  const inExperiment = await queryOne<{ id: number }>(
-    `SELECT id FROM experiment_sessions
-     WHERE personalized_summary_id IN (SELECT id FROM summaries WHERE article_id = $1)
-        OR generic_summary_id IN (SELECT id FROM summaries WHERE article_id = $1)
-     LIMIT 1`,
-    [summary.article_id],
-  );
-  if (remaining && Number(remaining.count) === 0 && !inExperiment) {
+  if (remaining && Number(remaining.count) === 0) {
     await execute('DELETE FROM articles WHERE id = $1', [summary.article_id]);
   }
 

@@ -35,11 +35,7 @@ export function AuthVerify() {
           sessionStorage.setItem('experimentParticipantId', String(result.participantId));
         }
 
-        if (result.role === 'manager') {
-          navigate('/manager', { replace: true });
-        } else {
-          navigate('/dashboard', { replace: true });
-        }
+        navigate('/dashboard', { replace: true });
       } catch {
         if (cancelled) return;
         setErrorMessage('Link invalido ou expirado.');

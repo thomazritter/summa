@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { experimentApi } from '../../api/client';
+import { profileApi } from '../../api/client';
 import { PROFILE_DIMENSIONS, FORMAT_DIMENSIONS } from '../../constants/profileDimensions';
 
 const DIMENSIONS = [...PROFILE_DIMENSIONS, ...FORMAT_DIMENSIONS];
@@ -47,7 +47,7 @@ export function ProfileView() {
 
   const { data: profile, isLoading, error } = useQuery({
     queryKey: ['experiment-profile'],
-    queryFn: () => experimentApi.getProfile(),
+    queryFn: () => profileApi.getProfile(),
     enabled: !!participantId,
   });
 
@@ -72,7 +72,7 @@ export function ProfileView() {
 
   const updateMutation = useMutation({
     mutationFn: (overrides: Record<string, string>) =>
-      experimentApi.updateProfile(overrides),
+      profileApi.updateProfile(overrides),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['experiment-profile'] });
       setShowSuccess(true);
@@ -81,7 +81,7 @@ export function ProfileView() {
   });
 
   const refreshFromCvMutation = useMutation({
-    mutationFn: (file: File) => experimentApi.refreshProfileFromCv(file),
+    mutationFn: (file: File) => profileApi.refreshProfileFromCv(file),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['experiment-profile'] });
       setShowSuccess(true);

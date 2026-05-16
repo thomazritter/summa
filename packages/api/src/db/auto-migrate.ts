@@ -23,18 +23,6 @@ export async function runMigrations(): Promise<void> {
   const alterStatements = `
     ALTER TABLE summary_ratings ADD COLUMN IF NOT EXISTS comment TEXT;
 
-    ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS preference_reason TEXT;
-
-    ALTER TABLE regenerations ADD COLUMN IF NOT EXISTS utility_rating INTEGER CHECK (utility_rating BETWEEN 1 AND 5);
-    ALTER TABLE regenerations ADD COLUMN IF NOT EXISTS clarity_rating INTEGER CHECK (clarity_rating BETWEEN 1 AND 5);
-    ALTER TABLE regenerations ADD COLUMN IF NOT EXISTS adequacy_rating INTEGER CHECK (adequacy_rating BETWEEN 1 AND 5);
-    ALTER TABLE regenerations ADD COLUMN IF NOT EXISTS change_description TEXT;
-
-    ALTER TABLE post_test_responses ADD COLUMN IF NOT EXISTS noticed_difference TEXT;
-    ALTER TABLE post_test_responses ADD COLUMN IF NOT EXISTS difference_type TEXT;
-    ALTER TABLE post_test_responses ADD COLUMN IF NOT EXISTS would_use_daily TEXT;
-    ALTER TABLE post_test_responses ADD COLUMN IF NOT EXISTS improvements TEXT;
-
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS rouge_1 REAL;
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS rouge_2 REAL;
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS rouge_l REAL;
@@ -44,8 +32,6 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS reading_goal TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS preferred_length TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS english_comfort TEXT;
-
-    ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS preference_rating INTEGER;
 
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_expertise TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_focus TEXT;
@@ -57,8 +43,6 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_focus TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_depth TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_context TEXT;
-
-    ALTER TABLE experiment_sessions ADD COLUMN IF NOT EXISTS profile_snapshot JSONB;
 
     ALTER TABLE articles ADD COLUMN IF NOT EXISTS uploaded_by INTEGER;
 
@@ -151,7 +135,6 @@ export async function runMigrations(): Promise<void> {
 
   // 2c. Add unique constraints to prevent race-condition duplicates
   const uniqueConstraints = `
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_session_participant_article ON experiment_sessions(participant_id, article_id);
     DROP INDEX IF EXISTS idx_unique_generic_summary;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_variant ON summaries(article_id, profile_id) WHERE profile_id IN (98, 99);
     -- One product rating per (participant, summary) pair.
@@ -164,25 +147,25 @@ export async function runMigrations(): Promise<void> {
   await query(uniqueConstraints);
   console.log('[auto-migrate] Unique constraints ensured.');
 
-  // 3. Drop legacy columns from post_test_responses if they still exist
-  // (overall_satisfaction and would_use_again replaced by new text fields)
-  try {
-    await query(`
-      ALTER TABLE post_test_responses DROP COLUMN IF EXISTS overall_satisfaction;
-      ALTER TABLE post_test_responses DROP COLUMN IF EXISTS would_use_again;
-    `);
-    console.log('[auto-migrate] Legacy post_test_responses columns dropped.');
-  } catch {
-    // Columns may already be gone on fresh databases; ignore errors
-  }
-
-  // 3b. Drop tables with zero rows and no live code path writing to them.
-  // The feedback table predates summary_ratings and was never wired into
-  // the current product or experiment flows. Snapshot taken in
-  // /Users/thomazjusto/Documents/TCC/db_snapshot_2026-05-16/ before this
-  // migration was first applied; exported as an empty array.
-  await query('DROP TABLE IF EXISTS feedback CASCADE;');
-  console.log('[auto-migrate] Empty legacy table dropped: feedback.');
+  // 3. Drop legacy tables from the deprecated A/B experiment flow.
+  // The product runs on participants + summaries + summary_ratings only;
+  // experiment_sessions/post_test_responses/regenerations carry no code
+  // path in the live codebase. Snapshot of all four tables (including the
+  // already-dropped feedback) is in
+  // /Users/thomazjusto/Documents/TCC/db_snapshot_2026-05-16/.
+  await query(`
+    DROP TABLE IF EXISTS regenerations CASCADE;
+    DROP TABLE IF EXISTS post_test_responses CASCADE;
+    DROP TABLE IF EXISTS experiment_sessions CASCADE;
+    DROP TABLE IF EXISTS feedback CASCADE;
+    -- Columns inherited from the experiment trial flow that no live code
+    -- path references. Both are unused in production (verified 2026-05-16:
+    -- summary_ratings.session_id NULL in all rows, ab_label only set by
+    -- the deleted ExperimentTrial page).
+    ALTER TABLE summary_ratings DROP COLUMN IF EXISTS session_id;
+    ALTER TABLE summary_ratings DROP COLUMN IF EXISTS ab_label;
+  `);
+  console.log('[auto-migrate] Legacy experiment tables dropped: regenerations, post_test_responses, experiment_sessions, feedback.');
 
   // 4. Seed manager access code if it doesn't exist
   const managerCode = process.env.MANAGER_CODE || 'SUMMA-ADMIN';
