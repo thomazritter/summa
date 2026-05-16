@@ -23,10 +23,11 @@ export async function runMigrations(): Promise<void> {
   const alterStatements = `
     ALTER TABLE summary_ratings ADD COLUMN IF NOT EXISTS comment TEXT;
 
-    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS rouge_1 REAL;
-    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS rouge_2 REAL;
-    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS rouge_l REAL;
-    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS bert_score REAL;
+    -- Legacy ROUGE/BERTScore columns dropped (FineSurE replaced these metrics).
+    ALTER TABLE summaries DROP COLUMN IF EXISTS rouge_1;
+    ALTER TABLE summaries DROP COLUMN IF EXISTS rouge_2;
+    ALTER TABLE summaries DROP COLUMN IF EXISTS rouge_l;
+    ALTER TABLE summaries DROP COLUMN IF EXISTS bert_score;
 
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS structure_preference TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS reading_goal TEXT;
@@ -121,20 +122,9 @@ export async function runMigrations(): Promise<void> {
   await query('CREATE INDEX IF NOT EXISTS idx_access_codes_email ON access_codes(email);');
   console.log('[auto-migrate] access_codes indexes ensured.');
 
-  // 2b. Create p_accuracy_scores table if not exists
-  const pAccuracyTable = `
-    CREATE TABLE IF NOT EXISTS p_accuracy_scores (
-      id SERIAL PRIMARY KEY,
-      article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-      p_accuracy_rouge REAL,
-      avg_pairwise_rouge_l REAL,
-      pairwise_details TEXT,
-      computed_at TIMESTAMP DEFAULT NOW(),
-      UNIQUE(article_id)
-    );
-  `;
-  await query(pAccuracyTable);
-  console.log('[auto-migrate] p_accuracy_scores table ensured.');
+  // Legacy P-Accuracy table dropped (FineSurE replaced these metrics).
+  await query('DROP TABLE IF EXISTS p_accuracy_scores;');
+  console.log('[auto-migrate] legacy p_accuracy_scores table dropped if present.');
 
   // 2c. Add unique constraints to prevent race-condition duplicates
   const uniqueConstraints = `

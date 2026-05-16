@@ -20,10 +20,6 @@ interface DisplaySummary {
   completenessScore: number | null;
   concisenessScore: number | null;
   keyfactAlignment: KeyfactAlignment[] | null;
-  rouge1: number | null;
-  rouge2: number | null;
-  rougeL: number | null;
-  bertScore: number | null;
   modelId: string | null;
   modelLabel: string | null;
   profile: {
@@ -64,7 +60,6 @@ export function SummaryView() {
     id: number;
     title: string;
     authors: string | null;
-    pAccuracy: { pAccuracyRouge: number | null; avgPairwiseRougeL: number | null } | null;
   } | null = null;
 
   if (articles) {
@@ -79,10 +74,6 @@ export function SummaryView() {
           completenessScore: match.completenessScore,
           concisenessScore: match.concisenessScore,
           keyfactAlignment: match.keyfactAlignment,
-          rouge1: match.rouge1,
-          rouge2: match.rouge2,
-          rougeL: match.rougeL,
-          bertScore: match.bertScore,
           modelId: match.modelId,
           modelLabel: match.modelLabel,
           profile: match.profile,
@@ -91,7 +82,6 @@ export function SummaryView() {
           id: article.id,
           title: article.title,
           authors: article.authors,
-          pAccuracy: article.pAccuracy,
         };
         break;
       }

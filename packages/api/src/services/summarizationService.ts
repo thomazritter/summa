@@ -4,8 +4,6 @@ import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxOutput
 import type { ParticipantPreferences } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
 import { checkFactuality } from './factualityChecker.js';
-import { computeRouge, computeBertScore } from './metricsService.js';
-import { recomputePAccuracyForArticle } from './pAccuracyHelper.js';
 import { safeJsonParse } from '../utils/validation.js';
 import { GENERIC_PROFILE_IDS, GENERIC_PROFILE_ID } from '../types/rows.js';
 import type { ArticleRow, SummaryRow, ParticipantRow } from '../types/rows.js';
@@ -138,42 +136,6 @@ const checkFactualityInBackground = (
 };
 
 /**
- * Compute BERTScore F1 in the background and persist it on the summary row.
- * Silent no-op if the metrics service is unavailable or the call fails.
- */
-const computeBertInBackground = (
-  summaryId: number,
-  summary: string,
-  reference: string | null,
-): void => {
-  if (!reference) return;
-  (async () => {
-    try {
-      const f1 = await computeBertScore(summary, reference);
-      if (f1 === null) return;
-      await execute('UPDATE summaries SET bert_score = $1 WHERE id = $2', [f1, summaryId]);
-      console.info(`[bertscore] Summary ${summaryId} F1 ${f1.toFixed(3)}`);
-    } catch (error) {
-      console.warn(`[bertscore] Background check failed for summary ${summaryId}:`, error);
-    }
-  })();
-};
-
-/**
- * Recompute the P-Accuracy aggregate for the given article in the background.
- * No-op when fewer than two distinct profiles have summaries for the article.
- */
-const recomputePAccuracyInBackground = (articleId: number): void => {
-  (async () => {
-    try {
-      await recomputePAccuracyForArticle(articleId);
-    } catch (error) {
-      console.warn(`[p-accuracy] Background recompute failed for article ${articleId}:`, error);
-    }
-  })();
-};
-
-/**
  * Generate a generic summary (no profile parameterization).
  * Used as the control condition in the experiment.
  */
@@ -217,22 +179,8 @@ export const generateGenericSummary = async (
     throw new SummarizationError('Failed to save generic summary');
   }
 
-  // Compute and store ROUGE metrics
-  const reference = structuredContent.abstract
-    || structuredContent.introduction
-    || article.raw_text.substring(0, 3000);
-  if (reference) {
-    const rouge = computeRouge(summaryContent, reference);
-    await execute(
-      'UPDATE summaries SET rouge_1 = $1, rouge_2 = $2, rouge_l = $3 WHERE id = $4',
-      [rouge.rouge1, rouge.rouge2, rouge.rougeL, row.id],
-    );
-  }
-
-  // Run factuality, BERTScore, and P-Accuracy in background (non-blocking)
+  // Run factuality check in background (non-blocking)
   checkFactualityInBackground(row.id, summaryContent, structuredContent, article.raw_text);
-  computeBertInBackground(row.id, summaryContent, reference);
-  recomputePAccuracyInBackground(articleId);
 
   return mapRowToSummary(row);
 };
@@ -321,24 +269,8 @@ export const generatePersonalizedSummary = async (
     throw new SummarizationError('Failed to save personalized summary');
   }
 
-  // Compute ROUGE against the generic summary (baseline)
-  // Measures how much personalization diverges from the generic version
-  const genericSummary = await queryOne<{ content: string }>(
-    'SELECT content FROM summaries WHERE article_id = $1 AND profile_id = $2 LIMIT 1',
-    [articleId, GENERIC_PROFILE_IDS.keepEnglish],
-  );
-  if (genericSummary) {
-    const rouge = computeRouge(summaryContent, genericSummary.content);
-    await execute(
-      'UPDATE summaries SET rouge_1 = $1, rouge_2 = $2, rouge_l = $3 WHERE id = $4',
-      [rouge.rouge1, rouge.rouge2, rouge.rougeL, row.id],
-    );
-  }
-
-  // Run factuality, BERTScore, and P-Accuracy in background (non-blocking)
+  // Run factuality check in background (non-blocking)
   checkFactualityInBackground(row.id, summaryContent, structuredContent, article.raw_text);
-  computeBertInBackground(row.id, summaryContent, genericSummary?.content ?? null);
-  recomputePAccuracyInBackground(articleId);
 
   return mapRowToSummary(row);
 };

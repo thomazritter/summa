@@ -60,10 +60,6 @@ interface ArticleSummary {
   completenessScore: number | null;
   concisenessScore: number | null;
   keyfactAlignment: KeyfactAlignment[] | null;
-  rouge1: number | null;
-  rouge2: number | null;
-  rougeL: number | null;
-  bertScore: number | null;
   modelId: string | null;
   modelLabel: string | null;
   profile: {
@@ -75,17 +71,11 @@ interface ArticleSummary {
   generatedAt: string;
 }
 
-interface ArticlePAccuracy {
-  pAccuracyRouge: number | null;
-  avgPairwiseRougeL: number | null;
-}
-
 interface UserArticle {
   id: number;
   title: string;
   authors: string | null;
   createdAt: string;
-  pAccuracy: ArticlePAccuracy | null;
   summaries: ArticleSummary[];
 }
 
@@ -125,14 +115,9 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
       completeness_score: number | null;
       conciseness_score: number | null;
       factuality_keyfacts: string | null;
-      rouge_1: number | null;
-      rouge_2: number | null;
-      rouge_l: number | null;
-      bert_score: number | null;
     }>(
       `SELECT s.id, s.article_id, s.content, s.factuality_score, s.factuality_details,
               s.completeness_score, s.conciseness_score, s.factuality_keyfacts,
-              s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score,
               s.model_id, s.generated_at, s.parent_summary_id,
               s.profile_snapshot
        FROM summaries s
@@ -143,34 +128,16 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
       [article.id, participantId],
     );
 
-    const pAccuracyRow = await queryOne<{
-      p_accuracy_rouge: number | null;
-      avg_pairwise_rouge_l: number | null;
-    }>(
-      `SELECT p_accuracy_rouge, avg_pairwise_rouge_l FROM p_accuracy_scores WHERE article_id = $1`,
-      [article.id],
-    );
-
     articles.push({
       id: article.id,
       title: article.title,
       authors: article.authors,
       createdAt: article.created_at,
-      pAccuracy: pAccuracyRow
-        ? {
-            pAccuracyRouge: pAccuracyRow.p_accuracy_rouge,
-            avgPairwiseRougeL: pAccuracyRow.avg_pairwise_rouge_l,
-          }
-        : null,
       summaries: summaryRows.map((s: UserSummaryRow & {
         factuality_details: string | null;
         completeness_score: number | null;
         conciseness_score: number | null;
         factuality_keyfacts: string | null;
-        rouge_1: number | null;
-        rouge_2: number | null;
-        rouge_l: number | null;
-        bert_score: number | null;
         parent_summary_id?: number | null;
       }) => {
         const modelInfo = AVAILABLE_MODELS.find((m) => m.id === s.model_id);
@@ -207,10 +174,6 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
             covered: boolean;
             lineNumbers: number[];
           }> | null,
-          rouge1: s.rouge_1,
-          rouge2: s.rouge_2,
-          rougeL: s.rouge_l,
-          bertScore: s.bert_score,
           modelId: s.model_id,
           modelLabel: modelInfo?.name || s.model_id || 'Desconhecido',
           parentSummaryId: s.parent_summary_id ?? null,

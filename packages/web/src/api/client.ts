@@ -187,10 +187,6 @@ export const userApi = {
       title: string;
       authors: string | null;
       createdAt: string;
-      pAccuracy: {
-        pAccuracyRouge: number | null;
-        avgPairwiseRougeL: number | null;
-      } | null;
       summaries: Array<{
         id: number;
         content: string;
@@ -211,10 +207,6 @@ export const userApi = {
           covered: boolean;
           lineNumbers: number[];
         }> | null;
-        rouge1: number | null;
-        rouge2: number | null;
-        rougeL: number | null;
-        bertScore: number | null;
         parentSummaryId: number | null;
         profile: {
           expertise: string;

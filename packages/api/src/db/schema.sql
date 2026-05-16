@@ -44,10 +44,6 @@ CREATE TABLE IF NOT EXISTS summaries (
   content TEXT NOT NULL,
   factuality_score REAL,
   factuality_details TEXT, -- JSON
-  rouge_1 REAL,
-  rouge_2 REAL,
-  rouge_l REAL,
-  bert_score REAL,
   -- Per-summary snapshot of profile dimensions + auxiliary preferences that
   -- were active at generation time. Lets the system reproduce what produced
   -- this row even after the user edits their profile later.
@@ -182,14 +178,3 @@ ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;
 
 ALTER TABLE summaries ADD COLUMN IF NOT EXISTS parent_summary_id INTEGER REFERENCES summaries(id) ON DELETE SET NULL;
 
--- ─── P-Accuracy Scores ──────────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS p_accuracy_scores (
-  id SERIAL PRIMARY KEY,
-  article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
-  p_accuracy_rouge REAL,
-  avg_pairwise_rouge_l REAL,
-  pairwise_details TEXT, -- JSON with all pairwise comparisons
-  computed_at TIMESTAMP DEFAULT NOW(),
-  UNIQUE(article_id)
-);
