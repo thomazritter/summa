@@ -234,6 +234,13 @@ export const userApi = {
           category: string;
           rationale: string;
         }> | null;
+        completenessScore: number | null;
+        concisenessScore: number | null;
+        keyfactAlignment: Array<{
+          fact: string;
+          covered: boolean;
+          lineNumbers: number[];
+        }> | null;
         rouge1: number | null;
         rouge2: number | null;
         rougeL: number | null;

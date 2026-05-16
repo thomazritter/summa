@@ -47,11 +47,20 @@ interface FactualitySentence {
   rationale: string;
 }
 
+interface KeyfactAlignment {
+  fact: string;
+  covered: boolean;
+  lineNumbers: number[];
+}
+
 interface ArticleSummary {
   id: number;
   content: string;
   factualityScore: number | null;
   factualityDetails: FactualitySentence[] | null;
+  completenessScore: number | null;
+  concisenessScore: number | null;
+  keyfactAlignment: KeyfactAlignment[] | null;
   rouge1: number | null;
   rouge2: number | null;
   rougeL: number | null;
@@ -118,6 +127,9 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
   for (const article of articleRows) {
     const summaryRows = await queryAll<UserSummaryRow & {
       factuality_details: string | null;
+      completeness_score: number | null;
+      conciseness_score: number | null;
+      factuality_keyfacts: string | null;
       rouge_1: number | null;
       rouge_2: number | null;
       rouge_l: number | null;
@@ -127,6 +139,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
       // after the C1/M3 fix). Fall back to the experiment_sessions snapshot
       // for historical rows generated before that column existed.
       `SELECT DISTINCT s.id, s.article_id, s.content, s.factuality_score, s.factuality_details,
+              s.completeness_score, s.conciseness_score, s.factuality_keyfacts,
               s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score,
               s.model_id, s.generated_at, s.parent_summary_id,
               COALESCE(s.profile_snapshot, es.profile_snapshot) AS profile_snapshot
@@ -167,6 +180,9 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
         : null,
       summaries: summaryRows.map((s: UserSummaryRow & {
         factuality_details: string | null;
+        completeness_score: number | null;
+        conciseness_score: number | null;
+        factuality_keyfacts: string | null;
         rouge_1: number | null;
         rouge_2: number | null;
         rouge_l: number | null;
@@ -188,6 +204,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
           ? (snapshot.preferences as Record<string, string> | null)
           : null);
         const factualityDetails = s.factuality_details ? safeJsonParse(s.factuality_details) : null;
+        const keyfactAlignment = s.factuality_keyfacts ? safeJsonParse(s.factuality_keyfacts) : null;
         return {
           id: s.id,
           content: s.content,
@@ -198,6 +215,13 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
             confidence: number;
             category: string;
             rationale: string;
+          }> | null,
+          completenessScore: s.completeness_score,
+          concisenessScore: s.conciseness_score,
+          keyfactAlignment: keyfactAlignment as Array<{
+            fact: string;
+            covered: boolean;
+            lineNumbers: number[];
           }> | null,
           rouge1: s.rouge_1,
           rouge2: s.rouge_2,

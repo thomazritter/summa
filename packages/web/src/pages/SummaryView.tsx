@@ -6,11 +6,20 @@ import { FactualityHighlightedMarkdown } from '../components/FactualityHighlight
 import type { FactualitySentence } from '../components/FactualityHighlightedMarkdown';
 import { SummaryRatingPanel } from '../components/SummaryRatingPanel';
 
+interface KeyfactAlignment {
+  fact: string;
+  covered: boolean;
+  lineNumbers: number[];
+}
+
 interface DisplaySummary {
   id: number;
   content: string;
   factualityScore: number | null;
   factualityDetails: FactualitySentence[] | null;
+  completenessScore: number | null;
+  concisenessScore: number | null;
+  keyfactAlignment: KeyfactAlignment[] | null;
   rouge1: number | null;
   rouge2: number | null;
   rougeL: number | null;
@@ -67,6 +76,9 @@ export function SummaryView() {
           content: match.content,
           factualityScore: match.factualityScore,
           factualityDetails: match.factualityDetails,
+          completenessScore: match.completenessScore,
+          concisenessScore: match.concisenessScore,
+          keyfactAlignment: match.keyfactAlignment,
           rouge1: match.rouge1,
           rouge2: match.rouge2,
           rougeL: match.rougeL,
@@ -148,7 +160,7 @@ export function SummaryView() {
                 </span>
               )}
               {displaySummary.factualityScore !== null ? (
-                <div className="relative flex items-center gap-1">
+                <div className="relative flex items-center gap-1.5">
                   <span className={`px-3 py-1 text-xs rounded-full ${
                     displaySummary.factualityScore >= 0.8
                       ? 'bg-green-100 text-green-700'
@@ -156,12 +168,22 @@ export function SummaryView() {
                       ? 'bg-amber-100 text-amber-700'
                       : 'bg-red-100 text-red-700'
                   }`}>
-                    Factualidade: {(displaySummary.factualityScore * 100).toFixed(0)}%
+                    Fidelidade: {(displaySummary.factualityScore * 100).toFixed(0)}%
                   </span>
+                  {displaySummary.completenessScore !== null && (
+                    <span className="px-3 py-1 text-xs rounded-full bg-blue-50 text-blue-700">
+                      Cobertura: {(displaySummary.completenessScore * 100).toFixed(0)}%
+                    </span>
+                  )}
+                  {displaySummary.concisenessScore !== null && (
+                    <span className="px-3 py-1 text-xs rounded-full bg-blue-50 text-blue-700">
+                      Concisão: {(displaySummary.concisenessScore * 100).toFixed(0)}%
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={() => setFactInfoOpen((v) => !v)}
-                    aria-label="Como interpretar o score de factualidade"
+                    aria-label="Como interpretar os scores de factualidade"
                     className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-xs font-semibold"
                   >
                     ?
@@ -169,24 +191,31 @@ export function SummaryView() {
                   {factInfoOpen && (
                     <div
                       role="tooltip"
-                      className="absolute right-0 top-full mt-2 w-80 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-xs text-gray-700 leading-relaxed"
+                      className="absolute right-0 top-full mt-2 w-96 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-xs text-gray-700 leading-relaxed"
                     >
-                      <p className="font-semibold text-gray-900 mb-2">Sobre o score de factualidade</p>
+                      <p className="font-semibold text-gray-900 mb-2">Como interpretar as três dimensões</p>
                       <p className="mb-2">
-                        Cada frase do resumo é avaliada por um modelo de linguagem que classifica a
-                        sentença em uma das categorias do protocolo FineSurE (entidade, predicado,
-                        relação circunstancial, sentimento, contradição, fora do escopo, etc.) ou
-                        como sem erro. O score corresponde à proporção de frases sem erro no resumo.
+                        O verificador aplica o protocolo FineSurE, que mede três aspectos independentes
+                        do resumo em relação ao artigo de origem.
+                      </p>
+                      <p className="mb-1.5">
+                        <strong>Fidelidade</strong> é a proporção de frases sem erro factual (entidade,
+                        predicado, fora de contexto e variantes). Quanto mais alta, mais consistente o
+                        resumo é com o texto do artigo.
+                      </p>
+                      <p className="mb-1.5">
+                        <strong>Cobertura</strong> é a proporção de pontos do <em>abstract</em> do
+                        artigo que aparecem no resumo. Resumos mais curtos ou voltados a iniciantes
+                        tendem a ter cobertura menor por desenho.
                       </p>
                       <p className="mb-2">
-                        A avaliação pode errar, sobretudo em paráfrases legítimas, sínteses que combinam
-                        trechos distantes do artigo, ou frases redigidas em português a partir de um
-                        artigo em inglês.
+                        <strong>Concisão</strong> é a proporção de frases do resumo que correspondem
+                        a algum ponto do <em>abstract</em>. Valores menores indicam mais contexto,
+                        qualificadores ou discussão metodológica adicionados pelo modelo.
                       </p>
                       <p>
-                        Use o score como indicador de quais frases vale a pena conferir, não como
-                        veredito automático sobre o resumo. Passe o cursor sobre uma frase destacada
-                        para ver a categoria e a justificativa atribuídas pelo modelo.
+                        A avaliação pode errar em paráfrases legítimas ou em sínteses que combinam
+                        trechos distantes do artigo. Use os scores como indicador, não como veredito.
                       </p>
                     </div>
                   )}
@@ -235,6 +264,65 @@ export function SummaryView() {
             content={displaySummary.content}
             factualityDetails={displaySummary.factualityDetails}
           />
+
+          {displaySummary.keyfactAlignment && displaySummary.keyfactAlignment.length > 0 && (() => {
+            const uncovered = displaySummary.keyfactAlignment.filter((k) => !k.covered);
+            const coveredLines = new Set(
+              displaySummary.keyfactAlignment.flatMap((k) => k.lineNumbers),
+            );
+            const lowDensity = (displaySummary.factualityDetails ?? [])
+              .map((d, idx) => ({ line: idx + 1, sentence: d.sentence }))
+              .filter((d) => !coveredLines.has(d.line));
+            return (
+              <div className="mt-8 pt-6 border-t border-gray-100 space-y-6">
+                <section>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                    Pontos do <em>abstract</em> não cobertos pelo resumo
+                  </h3>
+                  {uncovered.length === 0 ? (
+                    <p className="text-xs text-gray-500">
+                      O resumo cobre todos os pontos extraídos do <em>abstract</em> do artigo.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {uncovered.map((k, i) => (
+                        <li
+                          key={i}
+                          className="text-xs text-gray-700 flex items-start gap-2 leading-relaxed"
+                        >
+                          <span className="text-gray-400 mt-0.5">•</span>
+                          <span>{k.fact}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+
+                <section>
+                  <h3 className="text-sm font-semibold text-gray-900 mb-2">
+                    Frases do resumo sem alinhamento direto ao <em>abstract</em>
+                  </h3>
+                  {lowDensity.length === 0 ? (
+                    <p className="text-xs text-gray-500">
+                      Todas as frases do resumo correspondem a algum ponto do <em>abstract</em>.
+                    </p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {lowDensity.map((d) => (
+                        <li
+                          key={d.line}
+                          className="text-xs text-gray-700 flex items-start gap-2 leading-relaxed"
+                        >
+                          <span className="text-gray-400 mt-0.5">[{d.line}]</span>
+                          <span>{d.sentence}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Rating panel: collects Likert feedback after reading. */}
