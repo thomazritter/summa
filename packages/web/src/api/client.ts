@@ -231,10 +231,8 @@ export const userApi = {
           sentence: string;
           label: 'supported' | 'neutral' | 'contradicted';
           confidence: number;
-          sourceSentence?: string;
-          category?: string;
-          rationale?: string;
-          judgedBy?: 'finesure' | 'nli' | 'llm' | 'cap_exhausted';
+          category: string;
+          rationale: string;
         }> | null;
         rouge1: number | null;
         rouge2: number | null;
@@ -480,27 +478,4 @@ export const experimentApi = {
     }
     return response.json();
   },
-
-  regenerateSummaryWithEvidence: (summaryId: number) =>
-    apiRequest<{
-      id: number;
-      articleId: number;
-      profileId: number;
-      content: string;
-      modelId: string | null;
-      factualityScore: number | null;
-      factualityDetails: Array<{
-        sentence: string;
-        label: 'supported' | 'neutral' | 'contradicted';
-        confidence: number;
-        sourceSentence?: string;
-        category?: string;
-        rationale?: string;
-        judgedBy?: 'finesure' | 'nli' | 'llm' | 'cap_exhausted';
-      }> | null;
-      parentSummaryId: number | null;
-      generatedAt: string;
-    }>(`/experiment/summaries/${summaryId}/regenerate-with-evidence`, {
-      method: 'POST',
-    }),
 };

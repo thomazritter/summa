@@ -5,12 +5,8 @@ export interface FactualitySentence {
   sentence: string;
   label: 'supported' | 'neutral' | 'contradicted';
   confidence: number;
-  // Legacy NLI+LLM-judge records carry the matched article snippet.
-  sourceSentence?: string;
-  // FineSurE 3-dim records carry category + rationale instead.
-  category?: string;
-  rationale?: string;
-  judgedBy?: 'finesure' | 'nli' | 'llm' | 'cap_exhausted';
+  category: string;
+  rationale: string;
 }
 
 interface Props {
@@ -31,14 +27,14 @@ const SENTENCE_ABBREVS = [
 ];
 const ABBREV_REGEX = new RegExp(`\\b(${SENTENCE_ABBREVS.join('|')})\\.`, 'gi');
 
-const DOT_PLACEHOLDER = '\u0003';
+const DOT_PLACEHOLDER = String.fromCharCode(3);
 
 function maskAbbreviations(text: string): string {
   return text.replace(ABBREV_REGEX, (m) => m.replace('.', DOT_PLACEHOLDER));
 }
 
 function unmaskAbbreviations(text: string): string {
-  return text.replace(new RegExp(DOT_PLACEHOLDER, 'g'), '.');
+  return text.split(DOT_PLACEHOLDER).join('.');
 }
 
 function normalizeKey(text: string): string {
@@ -58,6 +54,53 @@ function buildIndex(details: FactualitySentence[] | null): Map<string, Factualit
     if (key) index.set(key, d);
   }
   return index;
+}
+
+const LABEL_TEXT: Record<FactualitySentence['label'], string> = {
+  supported: 'Suportada pelo artigo',
+  contradicted: 'Contraditada pelo artigo',
+  neutral: 'Sem confirmação direta no artigo',
+};
+
+const SPAN_CLASS: Record<FactualitySentence['label'], string> = {
+  supported: 'bg-emerald-50 border-b-2 border-emerald-300',
+  contradicted: 'bg-red-50 border-b-2 border-red-300',
+  neutral: 'bg-amber-50 border-b-2 border-amber-300',
+};
+
+const POPOVER_HEADER_CLASS: Record<FactualitySentence['label'], string> = {
+  supported: 'text-emerald-700',
+  contradicted: 'text-red-700',
+  neutral: 'text-amber-700',
+};
+
+function HighlightedSentence({ detail, sentence }: { detail: FactualitySentence; sentence: string }) {
+  const showCategory = detail.category && detail.category !== 'no error';
+  return (
+    <span className={`relative inline group ${SPAN_CLASS[detail.label]} px-0.5 rounded-sm cursor-help`}>
+      {sentence}
+      <span
+        role="tooltip"
+        className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 max-w-[90vw] bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs text-gray-700 leading-snug whitespace-normal text-left"
+      >
+        <span className={`block font-semibold mb-1 ${POPOVER_HEADER_CLASS[detail.label]}`}>
+          {LABEL_TEXT[detail.label]}
+        </span>
+        {showCategory && (
+          <span className="block mb-1">
+            <span className="font-medium text-gray-900">Categoria FineSurE: </span>
+            {detail.category}
+          </span>
+        )}
+        {detail.rationale && (
+          <span className="block">
+            <span className="font-medium text-gray-900">Justificativa: </span>
+            {detail.rationale}
+          </span>
+        )}
+      </span>
+    </span>
+  );
 }
 
 function highlightString(text: string, index: Map<string, FactualitySentence>, prefix: string): React.ReactNode[] {
@@ -81,41 +124,8 @@ function highlightString(text: string, index: Map<string, FactualitySentence>, p
       return;
     }
 
-    let className: string;
-    const labelText =
-      detail.label === 'contradicted'
-        ? 'Contraditada pelo artigo'
-        : detail.label === 'supported'
-          ? 'Suportada pelo artigo'
-          : 'Sem confirmação direta no artigo';
-
-    if (detail.label === 'contradicted') {
-      className = 'bg-red-50 border-b-2 border-red-300';
-    } else if (detail.label === 'supported') {
-      className = 'bg-emerald-50 border-b-2 border-emerald-300';
-    } else {
-      className = 'bg-amber-50 border-b-2 border-amber-300';
-    }
-
-    const tooltipLines: string[] = [labelText];
-    if (detail.category && detail.category !== 'no error') {
-      tooltipLines.push(`Categoria: ${detail.category}`);
-    }
-    if (detail.rationale) {
-      tooltipLines.push(`Justificativa: ${detail.rationale}`);
-    } else if (detail.sourceSentence) {
-      tooltipLines.push(`Trecho: "${detail.sourceSentence.slice(0, 200)}"`);
-    }
-    const tooltip = tooltipLines.join('\n');
-
     nodes.push(
-      <span
-        key={`${prefix}-${i}`}
-        className={`${className} px-0.5 rounded-sm cursor-help`}
-        title={tooltip}
-      >
-        {sentence}
-      </span>,
+      <HighlightedSentence key={`${prefix}-${i}`} detail={detail} sentence={sentence} />,
     );
     if (trailingSpace) nodes.push(' ');
   });
@@ -161,6 +171,7 @@ export function FactualityHighlightedMarkdown({ content, factualityDetails }: Pr
             <span className="inline-block w-3 h-3 rounded-sm bg-red-50 border border-red-300"></span>
             contraditada pelo artigo
           </span>
+          <span className="text-gray-400">· passe o cursor sobre uma frase destacada para ver a justificativa</span>
         </div>
       )}
       <div className="prose prose-gray max-w-none">

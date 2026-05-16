@@ -188,7 +188,6 @@ export const checkFactuality = async (
       confidence: 1.0,
       category,
       rationale: faith.reasons[i] ?? '',
-      judgedBy: 'finesure',
     };
   });
   const faithfulnessScore = faith.predLabels.length > 0

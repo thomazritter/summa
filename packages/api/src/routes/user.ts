@@ -43,7 +43,8 @@ interface FactualitySentence {
   sentence: string;
   label: 'supported' | 'neutral' | 'contradicted';
   confidence: number;
-  sourceSentence: string;
+  category: string;
+  rationale: string;
 }
 
 interface ArticleSummary {
@@ -195,7 +196,8 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
             sentence: string;
             label: 'supported' | 'neutral' | 'contradicted';
             confidence: number;
-            sourceSentence: string;
+            category: string;
+            rationale: string;
           }> | null,
           rouge1: s.rouge_1,
           rouge2: s.rouge_2,

@@ -81,20 +81,15 @@ export interface Feedback {
   createdAt: Date;
 }
 
-// Factuality verification types
+// Factuality verification types — FineSurE 3-dim pipeline (Song et al. 2024).
 export interface FactualityResult {
   sentence: string;
   label: 'supported' | 'contradicted' | 'neutral';
   confidence: number;
-  sourceSentence?: string;
-  // Records which layer produced the final verdict.
-  // 'finesure' — FineSurE 3-dim pipeline (Song et al. 2024) — current production method.
-  // 'nli', 'llm', 'cap_exhausted' — legacy NLI+LLM-judge pipeline, kept for historical
-  //   records still present in the database.
-  judgedBy?: 'finesure' | 'nli' | 'llm' | 'cap_exhausted';
-  rationale?: string;
-  /** FineSurE 9-category classification (e.g. "no error", "entity error"). Empty for legacy records. */
-  category?: string;
+  // FineSurE 9-category classification (e.g. "no error", "entity error", "predicate error").
+  category: string;
+  // LLM rationale explaining the category assignment.
+  rationale: string;
 }
 
 // API request/response types

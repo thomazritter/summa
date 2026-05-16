@@ -1,18 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { userApi, experimentApi } from '../api/client';
+import { useQuery } from '@tanstack/react-query';
+import { userApi } from '../api/client';
 import { FactualityHighlightedMarkdown } from '../components/FactualityHighlightedMarkdown';
 import type { FactualitySentence } from '../components/FactualityHighlightedMarkdown';
 import { SummaryRatingPanel } from '../components/SummaryRatingPanel';
-
-interface RegeneratedSummary {
-  id: number;
-  content: string;
-  factualityScore: number | null;
-  factualityDetails: FactualitySentence[] | null;
-  modelId: string | null;
-}
 
 interface DisplaySummary {
   id: number;
@@ -38,28 +30,15 @@ interface DisplaySummary {
 export function SummaryView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [regenerated, setRegenerated] = useState<RegeneratedSummary | null>(null);
-  const [regenLoading, setRegenLoading] = useState(false);
-  const [regenError, setRegenError] = useState<string | null>(null);
-  const [factInfoOpen, setFactInfoOpen] = useState<'primary' | 'regen' | null>(null);
-  const regenPanelRef = useRef<HTMLDivElement | null>(null);
-
-  // Scroll the regen panel into view once it appears. Without this, users
-  // see the unchanged parent at the top and assume the regeneration did
-  // nothing, missing the new panel further down the page.
-  useEffect(() => {
-    if (!regenerated) return;
-    regenPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, [regenerated?.id]);
+  const [factInfoOpen, setFactInfoOpen] = useState(false);
 
   const summaryId = Number(id);
   const { data: articles, isLoading } = useQuery({
     queryKey: ['user-articles'],
     queryFn: () => userApi.getArticles(),
-    // Same pattern as Dashboard: while the summary on this page still has a
-    // null factuality score (background NLI job not finished), poll the
-    // list endpoint so the "Verificando..." badge resolves on its own.
+    // Poll the list endpoint while this summary's factuality score is still
+    // null (background FineSurE job not finished) so the "Verificando..."
+    // badge resolves on its own.
     refetchInterval: (query) => {
       const data = query.state.data as Awaited<ReturnType<typeof userApi.getArticles>> | undefined;
       if (!data) return false;
@@ -71,7 +50,6 @@ export function SummaryView() {
     refetchOnWindowFocus: true,
   });
 
-  // Find the summary across all articles
   let foundSummary: DisplaySummary | null = null;
   let foundArticle: {
     id: number;
@@ -109,77 +87,6 @@ export function SummaryView() {
   }
 
   const displaySummary: DisplaySummary | null = foundSummary;
-
-  const handleRegenerateWithEvidence = async () => {
-    if (!displaySummary) return;
-    setRegenLoading(true);
-    setRegenError(null);
-    try {
-      const result = await experimentApi.regenerateSummaryWithEvidence(displaySummary.id);
-      setRegenerated({
-        id: result.id,
-        content: result.content,
-        factualityScore: result.factualityScore,
-        factualityDetails: result.factualityDetails,
-        modelId: result.modelId,
-      });
-      void queryClient.invalidateQueries({ queryKey: ['user-articles'] });
-    } catch (err) {
-      setRegenError(err instanceof Error ? err.message : 'Falha ao regenerar resumo');
-    } finally {
-      setRegenLoading(false);
-    }
-  };
-
-  // Poll for the regen's factuality score until the background NLI job
-  // finishes. The endpoint returns the row immediately after INSERT, so
-  // factualityScore starts null and only fills in once checkFactuality
-  // completes asynchronously. Without this loop, the "Verificando..."
-  // label would stay forever even after the score is ready.
-  useEffect(() => {
-    if (!regenerated) return;
-    if (regenerated.factualityScore !== null) return;
-
-    let cancelled = false;
-    let pollCount = 0;
-    const maxPolls = 24; // 24 × 5s = 2 min hard ceiling
-
-    const tick = async () => {
-      if (cancelled) return;
-      pollCount += 1;
-      try {
-        const fresh = await userApi.getArticles();
-        if (cancelled) return;
-        for (const article of fresh) {
-          const match = article.summaries.find((s) => s.id === regenerated.id);
-          if (match && match.factualityScore !== null) {
-            setRegenerated({
-              id: match.id,
-              content: match.content,
-              factualityScore: match.factualityScore,
-              factualityDetails: match.factualityDetails,
-              modelId: match.modelId,
-            });
-            queryClient.setQueryData(['user-articles'], fresh);
-            return;
-          }
-        }
-        if (pollCount < maxPolls) {
-          setTimeout(tick, 5000);
-        }
-      } catch {
-        if (pollCount < maxPolls) {
-          setTimeout(tick, 5000);
-        }
-      }
-    };
-
-    const initial = setTimeout(tick, 5000);
-    return () => {
-      cancelled = true;
-      clearTimeout(initial);
-    };
-  }, [regenerated?.id, regenerated?.factualityScore, queryClient]);
 
   if (isLoading) {
     return (
@@ -233,9 +140,7 @@ export function SummaryView() {
         {/* Summary content */}
         <div className="bg-white border border-gray-200 rounded-lg p-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {regenerated ? 'Resumo original' : 'Resumo Personalizado'}
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900">Resumo Personalizado</h2>
             <div className="flex items-center gap-3">
               {displaySummary.modelLabel && (
                 <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
@@ -255,30 +160,33 @@ export function SummaryView() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setFactInfoOpen(factInfoOpen === 'primary' ? null : 'primary')}
+                    onClick={() => setFactInfoOpen((v) => !v)}
                     aria-label="Como interpretar o score de factualidade"
                     className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-xs font-semibold"
                   >
                     ?
                   </button>
-                  {factInfoOpen === 'primary' && (
+                  {factInfoOpen && (
                     <div
                       role="tooltip"
                       className="absolute right-0 top-full mt-2 w-80 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-xs text-gray-700 leading-relaxed"
                     >
                       <p className="font-semibold text-gray-900 mb-2">Sobre o score de factualidade</p>
                       <p className="mb-2">
-                        É uma estimativa automática feita por um modelo de NLI multilíngue, que compara
-                        cada frase do resumo com parágrafos do artigo original.
+                        Cada frase do resumo é avaliada por um modelo de linguagem que classifica a
+                        sentença em uma das categorias do protocolo FineSurE (entidade, predicado,
+                        relação circunstancial, sentimento, contradição, fora do escopo, etc.) ou
+                        como sem erro. O score corresponde à proporção de frases sem erro no resumo.
                       </p>
                       <p className="mb-2">
-                        O score pode errar, principalmente em paráfrases legítimas, sínteses que juntam
-                        ideias de trechos diferentes ou frases definicionais escritas em português a
-                        partir de um artigo em inglês.
+                        A avaliação pode errar, sobretudo em paráfrases legítimas, sínteses que combinam
+                        trechos distantes do artigo, ou frases redigidas em português a partir de um
+                        artigo em inglês.
                       </p>
                       <p>
-                        Use o score como um indicador de quais frases vale a pena conferir, não como
-                        veredito automático sobre o resumo.
+                        Use o score como indicador de quais frases vale a pena conferir, não como
+                        veredito automático sobre o resumo. Passe o cursor sobre uma frase destacada
+                        para ver a categoria e a justificativa atribuídas pelo modelo.
                       </p>
                     </div>
                   )}
@@ -327,152 +235,7 @@ export function SummaryView() {
             content={displaySummary.content}
             factualityDetails={displaySummary.factualityDetails}
           />
-
-          {/* Guided regeneration by factuality, attached to the primary summary card */}
-          {(() => {
-            const flaggedCount = displaySummary.factualityDetails
-              ? displaySummary.factualityDetails.filter((d) => d.label !== 'supported').length
-              : 0;
-            const noFlagged = flaggedCount === 0;
-            // Empirical guard: the regen bench (Appendix G of the thesis,
-            // Llama 4 Scout N=20) shows mean improvement collapses to ~+0.015
-            // once factuality crosses 0.70, with non-trivial probability of
-            // regressing. Below 0.70, 14 of 16 cases improved (mean +0.07).
-            // Block the action above that threshold so the user does not
-            // pay an LLM call to most likely make things worse.
-            const factualityHighEnough =
-              displaySummary.factualityScore !== null
-              && displaySummary.factualityScore >= 0.70;
-            // Soft warning band: between 0.65 and 0.70 the regen bench shows
-            // the smallest marginal gains and the highest relative regression
-            // risk. The action stays enabled (the user always has the original
-            // to fall back to), but we surface the expectation up-front so a
-            // 0.68 → 0.65 result does not feel like a bug.
-            const isLowExpectedGain =
-              displaySummary.factualityScore !== null
-              && displaySummary.factualityScore >= 0.65
-              && displaySummary.factualityScore < 0.70;
-            // One regen per parent: disable once a child summary exists in the
-            // article (either tracked in local `regenerated` state from this
-            // session, or persisted from a previous session).
-            const alreadyRegenerated = regenerated !== null
-              || (foundArticle ? (
-                articles?.find((a) => a.id === foundArticle.id)?.summaries
-                  .some((s) => s.parentSummaryId === displaySummary.id)
-                ?? false
-              ) : false);
-            const disabled =
-              noFlagged || regenLoading || alreadyRegenerated || factualityHighEnough;
-            const buttonTitle = alreadyRegenerated
-              ? 'Este resumo já foi regenerado uma vez. Apenas uma regeneração por resumo é permitida.'
-              : factualityHighEnough
-                ? 'Factualidade já está alta (≥ 70%). Nos testes deste trabalho, regenerar acima desse limiar tende a não melhorar e pode piorar o resumo.'
-                : noFlagged
-                  ? 'Nenhuma frase deste resumo foi sinalizada como não apoiada pelo artigo.'
-                  : `Reprocessa o resumo usando os trechos do artigo correspondentes às ${flaggedCount} frase(s) sinalizadas.`;
-
-            return (
-              <div className="mt-5 pt-4 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={handleRegenerateWithEvidence}
-                  disabled={disabled}
-                  title={buttonTitle}
-                  className={`text-sm transition-colors ${
-                    disabled
-                      ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-[#2563eb] hover:text-[#1d4ed8] hover:underline'
-                  }`}
-                >
-                  {regenLoading
-                    ? 'Regenerando…'
-                    : alreadyRegenerated
-                      ? 'Já regenerado'
-                      : factualityHighEnough
-                        ? 'Factualidade já está alta'
-                        : noFlagged
-                          ? 'Regenerar com foco em factualidade'
-                          : `Regenerar com foco em factualidade (${flaggedCount} frase${flaggedCount === 1 ? '' : 's'} sinalizada${flaggedCount === 1 ? '' : 's'})`}
-                </button>
-                {isLowExpectedGain && !disabled && (
-                  <p className="mt-2 text-xs text-amber-700">
-                    Atenção: nesta faixa de factualidade (65–70%), o ganho médio observado é pequeno e há chance de o resumo regenerado piorar. Você pode comparar as duas versões antes de decidir qual manter.
-                  </p>
-                )}
-                {regenError && (
-                  <p className="mt-2 text-xs text-red-700">{regenError}</p>
-                )}
-              </div>
-            );
-          })()}
         </div>
-
-        {/* Regenerated summary side-by-side */}
-        {regenerated && (
-          <div ref={regenPanelRef} className="mt-6 bg-white border-2 border-[#2563eb] rounded-lg p-8 ring-4 ring-blue-100">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-lg font-semibold text-[#1d4ed8]">
-                Resumo regenerado com evidências (nova versão)
-              </h2>
-              <div className="flex items-center gap-3">
-                {regenerated.factualityScore !== null ? (
-                  <div className="relative flex items-center gap-1">
-                    <span className={`px-3 py-1 text-xs rounded-full ${
-                      regenerated.factualityScore >= 0.8
-                        ? 'bg-green-100 text-green-700'
-                        : regenerated.factualityScore >= 0.6
-                        ? 'bg-amber-100 text-amber-700'
-                        : 'bg-red-100 text-red-700'
-                    }`}>
-                      Factualidade: {(regenerated.factualityScore * 100).toFixed(0)}%
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setFactInfoOpen(factInfoOpen === 'regen' ? null : 'regen')}
-                      aria-label="Como interpretar o score de factualidade"
-                      className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-xs font-semibold"
-                    >
-                      ?
-                    </button>
-                    {factInfoOpen === 'regen' && (
-                      <div
-                        role="tooltip"
-                        className="absolute right-0 top-full mt-2 w-80 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-xs text-gray-700 leading-relaxed"
-                      >
-                        <p className="font-semibold text-gray-900 mb-2">Sobre o score de factualidade</p>
-                        <p className="mb-2">
-                          É uma estimativa automática feita por um modelo de NLI multilíngue, que compara
-                          cada frase do resumo com parágrafos do artigo original.
-                        </p>
-                        <p className="mb-2">
-                          O score pode errar, principalmente em paráfrases legítimas, sínteses que juntam
-                          ideias de trechos diferentes ou frases definicionais escritas em português a
-                          partir de um artigo em inglês.
-                        </p>
-                        <p>
-                          Use o score como um indicador de quais frases vale a pena conferir, não como
-                          veredito automático sobre o resumo.
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <span className="px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
-                    Verificando factualidade...
-                  </span>
-                )}
-              </div>
-            </div>
-            <p className="text-xs text-gray-500 mb-4">
-              Versão reescrita a partir das frases sinalizadas e dos trechos-âncora do artigo.
-              O escore de factualidade é recalculado em segundo plano e aparece após alguns segundos.
-            </p>
-            <FactualityHighlightedMarkdown
-              content={regenerated.content}
-              factualityDetails={regenerated.factualityDetails}
-            />
-          </div>
-        )}
 
         {/* Rating panel: collects Likert feedback after reading. */}
         {displaySummary?.id && (
