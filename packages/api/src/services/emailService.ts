@@ -2,62 +2,67 @@ import { Resend } from 'resend';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function sendAccessCode(email: string, code: string) {
-  if (!process.env.RESEND_API_KEY) {
-    console.log(`[DEV] Access code for ${email}: ${code}`);
-    return;
-  }
+const FROM_ADDRESS = process.env.RESEND_FROM_EMAIL || 'Summa <onboarding@resend.dev>';
+const SITE_URL = process.env.SITE_URL || 'https://summa.thomazritter.com.br';
+const REPLY_TO = process.env.RESEND_REPLY_TO || 'thomaz.ritter207@gmail.com';
 
-  const siteUrl = process.env.SITE_URL || 'https://summa.thomazritter.com.br';
+const LOGO_URL = `${SITE_URL}/apple-touch-icon.png`;
 
-  await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || 'Summa <onboarding@resend.dev>',
-    to: email,
-    subject: 'Convite para participar de pesquisa acadêmica — Summa',
-    html: `
-      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; color: #1f2937;">
-        <h2 style="color: #1e3a5f;">Olá! Você foi convidado(a) para participar de uma pesquisa acadêmica.</h2>
+const magicLinkHtml = (magicLinkUrl: string) => `<!doctype html>
+<html lang="pt-BR">
+  <body style="margin:0;padding:0;background:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1f2937;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f9fafb;padding:48px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:440px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:40px 32px;">
+            <tr>
+              <td align="center" style="padding-bottom:24px;">
+                <img src="${LOGO_URL}" width="48" height="48" alt="Summa" style="display:block;border-radius:10px;" />
+              </td>
+            </tr>
+            <tr>
+              <td style="font-size:18px;line-height:1.5;color:#111827;padding-bottom:8px;">
+                Seu link de acesso ao Summa.
+              </td>
+            </tr>
+            <tr>
+              <td style="font-size:14px;line-height:1.6;color:#6b7280;padding-bottom:32px;">
+                Expira em 15 minutos.
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="padding-bottom:24px;">
+                <a href="${magicLinkUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+                  Entrar
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="font-size:12px;line-height:1.6;color:#9ca3af;word-break:break-all;padding-bottom:24px;">
+                Se o botão não funcionar:<br/>
+                <a href="${magicLinkUrl}" style="color:#6b7280;">${magicLinkUrl}</a>
+              </td>
+            </tr>
+            <tr>
+              <td style="border-top:1px solid #f3f4f6;padding-top:20px;font-size:12px;line-height:1.6;color:#9ca3af;">
+                Se você não pediu este acesso, ignore este email.
+              </td>
+            </tr>
+          </table>
+          <p style="font-size:12px;color:#9ca3af;padding-top:16px;margin:0;">
+            Thomaz Ritter · TCC Ciência da Computação · UNISINOS
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 
-        <p>Estamos realizando um experimento como parte de um Trabalho de Conclusão de Curso (TCC) em Ciência da Computação na UNISINOS. O objetivo é avaliar a qualidade de resumos automáticos de artigos científicos personalizados para diferentes perfis de leitores.</p>
-
-        <p><strong>O que você vai fazer:</strong></p>
-        <ul style="line-height: 1.8;">
-          <li>Ler 2 artigos científicos curtos (em inglês)</li>
-          <li>Comparar resumos gerados automaticamente</li>
-          <li>Dar feedback para melhorar os resumos</li>
-          <li>Responder um breve questionário final</li>
-        </ul>
-
-        <p><strong>Tempo estimado:</strong> 25–35 minutos</p>
-
-        <p>Seu código de acesso:</p>
-        <div style="text-align: center; margin: 24px 0;">
-          <span style="font-family: monospace; font-size: 2rem; color: #2563eb; letter-spacing: 0.2em; background: #eff6ff; padding: 12px 24px; border-radius: 8px; border: 1px solid #bfdbfe;">${code}</span>
-        </div>
-
-        <p style="text-align: center;">
-          <a href="${siteUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 32px; border-radius: 8px; text-decoration: none; font-weight: 600;">Acessar o Summa</a>
-        </p>
-
-        <p style="margin-top: 24px;">Use o código acima na tela de login para iniciar o experimento. Você pode pausar e retomar a qualquer momento usando o mesmo código.</p>
-
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-
-        <p style="color: #6b7280; font-size: 0.875rem;">
-          Seus dados serão utilizados exclusivamente para fins acadêmicos e tratados de forma anônima.
-          Em caso de dúvidas, entre em contato: <a href="mailto:thomaz.ritter207@gmail.com" style="color: #2563eb;">thomaz.ritter207@gmail.com</a>
-        </p>
-
-        <p style="color: #6b7280; font-size: 0.875rem;">Obrigado por contribuir com esta pesquisa!</p>
-        <p style="color: #6b7280; font-size: 0.875rem;"><strong>Thomaz Justo Ritter</strong><br/>Ciência da Computação — UNISINOS</p>
-      </div>
-    `,
-  });
-}
+const magicLinkText = (magicLinkUrl: string) =>
+  `Seu link de acesso ao Summa.\n\nEntrar: ${magicLinkUrl}\n\nO link expira em 15 minutos.\n\nSe você não pediu este acesso, ignore este email.\n\n—\nThomaz Ritter\nTCC Ciência da Computação · UNISINOS`;
 
 export async function sendMagicLinkEmail(email: string, code: string) {
-  const siteUrl = process.env.SITE_URL || 'https://summa.thomazritter.com.br';
-  const magicLinkUrl = `${siteUrl}/auth/verify?code=${code}`;
+  const magicLinkUrl = `${SITE_URL}/auth/verify?code=${code}`;
 
   if (!process.env.RESEND_API_KEY) {
     console.log(`[DEV] Magic link for ${email}: ${magicLinkUrl}`);
@@ -65,36 +70,11 @@ export async function sendMagicLinkEmail(email: string, code: string) {
   }
 
   await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || 'Summa <onboarding@resend.dev>',
+    from: FROM_ADDRESS,
     to: email,
-    subject: 'Seu link de acesso ao Summa',
-    html: `
-      <div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; color: #1f2937;">
-        <h2 style="color: #1e3a5f;">Acesse o Summa</h2>
-
-        <p>Clique no botão abaixo para acessar o Summa. Este link expira em 15 minutos.</p>
-
-        <p style="text-align: center; margin: 32px 0;">
-          <a href="${magicLinkUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 1.1rem;">Acessar o Summa</a>
-        </p>
-
-        <p style="color: #6b7280; font-size: 0.875rem;">Se o botão não funcionar, copie e cole este link no navegador:</p>
-        <p style="color: #6b7280; font-size: 0.875rem; word-break: break-all;">
-          <a href="${magicLinkUrl}" style="color: #2563eb;">${magicLinkUrl}</a>
-        </p>
-
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
-
-        <p style="color: #6b7280; font-size: 0.875rem;">
-          Se você não solicitou este link, pode ignorar este email com segurança.
-        </p>
-
-        <p style="color: #6b7280; font-size: 0.875rem;">
-          Em caso de dúvidas, entre em contato: <a href="mailto:thomaz.ritter207@gmail.com" style="color: #2563eb;">thomaz.ritter207@gmail.com</a>
-        </p>
-
-        <p style="color: #6b7280; font-size: 0.875rem;"><strong>Thomaz Justo Ritter</strong><br/>Ciência da Computação — UNISINOS</p>
-      </div>
-    `,
+    replyTo: REPLY_TO,
+    subject: 'Entrar no Summa',
+    html: magicLinkHtml(magicLinkUrl),
+    text: magicLinkText(magicLinkUrl),
   });
 }

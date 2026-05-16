@@ -33,12 +33,3 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   };
   next();
 }
-
-export async function requireManager(req: Request, res: Response, next: NextFunction) {
-  await requireAuth(req, res, () => {
-    if (req.accessCode?.role !== 'manager') {
-      return res.status(403).json({ error: 'Acesso restrito' });
-    }
-    next();
-  });
-}

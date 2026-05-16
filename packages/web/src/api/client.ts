@@ -66,21 +66,6 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ email }),
     }),
-  invite: (email: string) =>
-    apiRequest<{ code: string; email: string }>('/auth/invite', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
-    }),
-  listCodes: () =>
-    apiRequest<Array<{
-      id: number;
-      code: string;
-      email: string;
-      role: string;
-      participant_id: number | null;
-      used_at: string | null;
-      created_at: string;
-    }>>('/auth/codes'),
 };
 
 // Product-mode profile endpoints. Replace experimentApi for any profile

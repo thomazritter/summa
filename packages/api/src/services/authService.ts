@@ -25,12 +25,6 @@ export function generateCode(): string {
   return code;
 }
 
-export async function createAccessCode(email: string, role: 'participant' | 'manager' = 'participant') {
-  const code = generateCode();
-  await execute('INSERT INTO access_codes (code, email, role) VALUES ($1, $2, $3)', [code, email, role]);
-  return code;
-}
-
 // createMagicLink (non-atomic) and countRecentMagicLinks were removed once the
 // /magic-link route migrated to createMagicLinkUnderQuota, which combines the
 // quota check and code insertion inside a single advisory-locked transaction.

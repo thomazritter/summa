@@ -2,12 +2,10 @@ import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import {
   validateMagicLink,
-  createAccessCode,
   createMagicLinkUnderQuota,
 } from '../services/authService.js';
-import { sendAccessCode, sendMagicLinkEmail } from '../services/emailService.js';
-import { requireManager } from '../middleware/auth.js';
-import { queryAll, execute } from '../db/connection.js';
+import { sendMagicLinkEmail } from '../services/emailService.js';
+import { execute } from '../db/connection.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const authRoutes = Router();
@@ -64,19 +62,3 @@ authRoutes.post('/magic-link', asyncHandler(async (req: Request, res: Response) 
   res.json({ message: 'Se este email existir, enviaremos um link de acesso.' });
 }));
 
-// Manager: create and send participant code
-authRoutes.post('/invite', requireManager, asyncHandler(async (req: Request, res: Response) => {
-  const schema = z.object({ email: z.string().email() });
-  const validation = schema.safeParse(req.body);
-  if (!validation.success) return res.status(400).json({ error: 'Email invalido' });
-
-  const code = await createAccessCode(validation.data.email, 'participant');
-  await sendAccessCode(validation.data.email, code);
-  res.json({ code, email: validation.data.email });
-}));
-
-// Manager: list all codes
-authRoutes.get('/codes', requireManager, asyncHandler(async (_req: Request, res: Response) => {
-  const codes = await queryAll('SELECT * FROM access_codes ORDER BY created_at DESC');
-  res.json(codes);
-}));
