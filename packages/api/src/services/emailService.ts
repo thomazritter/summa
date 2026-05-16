@@ -46,7 +46,7 @@ const magicLinkHtml = (magicLinkUrl: string) => `<!doctype html>
               </td>
             </tr>
             <tr>
-              <td style="padding:32px 32px 0 32px;">
+              <td align="center" style="padding:32px 32px 0 32px;text-align:center;">
                 <p class="text-body" style="margin:0 0 6px 0;font-size:18px;line-height:1.5;color:#111827;">
                   Seu link de acesso ao Summa.
                 </p>
