@@ -103,6 +103,15 @@ Retorne APENAS um JSON válido (sem markdown, sem \`\`\`, sem texto antes ou dep
 IMPORTANTE: COPIE o texto original de cada seção integralmente. NÃO resuma nem altere o conteúdo.
 Use null (sem aspas) para seções não encontradas no texto.
 
+ABSTRACT SEM RÓTULO EXPLÍCITO: alguns artigos (notadamente os do formato
+Nature Communications) não trazem o cabeçalho "Abstract:" antes do resumo
+do artigo. Nesse caso, identifique o abstract como o parágrafo único de
+prosa contínua localizado entre os autores/afiliações e o primeiro de:
+(a) cabeçalho de seção numerada como "1. Introduction" ou "Introduction",
+(b) link de DOI ("https://doi.org/..."), ou (c) bloco "Keywords:". Esse
+parágrafo costuma resumir motivação, método e resultado em uma única
+sequência de 100-300 palavras. Capture-o integralmente como abstract.
+
 TEXTO DO ARTIGO:
 ${rawText}`;
 
