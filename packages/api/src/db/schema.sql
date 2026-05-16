@@ -59,26 +59,10 @@ CREATE TABLE IF NOT EXISTS summaries (
   FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
 );
 
--- Feedback table
-CREATE TABLE IF NOT EXISTS feedback (
-  id SERIAL PRIMARY KEY,
-  summary_id INTEGER NOT NULL,
-  user_id INTEGER NOT NULL,
-  utility_rating INTEGER NOT NULL CHECK (utility_rating BETWEEN 1 AND 5),
-  technical_level_rating INTEGER NOT NULL CHECK (technical_level_rating BETWEEN 1 AND 5),
-  depth_rating INTEGER NOT NULL CHECK (depth_rating BETWEEN 1 AND 5),
-  comments TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  FOREIGN KEY (summary_id) REFERENCES summaries(id) ON DELETE CASCADE,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_summaries_article_id ON summaries(article_id);
 CREATE INDEX IF NOT EXISTS idx_summaries_profile_id ON summaries(profile_id);
-CREATE INDEX IF NOT EXISTS idx_feedback_summary_id ON feedback(summary_id);
-CREATE INDEX IF NOT EXISTS idx_feedback_user_id ON feedback(user_id);
 
 -- Trigger function to update updated_at timestamps
 CREATE OR REPLACE FUNCTION update_updated_at_column()

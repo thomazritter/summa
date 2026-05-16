@@ -135,16 +135,12 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
       rouge_l: number | null;
       bert_score: number | null;
     }>(
-      // Prefer the per-summary snapshot (always present on summaries created
-      // after the C1/M3 fix). Fall back to the experiment_sessions snapshot
-      // for historical rows generated before that column existed.
       `SELECT DISTINCT s.id, s.article_id, s.content, s.factuality_score, s.factuality_details,
               s.completeness_score, s.conciseness_score, s.factuality_keyfacts,
               s.rouge_1, s.rouge_2, s.rouge_l, s.bert_score,
               s.model_id, s.generated_at, s.parent_summary_id,
-              COALESCE(s.profile_snapshot, es.profile_snapshot) AS profile_snapshot
+              s.profile_snapshot
        FROM summaries s
-       LEFT JOIN experiment_sessions es ON es.personalized_summary_id = s.id
        WHERE s.article_id = $1
          AND s.profile_id NOT IN (98, 99)
          AND (

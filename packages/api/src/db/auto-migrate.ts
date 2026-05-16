@@ -176,6 +176,14 @@ export async function runMigrations(): Promise<void> {
     // Columns may already be gone on fresh databases; ignore errors
   }
 
+  // 3b. Drop tables with zero rows and no live code path writing to them.
+  // The feedback table predates summary_ratings and was never wired into
+  // the current product or experiment flows. Snapshot taken in
+  // /Users/thomazjusto/Documents/TCC/db_snapshot_2026-05-16/ before this
+  // migration was first applied; exported as an empty array.
+  await query('DROP TABLE IF EXISTS feedback CASCADE;');
+  console.log('[auto-migrate] Empty legacy table dropped: feedback.');
+
   // 4. Seed manager access code if it doesn't exist
   const managerCode = process.env.MANAGER_CODE || 'SUMMA-ADMIN';
   const managerEmail = process.env.MANAGER_EMAIL || 'thomaz.ritter207@gmail.com';
