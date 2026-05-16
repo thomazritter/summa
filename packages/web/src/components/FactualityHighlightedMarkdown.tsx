@@ -5,7 +5,12 @@ export interface FactualitySentence {
   sentence: string;
   label: 'supported' | 'neutral' | 'contradicted';
   confidence: number;
-  sourceSentence: string;
+  // Legacy NLI+LLM-judge records carry the matched article snippet.
+  sourceSentence?: string;
+  // FineSurE 3-dim records carry category + rationale instead.
+  category?: string;
+  rationale?: string;
+  judgedBy?: 'finesure' | 'nli' | 'llm' | 'cap_exhausted';
 }
 
 interface Props {
@@ -77,20 +82,31 @@ function highlightString(text: string, index: Map<string, FactualitySentence>, p
     }
 
     let className: string;
-    let tooltip: string;
-    const conf = (detail.confidence * 100).toFixed(0);
-    const trecho = detail.sourceSentence.slice(0, 200);
+    const labelText =
+      detail.label === 'contradicted'
+        ? 'Contraditada pelo artigo'
+        : detail.label === 'supported'
+          ? 'Suportada pelo artigo'
+          : 'Sem confirmação direta no artigo';
 
     if (detail.label === 'contradicted') {
       className = 'bg-red-50 border-b-2 border-red-300';
-      tooltip = `Contraditada pelo artigo (confiança ${conf}%)\nTrecho: "${trecho}"`;
     } else if (detail.label === 'supported') {
       className = 'bg-emerald-50 border-b-2 border-emerald-300';
-      tooltip = `Suportada pelo artigo (confiança ${conf}%)\nTrecho: "${trecho}"`;
     } else {
       className = 'bg-amber-50 border-b-2 border-amber-300';
-      tooltip = `Sem confirmação direta no artigo (confiança ${conf}%)\nTrecho mais próximo: "${trecho}"`;
     }
+
+    const tooltipLines: string[] = [labelText];
+    if (detail.category && detail.category !== 'no error') {
+      tooltipLines.push(`Categoria: ${detail.category}`);
+    }
+    if (detail.rationale) {
+      tooltipLines.push(`Justificativa: ${detail.rationale}`);
+    } else if (detail.sourceSentence) {
+      tooltipLines.push(`Trecho: "${detail.sourceSentence.slice(0, 200)}"`);
+    }
+    const tooltip = tooltipLines.join('\n');
 
     nodes.push(
       <span
