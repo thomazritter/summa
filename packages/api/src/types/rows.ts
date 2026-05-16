@@ -108,6 +108,10 @@ export interface SummaryRow {
   content: string;
   factuality_score: number | null;
   factuality_details: string | null;
+  completeness_score: number | null;
+  conciseness_score: number | null;
+  /** Serialized JSONB: KeyfactAlignment[] from KeyfactAlignmentResult. */
+  factuality_keyfacts: string | null;
   model_id: string | null;
   parent_summary_id: number | null;
   profile_snapshot: string | null;

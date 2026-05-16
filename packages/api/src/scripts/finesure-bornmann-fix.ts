@@ -72,14 +72,26 @@ async function main() {
 
   for (const s of sums.rows) {
     process.stdout.write(`  ${(PROFILE_LABEL[s.profile_id] ?? String(s.profile_id)).padEnd(15)} (id=${s.id})... `);
-    const { score, results: details, completeness, conciseness, keyfacts } =
+    const { score, results: details, completeness, conciseness, keyfacts, keyfactAlignment } =
       await checkFactuality(s.content, structure, raw);
 
     await pool.query(
       `UPDATE summaries
-       SET factuality_score = $1, factuality_details = $2, factuality_status = 'complete'
-       WHERE id = $3`,
-      [score, JSON.stringify(details), s.id],
+       SET factuality_score = $1,
+           factuality_details = $2,
+           completeness_score = $3,
+           conciseness_score = $4,
+           factuality_keyfacts = $5,
+           factuality_status = 'complete'
+       WHERE id = $6`,
+      [
+        score,
+        JSON.stringify(details),
+        completeness,
+        conciseness,
+        keyfactAlignment.length > 0 ? JSON.stringify(keyfactAlignment) : null,
+        s.id,
+      ],
     );
 
     const fmt = (x: number | null) => (x === null ? 'n/a' : x.toFixed(3));

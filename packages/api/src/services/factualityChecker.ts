@@ -14,6 +14,7 @@ import {
   parseKeyfactAlignmentOutput,
   computeCompletenessScore,
   computeConcisenessScore,
+  type KeyfactAlignment,
 } from './finesure-prompts/keyfactAlignment.js';
 
 /**
@@ -124,15 +125,16 @@ export const extractKeyfacts = async (referenceSummary: string): Promise<string[
 export interface KeyfactAlignmentResult {
   predLabels: number[];
   matchedLines: number[];
+  alignment: KeyfactAlignment[];
 }
 
-/** Task 2 — Keyfact Alignment (Figure 4). Returns per-keyfact 0/1 + matched summary line numbers. */
+/** Task 2 — Keyfact Alignment (Figure 4). Returns per-keyfact 0/1 + matched summary line numbers + per-keyfact detail. */
 export const alignKeyfacts = async (
   keyfacts: string[],
   summarySentences: string[],
 ): Promise<KeyfactAlignmentResult> => {
   if (keyfacts.length === 0 || summarySentences.length === 0) {
-    return { predLabels: [], matchedLines: [] };
+    return { predLabels: [], matchedLines: [], alignment: [] };
   }
   const prompt = buildKeyfactAlignmentPrompt(keyfacts, summarySentences);
   const response = await generateCompletion({
@@ -141,7 +143,7 @@ export const alignKeyfacts = async (
     temperature: FINESURE_TEMPERATURE,
     maxTokens: KEYFACT_ALIGNMENT_MAX_TOKENS,
   });
-  return parseKeyfactAlignmentOutput(response);
+  return parseKeyfactAlignmentOutput(response, keyfacts);
 };
 
 // ─── Public API ─────────────────────────────────────────────────────
@@ -157,6 +159,8 @@ export interface FineSurEScoreResult {
   conciseness: number | null;
   /** The keyfact list extracted from the article abstract (empty when no abstract). */
   keyfacts: string[];
+  /** Per-keyfact alignment detail (covered + which summary lines), empty when no abstract. */
+  keyfactAlignment: KeyfactAlignment[];
 }
 
 /**
@@ -174,7 +178,7 @@ export const checkFactuality = async (
 ): Promise<FineSurEScoreResult> => {
   const sentences = splitIntoSentences(summaryContent);
   if (sentences.length === 0) {
-    return { score: null, results: [], completeness: null, conciseness: null, keyfacts: [] };
+    return { score: null, results: [], completeness: null, conciseness: null, keyfacts: [], keyfactAlignment: [] };
   }
 
   // Task 1 — Fact Checking against the raw article text.
@@ -203,6 +207,7 @@ export const checkFactuality = async (
       completeness: null,
       conciseness: null,
       keyfacts: [],
+      keyfactAlignment: [],
     };
   }
 
@@ -214,6 +219,7 @@ export const checkFactuality = async (
       completeness: null,
       conciseness: null,
       keyfacts: [],
+      keyfactAlignment: [],
     };
   }
 
@@ -224,6 +230,7 @@ export const checkFactuality = async (
     completeness: computeCompletenessScore(align.predLabels),
     conciseness: computeConcisenessScore(align.matchedLines, sentences.length),
     keyfacts,
+    keyfactAlignment: align.alignment,
   };
 };
 

@@ -83,9 +83,8 @@ export const getSummaryById = async (id: number): Promise<Summary | null> => {
 
 /**
  * Run FineSurE 3-dim factuality verification in the background without blocking
- * the response. On success the per-sentence verdicts + faithfulness score are
- * persisted; completeness and conciseness are computed in-memory and surfaced
- * via the script tooling but not yet persisted (requires schema migration).
+ * the response. On success persists all three scores (faithfulness, completeness,
+ * conciseness), the per-sentence verdicts, and the full per-keyfact alignment.
  */
 const checkFactualityInBackground = (
   summaryId: number,
@@ -96,7 +95,7 @@ const checkFactualityInBackground = (
   // Fire-and-forget: do not await
   (async () => {
     try {
-      const { score, results, completeness, conciseness, keyfacts } = await checkFactuality(
+      const { score, results, completeness, conciseness, keyfacts, keyfactAlignment } = await checkFactuality(
         summaryContent,
         structuredContent,
         rawText,
@@ -104,9 +103,21 @@ const checkFactualityInBackground = (
 
       await execute(
         `UPDATE summaries
-         SET factuality_score = $1, factuality_details = $2, factuality_status = 'complete'
-         WHERE id = $3`,
-        [score, JSON.stringify(results), summaryId],
+         SET factuality_score = $1,
+             factuality_details = $2,
+             completeness_score = $3,
+             conciseness_score = $4,
+             factuality_keyfacts = $5,
+             factuality_status = 'complete'
+         WHERE id = $6`,
+        [
+          score,
+          JSON.stringify(results),
+          completeness,
+          conciseness,
+          keyfactAlignment.length > 0 ? JSON.stringify(keyfactAlignment) : null,
+          summaryId,
+        ],
       );
 
       const scoreLabel = score === null ? 'n/a (no verifiable claims)' : score.toFixed(3);

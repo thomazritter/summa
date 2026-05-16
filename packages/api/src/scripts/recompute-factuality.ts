@@ -10,9 +10,10 @@
  *
  * What it does: for each summary referenced by an experiment_session (as
  * either the generic or the personalized variant), runs checkFactuality with
- * the FineSurE pipeline, persists the new faithfulness + per-sentence details
- * (factuality_status='complete'), and writes a CSV that also records
- * completeness and conciseness — those two are not persisted in the schema yet.
+ * the FineSurE pipeline, persists faithfulness + per-sentence details +
+ * completeness + conciseness + per-keyfact alignment (factuality_status=
+ * 'complete'), and writes a CSV with the three scores for downstream
+ * analysis.
  *
  * Run with:  railway run -- npx tsx src/scripts/recompute-factuality.ts
  */
@@ -112,7 +113,7 @@ async function main() {
     );
 
     try {
-      const { score, results: details, completeness, conciseness, keyfacts } =
+      const { score, results: details, completeness, conciseness, keyfacts, keyfactAlignment } =
         await checkFactuality(s.content, article.structure, article.rawText);
 
       const n_supported = details.filter((d) => d.label === 'supported').length;
@@ -121,9 +122,21 @@ async function main() {
 
       await pool.query(
         `UPDATE summaries
-         SET factuality_score = $1, factuality_details = $2, factuality_status = 'complete'
-         WHERE id = $3`,
-        [score, JSON.stringify(details), s.id],
+         SET factuality_score = $1,
+             factuality_details = $2,
+             completeness_score = $3,
+             conciseness_score = $4,
+             factuality_keyfacts = $5,
+             factuality_status = 'complete'
+         WHERE id = $6`,
+        [
+          score,
+          JSON.stringify(details),
+          completeness,
+          conciseness,
+          keyfactAlignment.length > 0 ? JSON.stringify(keyfactAlignment) : null,
+          s.id,
+        ],
       );
 
       results.push({

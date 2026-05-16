@@ -128,9 +128,10 @@ async function main() {
     for (const profile of profileRows) {
       process.stdout.write(`  ${profile.label.padEnd(15)} × ${article.label.padEnd(34)}... `);
       try {
-        // generatePersonalizedSummary also kicks off background factuality —
-        // we run checkFactuality synchronously below to capture all three
-        // FineSurE dimensions for the CSV (only faithfulness gets persisted).
+        // generatePersonalizedSummary also kicks off background factuality
+        // (which now persists all three FineSurE dimensions + alignment).
+        // The synchronous checkFactuality below captures the same numbers
+        // for the CSV without depending on the background job to finish.
         const summary = await generatePersonalizedSummary(article.id, profile.id, profile.dimensions);
         const { score, results: details, completeness, conciseness, keyfacts } =
           await checkFactuality(summary.content, article.structure, article.rawText);

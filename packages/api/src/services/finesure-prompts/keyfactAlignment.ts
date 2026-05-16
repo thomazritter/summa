@@ -19,11 +19,23 @@
  *   identifier. Prompt body and parser logic are unchanged.
  */
 
+/** Per-keyfact alignment record. Index-aligned with the input keyfacts array. */
+export interface KeyfactAlignment {
+  /** Original keyfact text (taken from the input list by index, not from the model output). */
+  fact: string;
+  /** True when the model returned "Yes" for this keyfact. */
+  covered: boolean;
+  /** Summary line numbers (1-indexed) the model cited as evidence. Empty when covered=false. */
+  lineNumbers: number[];
+}
+
 export interface KeyfactAlignmentParseResult {
   /** 0 = keyfact not inferred from summary, 1 = inferred (one entry per keyfact) */
   predLabels: number[];
   /** Unique sentence line numbers (1-indexed) that align with at least one keyfact */
   matchedLines: number[];
+  /** Per-keyfact detail used by the UI to surface uncovered points and low-density sentences. */
+  alignment: KeyfactAlignment[];
 }
 
 /**
@@ -62,9 +74,16 @@ function sanitizeJsonish(raw: string): string {
 }
 
 /**
- * Verbatim port of parsing_llm_keyfact_alighment_output from utils.py L191-230.
+ * Verbatim port of parsing_llm_keyfact_alighment_output from utils.py L191-230,
+ * plus an `alignment` array that pairs each input keyfact with its covered/
+ * lineNumbers verdict for downstream UI use. Pass `inputKeyfacts` so the
+ * record uses the original text instead of the model's echo (which may be
+ * paraphrased).
  */
-export function parseKeyfactAlignmentOutput(output: string): KeyfactAlignmentParseResult {
+export function parseKeyfactAlignmentOutput(
+  output: string,
+  inputKeyfacts: string[] = [],
+): KeyfactAlignmentParseResult {
   try {
     const startIdx = output.indexOf('[');
     const endIdx = output.lastIndexOf(']');
@@ -72,15 +91,22 @@ export function parseKeyfactAlignmentOutput(output: string): KeyfactAlignmentPar
       throw new Error('No JSON array found in keyfact alignment output');
     }
     const slice = sanitizeJsonish(output.slice(startIdx, endIdx + 1).replace(/\n/g, ''));
-    const parsed = JSON.parse(slice) as Array<{ response?: string; 'line number'?: Array<number | string> }>;
+    const parsed = JSON.parse(slice) as Array<{
+      'key fact'?: string;
+      response?: string;
+      'line number'?: Array<number | string>;
+    }>;
 
     const matchedLines = new Set<number>();
     const predLabels: number[] = [];
+    const alignment: KeyfactAlignment[] = [];
 
-    for (const item of parsed) {
+    parsed.forEach((item, idx) => {
       const response = String(item.response ?? '').toLowerCase();
-      predLabels.push(response === 'yes' ? 1 : 0);
+      const covered = response === 'yes';
+      predLabels.push(covered ? 1 : 0);
 
+      const perItemLines: number[] = [];
       const lineNums = item['line number'];
       if (Array.isArray(lineNums)) {
         for (const lineNum of lineNums) {
@@ -90,14 +116,21 @@ export function parseKeyfactAlignmentOutput(output: string): KeyfactAlignmentPar
           const parsedNum = parseInt(normalized, 10);
           if (!Number.isNaN(parsedNum)) {
             matchedLines.add(parsedNum);
+            perItemLines.push(parsedNum);
           }
         }
       }
-    }
 
-    return { predLabels, matchedLines: Array.from(matchedLines) };
+      alignment.push({
+        fact: inputKeyfacts[idx] ?? String(item['key fact'] ?? ''),
+        covered,
+        lineNumbers: perItemLines,
+      });
+    });
+
+    return { predLabels, matchedLines: Array.from(matchedLines), alignment };
   } catch {
-    return { predLabels: [], matchedLines: [] };
+    return { predLabels: [], matchedLines: [], alignment: [] };
   }
 }
 

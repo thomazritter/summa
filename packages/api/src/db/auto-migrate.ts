@@ -84,6 +84,19 @@ export async function runMigrations(): Promise<void> {
     -- Lets the UI distinguish "still verifying" from "verification gave up".
     ALTER TABLE summaries ADD COLUMN IF NOT EXISTS factuality_status TEXT DEFAULT 'pending';
 
+    -- FineSurE 3-dim persistence (Song et al. 2024).
+    -- completeness_score follows Eq. 2a: fraction of abstract keyfacts covered
+    -- by at least one summary sentence. NULL when no abstract was identified.
+    -- conciseness_score follows Eq. 2b: fraction of summary sentences that
+    -- cover at least one keyfact. NULL when no abstract was identified.
+    -- factuality_keyfacts persists the full per-keyfact alignment as
+    -- [{fact: string, covered: boolean, lineNumbers: number[]}], 1-indexed.
+    -- Powers the "uncovered abstract points" and "low-density sentences"
+    -- panels on the summary view.
+    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS completeness_score REAL;
+    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS conciseness_score  REAL;
+    ALTER TABLE summaries ADD COLUMN IF NOT EXISTS factuality_keyfacts JSONB;
+
     -- Likert ratings collected outside the experiment flow (product mode).
     -- session_id and ab_label are NULL for product ratings; participant_id is
     -- populated instead. source distinguishes the two regimes.
