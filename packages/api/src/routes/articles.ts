@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { queryOne, queryAll } from '../db/connection.js';
 import { extractRawText, structureRawText, PDFProcessingError } from '../services/pdfProcessor.js';
-import { validatePreStructuring, validatePostStructuring } from '../services/articleValidator.js';
+import { validatePreStructuring, validateArticleScope, validatePostStructuring } from '../services/articleValidator.js';
 import { parseId, safeJsonParse, MAX_PDF_SIZE } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { createPdfUpload, createMulterErrorHandler } from '../utils/multerHelpers.js';
@@ -23,8 +23,7 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
   // Step 1: Cheap extraction via pdf-parse (no LLM call yet).
   const { rawText, metadata } = await extractRawText(req.file.buffer);
 
-  // Step 2: Pre-structuring validation (blocking) — runs BEFORE the LLM call
-  // so invalid documents are rejected without wasting an API call.
+  // Step 2a: Pre-structuring validation (cheap, blocking) — text length only.
   const preValidation = validatePreStructuring(rawText);
   if (!preValidation.valid) {
     return res.status(422).json({
@@ -33,7 +32,18 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
     });
   }
 
-  // Step 3: LLM structuring (only after validation passes).
+  // Step 2b: Scope validation (LLM, blocking) — rejects non-scientific
+  // documents and articles not in English. Runs after the length check
+  // and before the structuring call.
+  const scopeValidation = await validateArticleScope(rawText);
+  if (!scopeValidation.valid) {
+    return res.status(422).json({
+      error: 'Article validation failed',
+      validation: { errors: scopeValidation.errors },
+    });
+  }
+
+  // Step 3: LLM structuring (only after both validations pass).
   const structuredContent = await structureRawText(rawText);
 
   // Resolve uploaded_by from access code if present
