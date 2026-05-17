@@ -16,22 +16,35 @@ export const buildSummarizationPrompt = (
   const contentSection = buildContentSection(articleContent, rawText);
   const instructions = buildInstructions(profile, participantPreferences);
 
-  // Three-block prose layout (variant V0 in the prompt-variant benchmark of
-  // §6.6 of the thesis): a single continuous instruction without structural
-  // markup. Empirically led to the highest factuality score across the
-  // tested variants and is the simplest design — no dependency on XML tags,
-  // no decomposition into multiple LLM calls.
-  return `${systemContext}
+  // XML-tagged layout (variant V2 in the prompt-variant benchmark of the
+  // thesis appendix). Identified empirically as the best-performing variant
+  // under FineSurE 3-dim: structural delimiters around role, profile, and
+  // article reduce the model's tendency to mix personalization instructions
+  // with source-text content, leading to higher faithfulness scores while
+  // preserving personalization. Adopted as the production prompt after the
+  // human experiment of Cap.6, which ran under the prior V0 (3-block prose)
+  // configuration.
+  return `<role>
+${systemContext}
+</role>
 
-Considere as seguintes diretivas derivadas do perfil do leitor:
-
+<profile>
+<expertise>${profile.expertise}</expertise>
+<focus>${profile.focus}</focus>
+<depth>${profile.depth}</depth>
+<context>${profile.context}</context>
+<directives>
 ${instructions}
+</directives>
+</profile>
 
-A seguir, o artigo a ser resumido:
-
+<article>
 ${contentSection}
+</article>
 
-Gere o resumo personalizado conforme as diretivas acima, ancorando todas as afirmações no conteúdo do artigo. Responda apenas com o texto do resumo.`;
+<task>
+Gere o resumo personalizado conforme as diretivas em <profile>, ancorando todas as afirmações no conteúdo de <article>. Responda apenas com o texto do resumo, sem repetir as tags.
+</task>`;
 };
 
 const buildSystemContext = (profile: Profile): string => {

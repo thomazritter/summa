@@ -20,7 +20,7 @@ export const AVAILABLE_MODELS = [
   { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B', description: 'Mais rápido e leve' },
 ];
 
-let activeModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
+let activeModel = process.env.GROQ_MODEL || 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 export function getActiveModel(): string {
   return activeModel;
