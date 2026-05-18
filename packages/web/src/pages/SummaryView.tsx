@@ -142,81 +142,82 @@ export function SummaryView() {
 
         {/* Summary content */}
         <div className="bg-white border border-gray-200 rounded-lg p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900">Resumo Personalizado</h2>
+          {/* Header: title + model on left, factuality scores on right */}
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-3">
+              <h2 className="text-lg font-semibold text-gray-900">Resumo Personalizado</h2>
               {displaySummary.modelLabel && (
                 <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs rounded-full">
                   {displaySummary.modelLabel}
                 </span>
               )}
-              {displaySummary.factualityScore !== null ? (
-                <div className="relative flex items-center gap-1.5">
-                  <span className={`px-3 py-1 text-xs rounded-full ${
-                    displaySummary.factualityScore >= 0.8
-                      ? 'bg-green-100 text-green-700'
-                      : displaySummary.factualityScore >= 0.6
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}>
-                    Fidelidade: {(displaySummary.factualityScore * 100).toFixed(0)}%
-                  </span>
-                  {displaySummary.completenessScore !== null && (
-                    <span className="px-3 py-1 text-xs rounded-full bg-blue-50 text-blue-700">
-                      Cobertura: {(displaySummary.completenessScore * 100).toFixed(0)}%
-                    </span>
-                  )}
-                  {displaySummary.concisenessScore !== null && (
-                    <span className="px-3 py-1 text-xs rounded-full bg-blue-50 text-blue-700">
-                      Concisão: {(displaySummary.concisenessScore * 100).toFixed(0)}%
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setFactInfoOpen((v) => !v)}
-                    aria-label="Como interpretar os scores de factualidade"
-                    className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-xs font-semibold"
-                  >
-                    ?
-                  </button>
-                  {factInfoOpen && (
-                    <div
-                      role="tooltip"
-                      className="absolute right-0 top-full mt-2 w-96 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-xs text-gray-700 leading-relaxed"
-                    >
-                      <p className="font-semibold text-gray-900 mb-2">Como interpretar as três dimensões</p>
-                      <p className="mb-2">
-                        O verificador aplica o protocolo FineSurE, que mede três aspectos independentes
-                        do resumo em relação ao artigo de origem.
-                      </p>
-                      <p className="mb-1.5">
-                        <strong>Fidelidade</strong> é a proporção de frases sem erro factual (entidade,
-                        predicado, fora de contexto e variantes). Quanto mais alta, mais consistente o
-                        resumo é com o texto do artigo.
-                      </p>
-                      <p className="mb-1.5">
-                        <strong>Cobertura</strong> é a proporção de pontos do <em>abstract</em> do
-                        artigo que aparecem no resumo. Resumos mais curtos ou voltados a iniciantes
-                        tendem a ter cobertura menor por desenho.
-                      </p>
-                      <p className="mb-2">
-                        <strong>Concisão</strong> é a proporção de frases do resumo que correspondem
-                        a algum ponto do <em>abstract</em>. Valores menores indicam mais contexto,
-                        qualificadores ou discussão metodológica adicionados pelo modelo.
-                      </p>
-                      <p>
-                        A avaliação pode errar em paráfrases legítimas ou em sínteses que combinam
-                        trechos distantes do artigo. Use os scores como indicador, não como veredito.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <span className="px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
-                  Verificando factualidade...
-                </span>
-              )}
             </div>
+            {displaySummary.factualityScore !== null ? (
+              <div className="relative flex items-center gap-1.5">
+                <span className={`px-3 py-1 text-xs rounded-full ${
+                  displaySummary.factualityScore >= 0.8
+                    ? 'bg-green-100 text-green-700'
+                    : displaySummary.factualityScore >= 0.6
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-red-100 text-red-700'
+                }`}>
+                  Fidelidade: {(displaySummary.factualityScore * 100).toFixed(0)}%
+                </span>
+                {displaySummary.completenessScore !== null && (
+                  <span className="px-3 py-1 text-xs rounded-full bg-blue-50 text-blue-700">
+                    Cobertura: {(displaySummary.completenessScore * 100).toFixed(0)}%
+                  </span>
+                )}
+                {displaySummary.concisenessScore !== null && (
+                  <span className="px-3 py-1 text-xs rounded-full bg-blue-50 text-blue-700">
+                    Concisão: {(displaySummary.concisenessScore * 100).toFixed(0)}%
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setFactInfoOpen((v) => !v)}
+                  aria-label="Como interpretar os scores de factualidade"
+                  className="w-5 h-5 flex items-center justify-center rounded-full text-gray-400 hover:text-gray-700 hover:bg-gray-100 text-xs font-semibold"
+                >
+                  ?
+                </button>
+                {factInfoOpen && (
+                  <div
+                    role="tooltip"
+                    className="absolute right-0 top-full mt-2 w-96 z-20 bg-white border border-gray-200 rounded-lg shadow-lg p-4 text-xs text-gray-700 leading-relaxed"
+                  >
+                    <p className="font-semibold text-gray-900 mb-2">Como interpretar as três dimensões</p>
+                    <p className="mb-2">
+                      O verificador aplica o protocolo FineSurE, que mede três aspectos independentes
+                      do resumo em relação ao artigo de origem.
+                    </p>
+                    <p className="mb-1.5">
+                      <strong>Fidelidade</strong> é a proporção de frases sem erro factual (entidade,
+                      predicado, fora de contexto e variantes). Quanto mais alta, mais consistente o
+                      resumo é com o texto do artigo.
+                    </p>
+                    <p className="mb-1.5">
+                      <strong>Cobertura</strong> é a proporção de pontos do <em>abstract</em> do
+                      artigo que aparecem no resumo. Resumos mais curtos ou voltados a iniciantes
+                      tendem a ter cobertura menor por desenho.
+                    </p>
+                    <p className="mb-2">
+                      <strong>Concisão</strong> é a proporção de frases do resumo que correspondem
+                      a algum ponto do <em>abstract</em>. Valores menores indicam mais contexto,
+                      qualificadores ou discussão metodológica adicionados pelo modelo.
+                    </p>
+                    <p>
+                      A avaliação pode errar em paráfrases legítimas ou em sínteses que combinam
+                      trechos distantes do artigo. Use os scores como indicador, não como veredito.
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <span className="px-3 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
+                Verificando factualidade...
+              </span>
+            )}
           </div>
 
           {displaySummary.profile && (
@@ -251,13 +252,14 @@ export function SummaryView() {
             </div>
           )}
 
+          {/* Toolbar: highlights toggle + legend (only when factuality is verified). */}
           {displaySummary.factualityDetails && displaySummary.factualityDetails.length > 0 && (
-            <div className="mb-3 flex justify-end">
+            <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-gray-500">
               <button
                 type="button"
                 onClick={() => setHighlightsOn((v) => !v)}
                 aria-pressed={highlightsOn}
-                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-full hover:border-gray-300 hover:bg-gray-50 transition-colors text-gray-600"
+                className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
               >
                 <span
                   className={`inline-block w-7 h-4 rounded-full relative transition-colors ${
@@ -273,6 +275,24 @@ export function SummaryView() {
                 </span>
                 Destaques de factualidade
               </button>
+              {highlightsOn && (
+                <>
+                  <span className="text-gray-300" aria-hidden="true">·</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded-sm bg-emerald-50 border border-emerald-300" />
+                    suportada
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded-sm bg-amber-50 border border-amber-300" />
+                    sem confirmação
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="inline-block w-3 h-3 rounded-sm bg-red-50 border border-red-300" />
+                    contraditada
+                  </span>
+                  <span className="text-gray-400">· passe o cursor sobre uma frase para ver a justificativa</span>
+                </>
+              )}
             </div>
           )}
 

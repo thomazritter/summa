@@ -136,15 +136,6 @@ export const profileApi = {
       body: JSON.stringify({ overrides }),
     }),
 
-  resetProfile: () =>
-    apiRequest<{
-      dimensions: Record<string, string | null>;
-      sources: Record<string, string>;
-      profileSource: string;
-    }>('/profile/reset', {
-      method: 'POST',
-    }),
-
   refreshProfileFromCv: async (file: File): Promise<{
     dimensions: Record<string, string | null>;
     sources: Record<string, string>;

@@ -21,12 +21,6 @@ export class NotFoundError extends Error {
   }
 }
 
-export const getSummaryById = async (id: number): Promise<Summary | null> => {
-  const row = await queryOne<SummaryRow>('SELECT * FROM summaries WHERE id = $1', [id]);
-  if (!row) return null;
-  return mapRowToSummary(row);
-};
-
 /**
  * Run FineSurE 3-dim factuality verification in the background without
  * blocking the response. On success persists all three scores

@@ -139,19 +139,14 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
         parent_summary_id?: number | null;
       }) => {
         const modelInfo = AVAILABLE_MODELS.find((m) => m.id === s.model_id);
-        // Accept both snapshot shapes:
-        //   new (per-summary): { dimensions: {...}, preferences: {...} }
-        //   old (per-session):  { expertise, focus, depth, context }
-        const snapshot = s.profile_snapshot ? safeJsonParse<Record<string, unknown>>(s.profile_snapshot) : null;
-        const dims = (snapshot && typeof snapshot === 'object' && 'dimensions' in snapshot
-          ? (snapshot.dimensions as Record<string, string>)
-          : (snapshot as Record<string, string> | null)) ?? null;
-        // Auxiliary participant prefs (domain / currentProject) live under
-        // `preferences` only in the new snapshot shape; legacy rows return
-        // null here.
-        const prefs = (snapshot && typeof snapshot === 'object' && 'preferences' in snapshot
-          ? (snapshot.preferences as Record<string, string> | null)
-          : null);
+        const snapshot = s.profile_snapshot
+          ? safeJsonParse<{
+              dimensions: Record<string, string>;
+              preferences: Record<string, string> | null;
+            }>(s.profile_snapshot)
+          : null;
+        const dims = snapshot?.dimensions ?? null;
+        const prefs = snapshot?.preferences ?? null;
         const factualityDetails = s.factuality_details ? safeJsonParse(s.factuality_details) : null;
         const keyfactAlignment = s.factuality_keyfacts ? safeJsonParse(s.factuality_keyfacts) : null;
         return {

@@ -265,37 +265,17 @@ function highlightBlock(
 
 export function FactualityHighlightedMarkdown({ content, factualityDetails }: Props) {
   const index = React.useMemo(() => buildIndex(factualityDetails), [factualityDetails]);
-  const hasHighlights = index.size > 0;
 
   return (
-    <>
-      {hasHighlights && (
-        <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded-sm bg-emerald-50 border border-emerald-300"></span>
-            suportada pelo artigo
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded-sm bg-amber-50 border border-amber-300"></span>
-            sem confirmação direta no artigo
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="inline-block w-3 h-3 rounded-sm bg-red-50 border border-red-300"></span>
-            contraditada pelo artigo
-          </span>
-          <span className="text-gray-400">· passe o cursor sobre uma frase destacada para ver a justificativa</span>
-        </div>
-      )}
-      <div className="prose prose-gray max-w-none">
-        <ReactMarkdown
-          components={{
-            p: ({ children }) => <p>{highlightBlock(children, index, 'p')}</p>,
-            li: ({ children }) => <li>{highlightBlock(children, index, 'li')}</li>,
-          }}
-        >
-          {content}
-        </ReactMarkdown>
-      </div>
-    </>
+    <div className="prose prose-gray max-w-none">
+      <ReactMarkdown
+        components={{
+          p: ({ children }) => <p>{highlightBlock(children, index, 'p')}</p>,
+          li: ({ children }) => <li>{highlightBlock(children, index, 'li')}</li>,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }
