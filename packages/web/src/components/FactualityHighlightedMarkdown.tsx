@@ -14,11 +14,9 @@ interface Props {
   factualityDetails: FactualitySentence[] | null;
 }
 
-const SENTENCE_SPLIT_REGEX = /(?<=[.!?])\s+/;
-const NORM_KEY_LEN = 60;
-
-// Mirror the backend list so frontend splitting matches the index keys
-// produced when factualityDetails were computed.
+// Mirror backend splitIntoSentences abbreviations + placeholder so that
+// sentence segmentation here matches the segmentation used to build the
+// factuality index on the server.
 const SENTENCE_ABBREVS = [
   'sr', 'sra', 'srta', 'dr', 'dra', 'prof', 'profa', 'eng', 'gen', 'cel',
   'fig', 'figs', 'tab', 'tabs', 'eq', 'eqs', 'ref', 'refs', 'cap', 'caps',
@@ -26,16 +24,8 @@ const SENTENCE_ABBREVS = [
   'ex', 'i.e', 'e.g', 'cf', 'vs', 'ca',
 ];
 const ABBREV_REGEX = new RegExp(`\\b(${SENTENCE_ABBREVS.join('|')})\\.`, 'gi');
-
-const DOT_PLACEHOLDER = String.fromCharCode(3);
-
-function maskAbbreviations(text: string): string {
-  return text.replace(ABBREV_REGEX, (m) => m.replace('.', DOT_PLACEHOLDER));
-}
-
-function unmaskAbbreviations(text: string): string {
-  return text.split(DOT_PLACEHOLDER).join('.');
-}
+const DOT_PLACEHOLDER = String.fromCharCode(1);
+const NORM_KEY_LEN = 60;
 
 function normalizeKey(text: string): string {
   return text
@@ -74,11 +64,17 @@ const POPOVER_HEADER_CLASS: Record<FactualitySentence['label'], string> = {
   neutral: 'text-amber-700',
 };
 
-function HighlightedSentence({ detail, sentence }: { detail: FactualitySentence; sentence: string }) {
+function HighlightedSentence({
+  detail,
+  children,
+}: {
+  detail: FactualitySentence;
+  children: React.ReactNode;
+}) {
   const showCategory = detail.category && detail.category !== 'no error';
   return (
     <span className={`relative inline group ${SPAN_CLASS[detail.label]} px-0.5 rounded-sm cursor-help`}>
-      {sentence}
+      {children}
       <span
         role="tooltip"
         className="invisible group-hover:visible opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 max-w-[90vw] bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs text-gray-700 leading-snug whitespace-normal text-left"
@@ -103,52 +99,168 @@ function HighlightedSentence({ detail, sentence }: { detail: FactualitySentence;
   );
 }
 
-function highlightString(text: string, index: Map<string, FactualitySentence>, prefix: string): React.ReactNode[] {
-  const sentences = maskAbbreviations(text)
-    .split(SENTENCE_SPLIT_REGEX)
-    .map(unmaskAbbreviations);
-  const nodes: React.ReactNode[] = [];
+// ─── Recursive tree walker ──────────────────────────────────────────
+//
+// The block-level highlighter cannot rely on string children alone: when the
+// LLM emits markdown like "**Header:** content", react-markdown places the
+// "Header:" inside a <strong> element, leaving only " content" as a string
+// sibling. A flat string-only walk would miss any sentence that spans across
+// a React element, which is the common case for bold/italic/code-formatted
+// content. This walker collects EVERY leaf (text + element) of a block while
+// tracking offsets in the combined plain text, segments that text by
+// sentence boundaries, and then re-emits the JSX wrapping leaves that fall
+// inside each sentence in a HighlightedSentence span.
 
-  sentences.forEach((sentence, i) => {
-    const detail = index.get(normalizeKey(sentence));
-    const isLast = i === sentences.length - 1;
-    const trailingSpace = isLast ? '' : ' ';
+type Leaf =
+  | { kind: 'string'; text: string; start: number; end: number }
+  | { kind: 'element'; node: React.ReactElement; text: string; start: number; end: number };
 
-    if (!detail) {
-      nodes.push(
-        <React.Fragment key={`${prefix}-${i}`}>
-          {sentence}
-          {trailingSpace}
-        </React.Fragment>,
-      );
-      return;
+function extractText(children: React.ReactNode): string {
+  let result = '';
+  React.Children.forEach(children, (child) => {
+    if (typeof child === 'string') result += child;
+    else if (typeof child === 'number') result += String(child);
+    else if (React.isValidElement(child)) {
+      const elementChildren = (child.props as { children?: React.ReactNode }).children;
+      if (elementChildren !== undefined) result += extractText(elementChildren);
     }
-
-    nodes.push(
-      <HighlightedSentence key={`${prefix}-${i}`} detail={detail} sentence={sentence} />,
-    );
-    if (trailingSpace) nodes.push(' ');
   });
+  return result;
+}
 
+function flattenLeaves(children: React.ReactNode): { leaves: Leaf[]; fullText: string } {
+  const leaves: Leaf[] = [];
+  let cursor = 0;
+  React.Children.forEach(children, (child) => {
+    if (typeof child === 'string' || typeof child === 'number') {
+      const text = String(child);
+      if (text.length === 0) return;
+      leaves.push({ kind: 'string', text, start: cursor, end: cursor + text.length });
+      cursor += text.length;
+    } else if (React.isValidElement(child)) {
+      const elementChildren = (child.props as { children?: React.ReactNode }).children;
+      const text = elementChildren !== undefined ? extractText(elementChildren) : '';
+      leaves.push({ kind: 'element', node: child, text, start: cursor, end: cursor + text.length });
+      cursor += text.length;
+    }
+  });
+  return { leaves, fullText: leaves.map((l) => l.text).join('') };
+}
+
+function splitSentencesWithOffsets(text: string): { start: number; end: number; text: string }[] {
+  const masked = text.replace(ABBREV_REGEX, (m) => m.replace('.', DOT_PLACEHOLDER));
+  const splitPoints: number[] = [0];
+  const re = /(?<=[.!?])\s+|\n\s*\n/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(masked)) !== null) {
+    splitPoints.push(m.index + m[0].length);
+  }
+  splitPoints.push(text.length);
+
+  const result: { start: number; end: number; text: string }[] = [];
+  for (let i = 0; i < splitPoints.length - 1; i++) {
+    let s = splitPoints[i];
+    let e = splitPoints[i + 1];
+    while (s < e && /\s/.test(text[s])) s++;
+    while (e > s && /\s/.test(text[e - 1])) e--;
+    if (e > s) {
+      result.push({ start: s, end: e, text: text.slice(s, e) });
+    }
+  }
+  return result;
+}
+
+interface Segment {
+  start: number;
+  end: number;
+  classification: FactualitySentence | null;
+}
+
+function segmentBlock(fullText: string, index: Map<string, FactualitySentence>): Segment[] {
+  const sentences = splitSentencesWithOffsets(fullText);
+  const segments: Segment[] = [];
+  let cursor = 0;
+  for (const sent of sentences) {
+    if (sent.start > cursor) {
+      segments.push({ start: cursor, end: sent.start, classification: null });
+    }
+    const key = normalizeKey(sent.text);
+    const classification = key ? index.get(key) ?? null : null;
+    segments.push({ start: sent.start, end: sent.end, classification });
+    cursor = sent.end;
+  }
+  if (cursor < fullText.length) {
+    segments.push({ start: cursor, end: fullText.length, classification: null });
+  }
+  return segments;
+}
+
+function renderLeavesInSegment(
+  leaves: Leaf[],
+  segStart: number,
+  segEnd: number,
+  keyPrefix: string,
+): React.ReactNode[] {
+  const nodes: React.ReactNode[] = [];
+  for (let i = 0; i < leaves.length; i++) {
+    const leaf = leaves[i];
+    const overlapStart = Math.max(leaf.start, segStart);
+    const overlapEnd = Math.min(leaf.end, segEnd);
+    if (overlapStart >= overlapEnd) continue;
+
+    if (leaf.kind === 'string') {
+      const subStart = overlapStart - leaf.start;
+      const subEnd = overlapEnd - leaf.start;
+      const piece = leaf.text.slice(subStart, subEnd);
+      nodes.push(<React.Fragment key={`${keyPrefix}-l${i}`}>{piece}</React.Fragment>);
+    } else {
+      // Element leaves are emitted whole. Sentence boundaries (.!?) typically
+      // fall outside markdown formatting wrappers, so this rarely matters; if
+      // a boundary does cut through an element, the element is attributed to
+      // the segment that contains its midpoint.
+      if (leaf.text.length === 0) {
+        if (leaf.start >= segStart && leaf.end <= segEnd) {
+          nodes.push(React.cloneElement(leaf.node, { key: `${keyPrefix}-l${i}` }));
+        }
+      } else {
+        const midpoint = (leaf.start + leaf.end) / 2;
+        if (midpoint >= segStart && midpoint < segEnd) {
+          nodes.push(React.cloneElement(leaf.node, { key: `${keyPrefix}-l${i}` }));
+        }
+      }
+    }
+  }
   return nodes;
 }
 
-function highlightChildren(
+function highlightBlock(
   children: React.ReactNode,
   index: Map<string, FactualitySentence>,
-  pathPrefix: string,
+  keyPrefix: string,
 ): React.ReactNode {
-  const childArray = React.Children.toArray(children);
-  return childArray.map((child, idx) => {
-    if (typeof child === 'string') {
-      return (
-        <React.Fragment key={`${pathPrefix}-s-${idx}`}>
-          {highlightString(child, index, `${pathPrefix}-s-${idx}`)}
-        </React.Fragment>
+  if (index.size === 0) return <>{children}</>;
+
+  const { leaves, fullText } = flattenLeaves(children);
+  if (fullText.trim().length === 0) return <>{children}</>;
+
+  const segments = segmentBlock(fullText, index);
+  const nodes: React.ReactNode[] = [];
+  segments.forEach((seg, segIdx) => {
+    const segKey = `${keyPrefix}-seg${segIdx}`;
+    const inner = renderLeavesInSegment(leaves, seg.start, seg.end, segKey);
+    if (inner.length === 0) return;
+    if (seg.classification) {
+      nodes.push(
+        <HighlightedSentence key={segKey} detail={seg.classification}>
+          {inner}
+        </HighlightedSentence>,
       );
+    } else {
+      nodes.push(<React.Fragment key={segKey}>{inner}</React.Fragment>);
     }
-    return child;
   });
+
+  return <>{nodes}</>;
 }
 
 export function FactualityHighlightedMarkdown({ content, factualityDetails }: Props) {
@@ -177,8 +289,8 @@ export function FactualityHighlightedMarkdown({ content, factualityDetails }: Pr
       <div className="prose prose-gray max-w-none">
         <ReactMarkdown
           components={{
-            p: ({ children }) => <p>{highlightChildren(children, index, 'p')}</p>,
-            li: ({ children }) => <li>{highlightChildren(children, index, 'li')}</li>,
+            p: ({ children }) => <p>{highlightBlock(children, index, 'p')}</p>,
+            li: ({ children }) => <li>{highlightBlock(children, index, 'li')}</li>,
           }}
         >
           {content}

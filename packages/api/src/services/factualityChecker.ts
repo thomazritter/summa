@@ -73,12 +73,18 @@ const SENTENCE_ABBREVS = [
   'ex', 'i.e', 'e.g', 'cf', 'vs', 'ca',
 ];
 const ABBREV_REGEX = new RegExp(`\\b(${SENTENCE_ABBREVS.join('|')})\\.`, 'gi');
+const DOT_PLACEHOLDER = String.fromCharCode(1);
 
 export const splitIntoSentences = (text: string): string[] => {
-  const masked = text.replace(ABBREV_REGEX, (m) => m.replace('.', ''));
+  const masked = text.replace(ABBREV_REGEX, (m) => m.replace('.', DOT_PLACEHOLDER));
+  // Split at sentence boundaries (.!? followed by whitespace) OR at paragraph
+  // breaks (blank line). The paragraph-break alternative prevents the splitter
+  // from concatenating distinct markdown paragraphs (e.g. a bold header line
+  // followed by content) into a single sentence — which would otherwise fail
+  // to match the frontend's per-paragraph rendering.
   return masked
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.replace(//g, '.').trim())
+    .split(/(?<=[.!?])\s+|\n\s*\n/)
+    .map((s) => s.replace(new RegExp(DOT_PLACEHOLDER, 'g'), '.').trim())
     .filter((s) => s.length > 0);
 };
 
