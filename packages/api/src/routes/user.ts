@@ -101,7 +101,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
   const articleRows = await queryAll<UserArticleRow>(
     `SELECT DISTINCT a.id, a.title, a.authors, a.created_at
      FROM articles a
-     INNER JOIN summaries s ON s.article_id = a.id AND s.profile_id NOT IN (98, 99)
+     INNER JOIN summaries s ON s.article_id = a.id AND (s.profile_id IS NULL OR s.profile_id NOT IN (98, 99))
      WHERE a.uploaded_by = $1
      ORDER BY a.created_at DESC`,
     [participantId],
@@ -122,7 +122,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
               s.profile_snapshot
        FROM summaries s
        WHERE s.article_id = $1
-         AND s.profile_id NOT IN (98, 99)
+         AND (s.profile_id IS NULL OR s.profile_id NOT IN (98, 99))
          AND s.article_id IN (SELECT id FROM articles WHERE uploaded_by = $2)
        ORDER BY s.generated_at DESC`,
       [article.id, participantId],
