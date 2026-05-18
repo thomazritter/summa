@@ -53,14 +53,3 @@ export const PROFILE_DIMENSIONS: DimensionConfig[] = [
   },
 ];
 
-export const FORMAT_DIMENSIONS: DimensionConfig[] = [
-  {
-    key: 'structurePreference',
-    label: 'Estrutura preferida',
-    options: [
-      { value: 'prose', label: 'Prosa corrida' },
-      { value: 'bullets', label: 'Tópicos' },
-      { value: 'mixed', label: 'Misto' },
-    ],
-  },
-];

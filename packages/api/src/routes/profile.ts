@@ -5,10 +5,10 @@
  * inspection/editing, and CV re-inference. Backend data model is a single
  * flat profile per participant: four dimensions (`expertise`/`focus`/
  * `depth`/`context`), each with a `_manual` boolean flag for source
- * tracking, plus three auxiliary preferences (`structure_preference`,
- * `domain`, `current_project`) each with their own `_manual` flag.
- * Questionnaire and CV are frontend input paths that write into the same
- * columns — no override/cv split at the data layer.
+ * tracking, plus two auxiliary preferences (`domain`, `current_project`)
+ * each with their own `_manual` flag. Questionnaire and CV are frontend
+ * input paths that write into the same columns — no override/cv split at
+ * the data layer.
  *
  * Mounted at /api/profile. Auth is enforced at the router level so every
  * handler can read req.accessCode.
@@ -52,7 +52,6 @@ const registerParticipantSchema = z.object({
   focus: z.enum(['concepts', 'methodology', 'results', 'applications', 'all']),
   depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']),
   context: z.enum(['quick_review', 'learning', 'research', 'teaching']),
-  structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
   domain: z.string().max(500).optional(),
   currentProject: z.string().max(2000).optional(),
 });
@@ -60,7 +59,6 @@ const registerParticipantSchema = z.object({
 const registerFromCvSchema = z.object({
   name: z.string().min(1).max(255),
   dimensions: dimensionsSchema,
-  structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
   domain: z.string().max(500).optional(),
   currentProject: z.string().max(2000).optional(),
 });
@@ -71,7 +69,6 @@ const updateProfileSchema = z.object({
     focus: z.enum(['concepts', 'methodology', 'results', 'applications', 'all']).optional(),
     depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']).optional(),
     context: z.enum(['quick_review', 'learning', 'research', 'teaching']).optional(),
-    structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
     domain: z.string().max(500).optional(),
     currentProject: z.string().max(2000).optional(),
   }),
@@ -86,7 +83,6 @@ const mapParticipantRow = (row: ParticipantRow): Participant => ({
   focus: row.focus as Participant['focus'],
   depth: row.depth as Participant['depth'],
   context: row.context as Participant['context'],
-  structurePreference: row.structure_preference as Participant['structurePreference'],
   domain: row.domain,
   currentProject: row.current_project,
   createdAt: row.created_at,
@@ -102,15 +98,15 @@ profileRoutes.post('/participants', asyncHandler(async (req: Request, res: Respo
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
-  const { name, expertise, focus, depth, context, structurePreference, domain, currentProject } = validation.data;
+  const { name, expertise, focus, depth, context, domain, currentProject } = validation.data;
 
   const row = await queryOne<ParticipantRow>(`
     INSERT INTO participants (
       name, expertise, focus, depth, context,
-      structure_preference, domain, current_project,
+      domain, current_project,
       profile_source
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'questionnaire')
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'questionnaire')
     RETURNING *
   `, [
     name,
@@ -118,7 +114,6 @@ profileRoutes.post('/participants', asyncHandler(async (req: Request, res: Respo
     focus,
     depth,
     context,
-    structurePreference || null,
     domain?.trim() || null,
     currentProject?.trim() || null,
   ]);
@@ -187,15 +182,15 @@ profileRoutes.post('/participants/from-cv', asyncHandler(async (req: Request, re
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
-  const { name, dimensions, structurePreference, domain, currentProject } = validation.data;
+  const { name, dimensions, domain, currentProject } = validation.data;
 
   const row = await queryOne<ParticipantRow>(`
     INSERT INTO participants (
       name, expertise, focus, depth, context,
-      structure_preference, domain, current_project,
+      domain, current_project,
       profile_source
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'cv')
+    VALUES ($1, $2, $3, $4, $5, $6, $7, 'cv')
     RETURNING *
   `, [
     name,
@@ -203,7 +198,6 @@ profileRoutes.post('/participants/from-cv', asyncHandler(async (req: Request, re
     dimensions.focus,
     dimensions.depth,
     dimensions.context,
-    structurePreference || null,
     domain?.trim() || null,
     currentProject?.trim() || null,
   ]);
@@ -264,19 +258,16 @@ profileRoutes.put('/', asyncHandler(async (req: Request, res: Response) => {
          focus_manual     = focus_manual     OR ($2 IS NOT NULL),
          depth_manual     = depth_manual     OR ($3 IS NOT NULL),
          context_manual   = context_manual   OR ($4 IS NOT NULL),
-         structure_preference        = COALESCE($5, structure_preference),
-         domain                      = COALESCE($6, domain),
-         current_project             = COALESCE($7, current_project),
-         structure_preference_manual = structure_preference_manual OR ($5 IS NOT NULL),
-         domain_manual               = domain_manual               OR ($6 IS NOT NULL),
-         current_project_manual      = current_project_manual      OR ($7 IS NOT NULL)
-     WHERE id = $8`,
+         domain                      = COALESCE($5, domain),
+         current_project             = COALESCE($6, current_project),
+         domain_manual               = domain_manual               OR ($5 IS NOT NULL),
+         current_project_manual      = current_project_manual      OR ($6 IS NOT NULL)
+     WHERE id = $7`,
     [
       overrides.expertise || null,
       overrides.focus || null,
       overrides.depth || null,
       overrides.context || null,
-      overrides.structurePreference || null,
       overrides.domain || null,
       overrides.currentProject || null,
       participantId,

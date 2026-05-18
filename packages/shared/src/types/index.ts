@@ -130,8 +130,6 @@ export interface ProfileQuestionOption {
 
 // ─── Experiment Mode Types ──────────────────────────────────────────
 
-export type StructurePreference = 'prose' | 'bullets' | 'mixed';
-
 export interface Participant {
   id: number;
   name: string;
@@ -139,7 +137,6 @@ export interface Participant {
   focus: FocusArea;
   depth: DepthLevel;
   context: ReadingContext;
-  structurePreference: StructurePreference | null;
   domain: string | null;
   currentProject: string | null;
   createdAt: string;
@@ -181,7 +178,6 @@ export interface RegisterParticipantRequest {
   focus: FocusArea;
   depth: DepthLevel;
   context: ReadingContext;
-  structurePreference?: StructurePreference;
 }
 
 export interface CreateExperimentSessionRequest {
@@ -238,7 +234,6 @@ export interface ProfileResponse {
     focus: FocusArea;
     depth: DepthLevel;
     context: ReadingContext;
-    structurePreference: StructurePreference | null;
     domain: string | null;
     currentProject: string | null;
   };
@@ -252,7 +247,6 @@ export interface UpdateProfileRequest {
     focus?: FocusArea;
     depth?: DepthLevel;
     context?: ReadingContext;
-    structurePreference?: StructurePreference;
     domain?: string;
     currentProject?: string;
   };

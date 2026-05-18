@@ -29,8 +29,16 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE summaries DROP COLUMN IF EXISTS rouge_l;
     ALTER TABLE summaries DROP COLUMN IF EXISTS bert_score;
 
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS structure_preference TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
+
+    -- structurePreference was removed (2026-05-18): the bullets/mixed/prose
+    -- format directive caused LLM outputs to emit inline bold header
+    -- patterns that broke FineSurE sentence-level fact-checking (heading
+    -- markers became antecedents for downstream pronouns, and forcing list
+    -- structure regressed faithfulness across subgroups). All summaries
+    -- are regenerated as prose-only.
+    ALTER TABLE participants DROP COLUMN IF EXISTS structure_preference;
+    ALTER TABLE participants DROP COLUMN IF EXISTS structure_preference_manual;
 
     -- Single-value direct profile dimensions. The legacy override_*/cv_*
     -- split was collapsed into one column per dimension, with a _manual

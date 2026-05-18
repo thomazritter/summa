@@ -43,10 +43,8 @@ export interface ParticipantRow {
   depth_manual: boolean;
   context_manual: boolean;
   // Auxiliary preferences (same shape).
-  structure_preference: string | null;
   domain: string | null;
   current_project: string | null;
-  structure_preference_manual: boolean | null;
   domain_manual: boolean | null;
   current_project_manual: boolean | null;
   // Whether the participant first arrived via questionnaire or CV upload.

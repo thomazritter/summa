@@ -77,7 +77,6 @@ export const profileApi = {
     focus: string;
     depth: string;
     context: string;
-    structurePreference?: string;
     domain?: string;
     currentProject?: string;
   }) =>
@@ -89,7 +88,6 @@ export const profileApi = {
   registerFromCv: (data: {
     name: string;
     dimensions: Record<string, string>;
-    structurePreference: string;
     domain?: string;
     currentProject?: string;
   }) =>

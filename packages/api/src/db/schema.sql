@@ -96,7 +96,6 @@ CREATE TRIGGER profiles_updated_at
 CREATE TABLE IF NOT EXISTS participants (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  structure_preference TEXT CHECK (structure_preference IN ('prose', 'bullets', 'mixed')),
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -157,7 +156,6 @@ ALTER TABLE participants ADD COLUMN IF NOT EXISTS context_manual BOOLEAN NOT NUL
 -- Auxiliary profile preferences.
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS structure_preference_manual BOOLEAN DEFAULT FALSE;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain_manual BOOLEAN DEFAULT FALSE;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project_manual BOOLEAN DEFAULT FALSE;
 

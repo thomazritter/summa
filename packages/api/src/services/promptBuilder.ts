@@ -1,7 +1,6 @@
 import type { Profile } from '@summarizer/shared';
 
 export interface ParticipantPreferences {
-  structurePreference?: 'prose' | 'bullets' | 'mixed';
   domain?: string;
   currentProject?: string;
 }
@@ -48,62 +47,6 @@ const DEPTH_INSTRUCTIONS: Record<Profile['depth'], string> = {
     'Extensão: abrangente (7-10 parágrafos). Cubra todos os aspectos relevantes com profundidade. Inclua detalhes, números, contexto e discussão.',
 };
 
-// IMPORTANT: the format instructions explicitly forbid inline bold markers
-// like `**Tópico:** conteúdo` as section labels. When the LLM uses that
-// pattern, the resulting sentence becomes a single fact-checking unit whose
-// `**Header:**` prefix acts as the antecedent for downstream pronouns
-// ("A abordagem...", "Esse sistema..."). Stripping the prefix later breaks
-// coreference; keeping it pollutes the FineSurE prompt with structural
-// markers. Section labels live on their own line (so they parse as a
-// standalone heading that the factuality checker skips entirely), and
-// bullets are emitted as plain "- " list items — never with a bold
-// in-sentence prefix.
-const STRUCTURE_INSTRUCTIONS: Record<NonNullable<ParticipantPreferences['structurePreference']>, string> = {
-  prose:
-    'Formato: parágrafos corridos. NÃO use bullet points, listas ou cabeçalhos em negrito.',
-
-  bullets: `Formato: organize a maior parte do resumo em listas com bullets ("- " no início de cada linha). Use uma lista para cada bloco temático (visão geral, metodologia, resultados, conclusões). Cabeçalhos de seção, quando usados, ficam SOZINHOS em uma linha, em negrito, separados do conteúdo pela quebra de linha. NUNCA escreva "**Tópico:** conteúdo" na mesma linha.
-
-Exemplo do formato esperado:
-
-**Visão Geral**
-
-- O sistema X foi proposto para resolver Y.
-- Atinge desempenho competitivo com Z.
-
-**Metodologia**
-
-- Baseia-se na abordagem A.
-- Os autores combinam B e C.
-
-**Resultados**
-
-- Ganho de 3% em métrica D.
-- Latência de 4 ms.`,
-
-  mixed: `Formato: alterne entre parágrafos curtos (1-3 frases) para contexto e listas com bullets ("- " no início de cada linha) para enumerar resultados, contribuições, etapas de metodologia ou métricas. O resumo final DEVE conter ao menos uma lista de bullets além dos parágrafos. Cabeçalhos de seção, quando usados, ficam SOZINHOS em uma linha em negrito, separados do conteúdo pela quebra de linha. NUNCA escreva "**Tópico:** conteúdo" na mesma linha.
-
-Exemplo do formato esperado:
-
-O sistema X foi proposto pelos autores para resolver o problema Y, comum em domínios de tipo Z.
-
-**Metodologia**
-
-A abordagem combina três componentes principais:
-
-- Componente A para a etapa inicial.
-- Componente B para refinar os resultados.
-- Componente C para a saída final.
-
-**Resultados**
-
-Em experimentos com o conjunto W, o sistema obteve as seguintes melhorias:
-
-- 3% em interações diárias.
-- 7% em visualizações totais.
-- Latência de 4 ms para índices de 1 bilhão de entradas.`,
-};
-
 const buildDirectives = (profile: Profile, participantPreferences?: ParticipantPreferences): string => {
   const parts = [
     EXPERTISE_INSTRUCTIONS[profile.expertise],
@@ -111,9 +54,6 @@ const buildDirectives = (profile: Profile, participantPreferences?: ParticipantP
     DEPTH_INSTRUCTIONS[profile.depth],
   ];
 
-  if (participantPreferences?.structurePreference) {
-    parts.push(STRUCTURE_INSTRUCTIONS[participantPreferences.structurePreference]);
-  }
   if (participantPreferences?.domain) {
     parts.push(
       `Domínio profissional do leitor: ${participantPreferences.domain}. Quando possível, relacione os conceitos e resultados do artigo com este domínio.`,
@@ -124,10 +64,7 @@ const buildDirectives = (profile: Profile, participantPreferences?: ParticipantP
       `O leitor está trabalhando em: ${participantPreferences.currentProject}. Contextualize o resumo destacando aspectos do artigo que possam ser relevantes para este projeto.`,
     );
   }
-  if (!participantPreferences?.structurePreference) {
-    parts.push('Estruture o resumo com parágrafos bem definidos.');
-  }
-  parts.push('Comece pela contribuição principal do artigo.');
+  parts.push('Estruture o resumo com parágrafos bem definidos. Comece pela contribuição principal do artigo.');
 
   return parts.join('\n\n');
 };

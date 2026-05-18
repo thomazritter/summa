@@ -141,7 +141,6 @@ export function computeProfileSources(participant: ParticipantRow): Record<strin
     focus: dimensionSource(participant.focus_manual),
     depth: dimensionSource(participant.depth_manual),
     context: dimensionSource(participant.context_manual),
-    structurePreference: auxSource(participant.structure_preference, participant.structure_preference_manual),
     domain: auxSource(participant.domain, participant.domain_manual),
     currentProject: auxSource(participant.current_project, participant.current_project_manual),
   };
@@ -155,7 +154,6 @@ export function computeProfileSources(participant: ParticipantRow): Record<strin
 export function serializeProfileForApi(participant: ParticipantRow) {
   return {
     ...computeProfileDimensions(participant),
-    structurePreference: participant.structure_preference || null,
     domain: participant.domain || null,
     currentProject: participant.current_project || null,
   };
@@ -169,18 +167,15 @@ export interface PersonalizationContext {
 /**
  * Personalization payload for every summarize call: the four profile
  * dimensions plus auxiliary preferences. Returns `preferences: undefined`
- * when none of structure/domain/currentProject is set, so callers can pass
+ * when neither domain nor currentProject is set, so callers can pass
  * it straight through to generatePersonalizedSummary.
  */
 export function buildPersonalizationContext(participant: ParticipantRow): PersonalizationContext {
   const preferences = {
-    structurePreference: (participant.structure_preference as 'prose' | 'bullets' | 'mixed' | null) ?? undefined,
     domain: participant.domain ?? undefined,
     currentProject: participant.current_project ?? undefined,
   };
-  const hasAny = preferences.structurePreference
-    || preferences.domain
-    || preferences.currentProject;
+  const hasAny = preferences.domain || preferences.currentProject;
   return {
     dimensions: computeProfileDimensions(participant),
     preferences: hasAny ? preferences : undefined,

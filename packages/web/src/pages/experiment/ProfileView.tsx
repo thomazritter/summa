@@ -2,9 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { profileApi } from '../../api/client';
-import { PROFILE_DIMENSIONS, FORMAT_DIMENSIONS } from '../../constants/profileDimensions';
+import { PROFILE_DIMENSIONS } from '../../constants/profileDimensions';
 
-const DIMENSIONS = [...PROFILE_DIMENSIONS, ...FORMAT_DIMENSIONS];
+const DIMENSIONS = PROFILE_DIMENSIONS;
 
 const SOURCE_BADGES: Record<string, { label: string; classes: string }> = {
   // 'questionnaire' and 'cv' (CV-inferred) share the same neutral "Derivado"

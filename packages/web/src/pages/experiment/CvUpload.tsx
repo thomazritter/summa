@@ -37,7 +37,6 @@ export function CvUpload() {
   // Results state
   const [cvResult, setCvResult] = useState<CvProfileResponse | null>(null);
   const [selections, setSelections] = useState<Record<string, string>>({});
-  const [structurePreference, setStructurePreference] = useState('');
   const [name, setName] = useState('');
   const [inferredDomain, setInferredDomain] = useState('');
   const [currentProject, setCurrentProject] = useState('');
@@ -67,14 +66,12 @@ export function CvUpload() {
   const registerMutation = useMutation({
     mutationFn: (data: {
       name: string;
-      structurePreference: string;
       dimensions: Record<string, string>;
       domain?: string;
       currentProject?: string;
     }) => profileApi.registerFromCv({
       name: data.name,
       dimensions: data.dimensions,
-      structurePreference: data.structurePreference,
       ...(data.domain ? { domain: data.domain } : {}),
       ...(data.currentProject ? { currentProject: data.currentProject } : {}),
     }),
@@ -160,19 +157,17 @@ export function CvUpload() {
   }, []);
 
   const handleConfirm = useCallback(() => {
-    if (!name.trim() || !structurePreference) return;
+    if (!name.trim()) return;
     registerMutation.mutate({
       name: name.trim(),
-      structurePreference,
       dimensions: selections,
       ...(inferredDomain.trim() ? { domain: inferredDomain.trim() } : {}),
       ...(currentProject.trim() ? { currentProject: currentProject.trim() } : {}),
     });
-  }, [name, structurePreference, selections, inferredDomain, currentProject, registerMutation]);
+  }, [name, selections, inferredDomain, currentProject, registerMutation]);
 
   const isResultsValid =
     name.trim().length > 0 &&
-    structurePreference !== '' &&
     Object.keys(selections).length >= 4;
 
   return (
@@ -485,58 +480,19 @@ export function CvUpload() {
             {/* Separator */}
             <div className="border-t border-gray-200 my-8" />
 
-            {/* Additional questions */}
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              Preferências adicionais
-            </h2>
-            <p className="text-sm text-gray-600 mb-6">
-              Essas preferências não podem ser inferidas do currículo. Por favor,
-              selecione as opções mais adequadas.
-            </p>
-
-            <div className="space-y-6">
-              {/* Structure preference */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-3">
-                  Preferência de formato
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  {[
-                    { value: 'prose', label: 'Prosa corrida' },
-                    { value: 'bullets', label: 'Tópicos e bullet points' },
-                    { value: 'mixed', label: 'Misto' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setStructurePreference(opt.value)}
-                      className={`p-4 border rounded-lg text-center transition-all ${
-                        structurePreference === opt.value
-                          ? 'bg-blue-50 border-[#2563eb]'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                      aria-pressed={structurePreference === opt.value}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Name input */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Nome
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Seu nome (pode ser anônimo)"
-                  maxLength={255}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
-                />
-              </div>
+            {/* Name input */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Nome
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Seu nome (pode ser anônimo)"
+                maxLength={255}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
+              />
             </div>
 
             {/* Registration error */}

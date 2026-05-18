@@ -202,7 +202,7 @@ export interface ProfileDimensions {
 
 /**
  * Generate a personalized summary on-demand using participant-specific
- * profile dimensions and preferences (structurePreference, domain, ...).
+ * profile dimensions and preferences (domain, currentProject).
  *
  * Accepts the four prompt-facing dimensions directly. The actual config
  * used to produce the summary travels in `summaries.profile_snapshot`;

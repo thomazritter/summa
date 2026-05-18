@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { profileApi } from '../../api/client';
-import { PROFILE_DIMENSIONS, FORMAT_DIMENSIONS } from '../../constants/profileDimensions';
+import { PROFILE_DIMENSIONS } from '../../constants/profileDimensions';
 
 interface FormData {
   name: string;
@@ -10,7 +10,6 @@ interface FormData {
   focus: string;
   depth: string;
   context: string;
-  structurePreference: string;
 }
 
 const DIMENSION_HINTS: Record<string, string> = {
@@ -28,7 +27,6 @@ export function ExperimentRegister() {
     focus: '',
     depth: '',
     context: '',
-    structurePreference: '',
   });
 
   const registerMutation = useMutation({
@@ -45,8 +43,7 @@ export function ExperimentRegister() {
     form.expertise !== '' &&
     form.focus !== '' &&
     form.depth !== '' &&
-    form.context !== '' &&
-    form.structurePreference !== '';
+    form.context !== '';
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -99,29 +96,6 @@ export function ExperimentRegister() {
                       }`}
                     >
                       <div className="font-medium text-gray-900">{opt.label}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-            {/* Structure preference */}
-            {FORMAT_DIMENSIONS.map((dim) => (
-              <div key={dim.key}>
-                <label className="block text-sm font-medium text-gray-700 mb-3">{dim.label}</label>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {dim.options.map((opt) => (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setForm({ ...form, [dim.key]: opt.value })}
-                      className={`p-4 border rounded-lg text-center transition-all ${
-                        form[dim.key as keyof FormData] === opt.value
-                          ? 'bg-blue-50 border-[#2563eb]'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
-                    >
-                      {opt.label}
                     </button>
                   ))}
                 </div>
