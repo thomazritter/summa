@@ -1,21 +1,16 @@
 /**
- * Recompute the FineSurE 3-dim metrics (faithfulness, completeness, conciseness)
- * on the summaries that were exercised by real participants during the experiment
- * described in §6.4 of the thesis.
+ * Recompute the FineSurE 3-dim metrics (faithfulness, completeness,
+ * conciseness) on every summary currently stored with
+ * factuality_status='complete'. Used to refresh stored scores after
+ * changes to the factuality pipeline (e.g. heading exclusion + content
+ * reconciliation in 229c1cf).
  *
- * Why: those summaries were originally scored with the legacy NLI+LLM-judge
- * pipeline. After the production switch to FineSurE 3-dim (Song et al. 2024),
- * we want fresh numbers under the same protocol the live system now applies,
- * so the §6.3 results table compares apples to apples with new summaries.
+ * Runs checkFactuality with the current pipeline against each summary's
+ * content + raw article text, persists faithfulness + per-sentence
+ * details + completeness + conciseness + per-keyfact alignment, and
+ * writes a CSV with old vs new scores for downstream analysis.
  *
- * What it does: for each summary referenced by an experiment_session (as
- * either the generic or the personalized variant), runs checkFactuality with
- * the FineSurE pipeline, persists faithfulness + per-sentence details +
- * completeness + conciseness + per-keyfact alignment (factuality_status=
- * 'complete'), and writes a CSV with the three scores for downstream
- * analysis.
- *
- * Run with:  railway run -- npx tsx src/scripts/recompute-factuality.ts
+ * Run with:  DATABASE_URL=... npx tsx src/scripts/recompute-factuality.ts
  */
 
 import { Pool } from 'pg';
@@ -37,10 +32,12 @@ const PROFILE_LABEL: Record<number, string> = {
   101: 'Pleno',
   102: 'Senior',
 };
+const labelFor = (pid: number | null): string =>
+  pid === null ? 'Personalized' : (PROFILE_LABEL[pid] ?? `profile=${pid}`);
 
 interface SummaryRow {
   id: number;
-  profile_id: number;
+  profile_id: number | null;
   article_id: number;
   content: string;
   factuality_score: number | null;
@@ -59,11 +56,9 @@ async function main() {
   const summaries = await pool.query<SummaryRow>(`
     SELECT s.id, s.profile_id, s.article_id, s.content, s.factuality_score
     FROM summaries s
-    WHERE s.id IN (
-      SELECT generic_summary_id FROM experiment_sessions
-      UNION SELECT personalized_summary_id FROM experiment_sessions
-    )
-    ORDER BY s.profile_id, s.id
+    WHERE s.factuality_status = 'complete'
+      AND s.content IS NOT NULL AND s.content <> ''
+    ORDER BY s.id
   `);
 
   console.log(`Found ${summaries.rows.length} summaries to recompute.\n`);
@@ -88,7 +83,7 @@ async function main() {
 
   type Result = {
     summary_id: number;
-    profile_id: number;
+    profile_id: number | null;
     profile_label: string;
     article_id: number;
     old_score: number | null;
@@ -109,7 +104,7 @@ async function main() {
     if (!article) continue;
 
     process.stdout.write(
-      `  [${i + 1}/${summaries.rows.length}] profile=${s.profile_id} (${PROFILE_LABEL[s.profile_id]}) summary=${s.id}…`,
+      `  [${i + 1}/${summaries.rows.length}] ${labelFor(s.profile_id).padEnd(14)} summary=${s.id}…`,
     );
 
     try {
@@ -142,7 +137,7 @@ async function main() {
       results.push({
         summary_id: s.id,
         profile_id: s.profile_id,
-        profile_label: PROFILE_LABEL[s.profile_id] ?? String(s.profile_id),
+        profile_label: labelFor(s.profile_id),
         article_id: s.article_id,
         old_score: s.factuality_score,
         new_score: score,
@@ -168,35 +163,36 @@ async function main() {
   }
 
   console.log('\n=== Aggregate by profile (after recompute) ===\n');
-  const byProfile = new Map<number, Result[]>();
+  const byProfile = new Map<string, Result[]>();
   for (const r of results) {
-    if (!byProfile.has(r.profile_id)) byProfile.set(r.profile_id, []);
-    byProfile.get(r.profile_id)!.push(r);
+    const key = r.profile_label;
+    if (!byProfile.has(key)) byProfile.set(key, []);
+    byProfile.get(key)!.push(r);
   }
 
   const mean = (xs: number[]) => (xs.length === 0 ? null : xs.reduce((a, b) => a + b, 0) / xs.length);
   const fmt = (x: number | null) => (x === null ? 'n/a' : x.toFixed(3));
 
-  console.log('profile_id | label              | n | faith (new) | faith (old) | comp     | conc');
-  console.log('-----------+--------------------+---+-------------+-------------+----------+--------');
-  const profileIds = Array.from(byProfile.keys()).sort();
-  for (const pid of profileIds) {
-    const rows = byProfile.get(pid)!;
+  console.log('label              | n  | faith (new) | faith (old) | comp     | conc');
+  console.log('-------------------+----+-------------+-------------+----------+--------');
+  const labels = Array.from(byProfile.keys()).sort();
+  for (const label of labels) {
+    const rows = byProfile.get(label)!;
     const meanFaithNew = mean(rows.map((r) => r.new_score).filter((x): x is number => x !== null));
     const meanFaithOld = mean(rows.map((r) => r.old_score).filter((x): x is number => x !== null));
     const meanComp = mean(rows.map((r) => r.completeness).filter((x): x is number => x !== null));
     const meanConc = mean(rows.map((r) => r.conciseness).filter((x): x is number => x !== null));
     console.log(
-      `${String(pid).padEnd(11)}| ${rows[0].profile_label.padEnd(19)}| ${String(rows.length).padEnd(2)}| ${fmt(meanFaithNew).padEnd(12)}| ${fmt(meanFaithOld).padEnd(12)}| ${fmt(meanComp).padEnd(9)}| ${fmt(meanConc)}`,
+      `${label.padEnd(19)}| ${String(rows.length).padEnd(3)}| ${fmt(meanFaithNew).padEnd(12)}| ${fmt(meanFaithOld).padEnd(12)}| ${fmt(meanComp).padEnd(9)}| ${fmt(meanConc)}`,
     );
   }
-  console.log('-----------+--------------------+---+-------------+-------------+----------+--------');
+  console.log('-------------------+----+-------------+-------------+----------+--------');
   const allFaithNew = mean(results.map((r) => r.new_score).filter((x): x is number => x !== null));
   const allFaithOld = mean(results.map((r) => r.old_score).filter((x): x is number => x !== null));
   const allComp = mean(results.map((r) => r.completeness).filter((x): x is number => x !== null));
   const allConc = mean(results.map((r) => r.conciseness).filter((x): x is number => x !== null));
   console.log(
-    `TOTAL      |                    | ${String(results.length).padEnd(2)}| ${fmt(allFaithNew).padEnd(12)}| ${fmt(allFaithOld).padEnd(12)}| ${fmt(allComp).padEnd(9)}| ${fmt(allConc)}`,
+    `TOTAL              | ${String(results.length).padEnd(3)}| ${fmt(allFaithNew).padEnd(12)}| ${fmt(allFaithOld).padEnd(12)}| ${fmt(allComp).padEnd(9)}| ${fmt(allConc)}`,
   );
 
   const csvPath = join(process.cwd(), `data/recompute-factuality-${Date.now()}.csv`);

@@ -48,12 +48,20 @@ const DEPTH_INSTRUCTIONS: Record<Profile['depth'], string> = {
     'Extensão: abrangente (7-10 parágrafos). Cubra todos os aspectos relevantes com profundidade. Inclua detalhes, números, contexto e discussão.',
 };
 
+// IMPORTANT: the format instructions explicitly forbid inline bold markers
+// like `**Tópico:** conteúdo` as section labels. When the LLM uses that
+// pattern, the resulting sentence becomes a single fact-checking unit whose
+// `**Header:**` prefix acts as the antecedent for downstream pronouns
+// ("A abordagem...", "Esse sistema..."). Stripping the prefix later breaks
+// coreference; keeping it pollutes the FineSurE prompt with structural
+// markers. Plain section breaks (newline + bullet list, or a short
+// label-then-newline pattern without bold) avoid both failure modes.
 const STRUCTURE_INSTRUCTIONS: Record<NonNullable<ParticipantPreferences['structurePreference']>, string> = {
-  prose: 'Formato: escreva em parágrafos corridos e fluidos. Não use bullet points ou listas.',
+  prose: 'Formato: escreva em parágrafos corridos e fluidos. Não use bullet points, listas ou cabeçalhos em negrito.',
   bullets:
-    'Formato: organize as informações em tópicos e bullet points. Use listas para pontos principais, resultados e conclusões. Minimize parágrafos longos.',
+    'Formato: organize as informações em listas com bullet points (linhas iniciadas por "- "). Use listas para pontos principais, resultados e conclusões. Minimize parágrafos longos. NÃO use cabeçalhos em negrito do tipo "**Resultados:**" no meio do texto — se precisar de uma seção, use uma linha curta sem negrito seguida da lista.',
   mixed:
-    'Formato: combine parágrafos explicativos com bullet points para dados, resultados e listas de contribuições. Use parágrafos para contexto e listas para pontos objetivos.',
+    'Formato: combine parágrafos explicativos com listas de bullets (linhas iniciadas por "- ") para dados, resultados e contribuições. Use parágrafos para contexto e listas para pontos objetivos. NÃO use marcadores em negrito do tipo "**Tópico:** conteúdo" no meio de uma frase — eles confundem a verificação de factualidade. Para introduzir uma seção, use uma linha em negrito curta seguida do conteúdo numa nova linha, ou inicie diretamente o parágrafo/lista sem rótulo em negrito.',
 };
 
 const buildDirectives = (profile: Profile, participantPreferences?: ParticipantPreferences): string => {

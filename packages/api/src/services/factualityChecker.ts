@@ -90,10 +90,8 @@ export const splitIntoSentences = (text: string): string[] => {
 
 // A "section heading" is a sentence that carries no factual claim — typically
 // a bold/markdown label like "**Resultados Principais:**" or "Metodologia:"
-// that ends in a colon. These should be auto-classified as `no error` and
-// excluded from the LLM fact-checking call (sending them as factuality
-// inputs both wastes tokens and tends to produce spurious `neutral` labels
-// because the LLM has nothing in the transcript to anchor against).
+// that ends in a colon. Standalone headings are auto-excluded from
+// fact-checking (they do not appear in `factuality_details` at all).
 const HEADING_REGEX = /^\s*\*+[^*\n]{1,80}?\*+:?\s*$|^[\p{Lu}\p{Ll}\s\p{P}]{1,80}:\s*$/u;
 export const isSectionHeading = (sentence: string): boolean => HEADING_REGEX.test(sentence);
 
@@ -205,13 +203,19 @@ export const checkFactuality = async (
     return { score: null, results: [], completeness: null, conciseness: null, keyfacts: [], keyfactAlignment: [] };
   }
 
-  // Section headings (`**Resultados Principais:**`, `Metodologia:`, ...)
-  // are structural markers — not assertions the LLM "thought through"
-  // against the article — so they are left out of fact-checking entirely:
-  // they are not sent to the FineSurE prompt, do not appear in
-  // `factuality_details`, and do not enter the score denominator. The
-  // frontend renders them as plain markdown headings (no underline)
-  // because no matching entry exists in the per-sentence index.
+  // Standalone section headings (`**Resultados Principais:**`,
+  // `Metodologia:`, ...) carry no factual claim — they are left out of
+  // fact-checking entirely: not sent to the LLM, not present in
+  // `factuality_details`, not in the score denominator. The frontend
+  // renders them as plain markdown headings (no underline) because no
+  // matching entry exists in the per-sentence highlight index.
+  //
+  // Inline-header sentences (`**Topic:** content...`) are sent to the LLM
+  // intact — stripping the marker would remove the antecedent the rest
+  // of the sentence relies on (e.g. "A abordagem reduziu..."), pushing
+  // the LLM toward spurious coreference errors. The structure-preference
+  // prompt at generation time discourages the `**Header:**` pattern in
+  // favor of plain markdown bullets so this case is rare.
   const contentSentences = sentences.filter((s) => !isSectionHeading(s));
 
   const faith = contentSentences.length > 0
@@ -231,8 +235,8 @@ export const checkFactuality = async (
     sentence: faith.sentences[i] ?? '',
     used: false,
   }));
-  const results: FactualityResult[] = contentSentences.map((sentence) => {
-    const key = normalizeForMatch(sentence);
+  const results: FactualityResult[] = contentSentences.map((origSentence) => {
+    const key = normalizeForMatch(origSentence);
     let match = remaining.find((r) => !r.used && normalizeForMatch(r.sentence) === key);
     if (!match) {
       match = remaining.find((r) => !r.used);
@@ -240,7 +244,7 @@ export const checkFactuality = async (
     if (match) {
       match.used = true;
       return {
-        sentence,
+        sentence: origSentence,
         label: mapCategoryToLabel(match.category),
         confidence: 1.0,
         category: match.category,
@@ -248,7 +252,7 @@ export const checkFactuality = async (
       };
     }
     return {
-      sentence,
+      sentence: origSentence,
       label: 'neutral',
       confidence: 1.0,
       category: 'other error',
