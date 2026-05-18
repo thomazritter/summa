@@ -69,38 +69,37 @@ export const authApi = {
 };
 
 // Product-mode profile endpoints. Replace experimentApi for any profile
-// interaction (registration via questionnaire or CV, view, edit, reset).
+// interaction (registration via questionnaire or CV, view, edit).
 export const profileApi = {
   registerParticipant: (data: {
     name: string;
-    experienceLevel: string;
-    yearsExperience: number;
-    readingFrequency: string;
-    topicFamiliarity: string;
+    expertise: string;
+    focus: string;
+    depth: string;
+    context: string;
     structurePreference?: string;
-    readingGoal?: string;
-    preferredLength?: string;
+    domain?: string;
+    currentProject?: string;
   }) =>
-    apiRequest<{ id: number; name: string; experienceLevel: string }>('/profile/participants', {
+    apiRequest<{ id: number; name: string }>('/profile/participants', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   registerFromCv: (data: {
     name: string;
-    experienceLevel: string;
     dimensions: Record<string, string>;
     structurePreference: string;
     domain?: string;
     currentProject?: string;
   }) =>
-    apiRequest<{ id: number; name: string; experienceLevel: string }>('/profile/participants/from-cv', {
+    apiRequest<{ id: number; name: string }>('/profile/participants/from-cv', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
 
   getParticipant: (id: number) =>
-    apiRequest<{ id: number; name: string; experienceLevel: string }>(`/profile/participants/${id}`),
+    apiRequest<{ id: number; name: string }>(`/profile/participants/${id}`),
 
   uploadCv: async (file: File) => {
     const formData = new FormData();

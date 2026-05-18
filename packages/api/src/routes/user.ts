@@ -11,7 +11,7 @@ import { queryAll, queryOne, execute } from '../db/connection.js';
 import { parseId, safeJsonParse, zodErrorMessage } from '../utils/validation.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { generatePersonalizedSummary, SummarizationError, NotFoundError } from '../services/summarizationService.js';
-import { buildPersonalizationContext, EXPERIENCE_CONFIG } from '../services/profileService.js';
+import { buildPersonalizationContext } from '../services/profileService.js';
 import { AVAILABLE_MODELS } from '../services/groqClient.js';
 import type { ParticipantRow } from '../types/rows.js';
 
@@ -231,14 +231,9 @@ userRoutes.post('/summarize', asyncHandler(async (req: Request, res: Response) =
 
   const { dimensions, preferences } = buildPersonalizationContext(participant);
 
-  // Determine the base profile ID from experience config
-  const config = EXPERIENCE_CONFIG[participant.experience_level];
-  const baseProfileId = config ? config.profileId : 101; // fallback to pleno
-
   try {
     const summary = await generatePersonalizedSummary(
       articleId,
-      baseProfileId,
       dimensions,
       preferences,
     );

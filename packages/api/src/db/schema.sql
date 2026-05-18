@@ -37,10 +37,14 @@ CREATE TABLE IF NOT EXISTS articles (
 );
 
 -- Summaries table
+-- `profile_id` references the legacy persona slots in `profiles` (98/99/100/
+-- 101/102) and is preserved nullable for backward compatibility with the
+-- historical N=9 experiment rows. New personalized summaries leave this
+-- column NULL — the actual generation config travels in `profile_snapshot`.
 CREATE TABLE IF NOT EXISTS summaries (
   id SERIAL PRIMARY KEY,
   article_id INTEGER NOT NULL,
-  profile_id INTEGER NOT NULL,
+  profile_id INTEGER,
   content TEXT NOT NULL,
   factuality_score REAL,
   factuality_details TEXT, -- JSON
@@ -84,18 +88,15 @@ CREATE TRIGGER profiles_updated_at
 
 -- ─── Experiment Mode Tables ──────────────────────────────────────────
 
--- Participants table (experiment pre-test data)
+-- Participants table — single flat profile per participant.
+-- Each dimension/aux preference has a value column and a `_manual` boolean
+-- indicating whether the value was last set via manual UI edit (true) or via
+-- the questionnaire/CV path (false). Questionnaire and CV are frontend input
+-- paths that write into the same columns.
 CREATE TABLE IF NOT EXISTS participants (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
-  experience_level TEXT NOT NULL CHECK (experience_level IN ('junior', 'pleno', 'senior')),
-  years_experience INTEGER NOT NULL,
-  reading_frequency TEXT NOT NULL CHECK (reading_frequency IN ('never', 'rarely', 'sometimes', 'frequently')),
-  topic_familiarity TEXT NOT NULL CHECK (topic_familiarity IN ('none', 'little', 'moderate', 'high')),
   structure_preference TEXT CHECK (structure_preference IN ('prose', 'bullets', 'mixed')),
-  reading_goal TEXT CHECK (reading_goal IN ('overview', 'methodology', 'results', 'practical')),
-  preferred_length TEXT CHECK (preferred_length IN ('brief', 'moderate', 'detailed')),
-  english_comfort TEXT, -- deprecated; column kept to preserve historical experiment data
   created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -139,36 +140,30 @@ CREATE TABLE IF NOT EXISTS access_codes (
 CREATE INDEX IF NOT EXISTS idx_access_codes_code ON access_codes(code);
 CREATE INDEX IF NOT EXISTS idx_access_codes_email ON access_codes(email);
 
--- ─── Profile Overrides & Snapshot ───────────────────────────────────
+-- ─── Profile dimensions ─────────────────────────────────────────
+-- Each dimension is a single value column plus a `_manual` boolean flag
+-- that marks whether the value was last set via manual edit. The flag is
+-- the only source-tracking signal at the backend layer; the questionnaire
+-- and CV flows both write the value with manual=false.
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS expertise TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS focus TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS depth TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS context TEXT;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS expertise_manual BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS focus_manual BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS depth_manual BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS context_manual BOOLEAN NOT NULL DEFAULT FALSE;
 
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_expertise TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_focus TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_depth TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_context TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
-
--- Values inferred from CV are stored separately from manual overrides so the
--- UI can distinguish "inferido do currículo" from "editado manualmente".
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_expertise TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_focus TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_depth TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_context TEXT;
-
--- ─── Domain & Current Project ─────────────────────────────────────
-
+-- Auxiliary profile preferences.
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain TEXT;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
-
--- ─── Manual-edit flags for aux fields ────────────────────────────
--- The four main dimensions (expertise/focus/depth/context) already
--- separate cv_X from override_X, so 'manual' can be derived from
--- override_X IS NOT NULL. The three auxiliary fields below have a
--- single column each (structure_preference, domain, current_project),
--- so we need explicit flags to tell the UI when the value originated
--- from a manual /profile edit vs. CV inference or questionnaire.
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS structure_preference_manual BOOLEAN DEFAULT FALSE;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain_manual BOOLEAN DEFAULT FALSE;
 ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project_manual BOOLEAN DEFAULT FALSE;
+
+-- Initial input path (questionnaire | cv). Informational only — the
+-- backend treats both paths identically for dimension storage.
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
 
 -- ─── Model Tracking ───────────────────────────────────────────────
 

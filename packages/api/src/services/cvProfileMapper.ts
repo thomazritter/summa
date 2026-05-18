@@ -11,7 +11,6 @@ const cvProfileSchema = z.object({
   focus: z.enum(['concepts', 'methodology', 'results', 'applications', 'all']).optional(),
   depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']).optional(),
   context: z.enum(['quick_review', 'learning', 'research', 'teaching']).optional(),
-  experienceLevel: z.enum(['junior', 'pleno', 'senior']).optional(),
   domain: z.string().max(500).optional(),
   reasoning: z.record(z.string(), z.string()).optional(),
 });
@@ -25,7 +24,6 @@ export interface CvProfileResult {
     depth: 'brief' | 'moderate' | 'detailed' | 'comprehensive';
     context: 'quick_review' | 'learning' | 'research' | 'teaching';
   };
-  experienceLevel: 'junior' | 'pleno' | 'senior';
   domain: string | null;
   reasoning: Record<string, string>;
 }
@@ -55,14 +53,12 @@ Se o documento FOR um currículo profissional, retorne:
   "focus": "concepts|methodology|results|applications|all",
   "depth": "brief|moderate|detailed|comprehensive",
   "context": "quick_review|learning|research|teaching",
-  "experienceLevel": "junior|pleno|senior",
   "domain": "domínio profissional inferido (ex: backend engineering, data science, machine learning)",
   "reasoning": {
     "expertise": "explicação breve de por que escolheu este nível",
     "focus": "explicação breve",
     "depth": "explicação breve",
-    "context": "explicação breve",
-    "experienceLevel": "explicação breve"
+    "context": "explicação breve"
   }
 }
 
@@ -74,7 +70,6 @@ Regras para inferir o perfil (apenas quando is_cv = true):
 - focus: baseie-se na área atual. Desenvolvedor = applications. Pesquisador = methodology ou results. Estudante = concepts. Gestão = all.
 - depth: baseie-se no cargo. Cargo executivo/gestão = brief. Operacional = moderate. Técnico especializado = detailed. Pesquisador = comprehensive.
 - context: Estudante = learning. Pesquisador/professor = research ou teaching. Profissional = quick_review.
-- experienceLevel: 0-2 anos = junior. 3-7 anos = pleno. 8+ anos = senior.
 - domain: infira o domínio profissional principal com base no cargo, área de atuação e habilidades. Use termos curtos em inglês (ex: "backend engineering", "data science", "frontend development", "machine learning", "devops", "product management"). Se não for possível inferir, omita o campo.
 
 CURRÍCULO:
@@ -85,14 +80,13 @@ const STRICT_RETRY_PROMPT = `Sua resposta anterior não era um JSON válido. Ten
 Retorne SOMENTE o JSON, sem nenhum texto antes ou depois, sem markdown.
 
 Se NÃO for currículo: {"is_cv":false,"not_cv_reason":"..."}
-Se FOR currículo: {"is_cv":true,"expertise":"...","focus":"...","depth":"...","context":"...","experienceLevel":"...","domain":"...","reasoning":{"expertise":"...","focus":"...","depth":"...","context":"...","experienceLevel":"..."}}
+Se FOR currículo: {"is_cv":true,"expertise":"...","focus":"...","depth":"...","context":"...","domain":"...","reasoning":{"expertise":"...","focus":"...","depth":"...","context":"..."}}
 
 Valores permitidos:
 - expertise: beginner, intermediate, advanced, expert
 - focus: concepts, methodology, results, applications, all
 - depth: brief, moderate, detailed, comprehensive
 - context: quick_review, learning, research, teaching
-- experienceLevel: junior, pleno, senior
 
 DOCUMENTO:
 `;
@@ -152,7 +146,7 @@ function parseLlmProfileResponse(raw: string): CvInferenceOutcome {
   }
 
   // is_cv === true; require all profile fields
-  if (!data.expertise || !data.focus || !data.depth || !data.context || !data.experienceLevel || !data.reasoning) {
+  if (!data.expertise || !data.focus || !data.depth || !data.context || !data.reasoning) {
     return { kind: 'parse_failed' };
   }
 
@@ -165,7 +159,6 @@ function parseLlmProfileResponse(raw: string): CvInferenceOutcome {
         depth: data.depth,
         context: data.context,
       },
-      experienceLevel: data.experienceLevel,
       domain: data.domain || null,
       reasoning: data.reasoning,
     },

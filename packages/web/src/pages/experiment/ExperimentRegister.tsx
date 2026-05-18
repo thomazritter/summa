@@ -2,29 +2,33 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import { profileApi } from '../../api/client';
+import { PROFILE_DIMENSIONS, FORMAT_DIMENSIONS } from '../../constants/profileDimensions';
 
 interface FormData {
   name: string;
-  experienceLevel: string;
-  yearsExperience: number;
-  readingFrequency: string;
-  topicFamiliarity: string;
+  expertise: string;
+  focus: string;
+  depth: string;
+  context: string;
   structurePreference: string;
-  readingGoal: string;
-  preferredLength: string;
 }
+
+const DIMENSION_HINTS: Record<string, string> = {
+  expertise: 'Quanta familiaridade você tem com o tipo de artigo que vai ler?',
+  focus: 'Que parte de um artigo te interessa mais?',
+  depth: 'Quanto detalhe você quer ver no resumo?',
+  context: 'Como você costuma usar a leitura de um artigo?',
+};
 
 export function ExperimentRegister() {
   const navigate = useNavigate();
   const [form, setForm] = useState<FormData>({
     name: '',
-    experienceLevel: '',
-    yearsExperience: 0,
-    readingFrequency: '',
-    topicFamiliarity: '',
+    expertise: '',
+    focus: '',
+    depth: '',
+    context: '',
     structurePreference: '',
-    readingGoal: '',
-    preferredLength: '',
   });
 
   const registerMutation = useMutation({
@@ -38,12 +42,11 @@ export function ExperimentRegister() {
 
   const isValid =
     form.name.trim().length > 0 &&
-    form.experienceLevel !== '' &&
-    form.readingFrequency !== '' &&
-    form.topicFamiliarity !== '' &&
-    form.structurePreference !== '' &&
-    form.readingGoal !== '' &&
-    form.preferredLength !== '';
+    form.expertise !== '' &&
+    form.focus !== '' &&
+    form.depth !== '' &&
+    form.context !== '' &&
+    form.structurePreference !== '';
 
   return (
     <div className="min-h-screen bg-[#f9fafb]">
@@ -57,9 +60,9 @@ export function ExperimentRegister() {
           </Link>
         </div>
         <div className="bg-white border border-gray-200 rounded-lg p-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Pré-teste: Dados do Participante</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Configure seu perfil</h1>
           <p className="text-gray-600 mb-8">
-            Preencha as informações abaixo para que possamos adequar o experimento ao seu perfil.
+            Responda às perguntas abaixo para que os resumos sejam adaptados ao seu perfil de leitura.
           </p>
 
           <div className="space-y-8">
@@ -74,182 +77,56 @@ export function ExperimentRegister() {
                 maxLength={255}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2563eb]"
               />
-              {form.name.length > 200 && (
-                <div className="flex justify-end mt-1">
-                  <span className={`text-xs ${form.name.length > 229 ? 'text-amber-600' : 'text-gray-400'}`}>
-                    {form.name.length}/255
-                  </span>
+            </div>
+
+            {/* Profile dimensions: expertise, focus, depth, context */}
+            {PROFILE_DIMENSIONS.map((dim) => (
+              <div key={dim.key}>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{dim.label}</label>
+                {DIMENSION_HINTS[dim.key] && (
+                  <p className="text-xs text-gray-500 mb-3">{DIMENSION_HINTS[dim.key]}</p>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {dim.options.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, [dim.key]: opt.value })}
+                      className={`p-4 border rounded-lg text-left transition-all ${
+                        form[dim.key as keyof FormData] === opt.value
+                          ? 'bg-blue-50 border-[#2563eb]'
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      <div className="font-medium text-gray-900">{opt.label}</div>
+                    </button>
+                  ))}
                 </div>
-              )}
-            </div>
-
-            {/* Experience Level */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Nível de experiência como desenvolvedor
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  { value: 'junior', label: 'Júnior', desc: 'Até 2 anos de experiência' },
-                  { value: 'pleno', label: 'Pleno', desc: '2-5 anos de experiência' },
-                  { value: 'senior', label: 'Sênior', desc: '5+ anos de experiência' },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, experienceLevel: opt.value })}
-                    className={`p-4 border rounded-lg text-left transition-all ${
-                      form.experienceLevel === opt.value
-                        ? 'bg-blue-50 border-[#2563eb]'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    <div className="font-medium text-gray-900">{opt.label}</div>
-                    <div className="text-xs text-gray-600 mt-1">{opt.desc}</div>
-                  </button>
-                ))}
               </div>
-            </div>
+            ))}
 
-            {/* Reading Frequency */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Frequência de leitura de artigos científicos
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  { value: 'never', label: 'Nunca' },
-                  { value: 'rarely', label: 'Raramente' },
-                  { value: 'sometimes', label: 'Às vezes' },
-                  { value: 'frequently', label: 'Frequentemente' },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, readingFrequency: opt.value })}
-                    className={`p-4 border rounded-lg text-center transition-all ${
-                      form.readingFrequency === opt.value
-                        ? 'bg-blue-50 border-[#2563eb]'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
+            {/* Structure preference */}
+            {FORMAT_DIMENSIONS.map((dim) => (
+              <div key={dim.key}>
+                <label className="block text-sm font-medium text-gray-700 mb-3">{dim.label}</label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {dim.options.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, [dim.key]: opt.value })}
+                      className={`p-4 border rounded-lg text-center transition-all ${
+                        form[dim.key as keyof FormData] === opt.value
+                          ? 'bg-blue-50 border-[#2563eb]'
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-
-            {/* Topic Familiarity */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Familiaridade com leitura de artigos científicos em computação
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  { value: 'none', label: 'Nenhuma' },
-                  { value: 'little', label: 'Pouca' },
-                  { value: 'moderate', label: 'Moderada' },
-                  { value: 'high', label: 'Alta' },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, topicFamiliarity: opt.value })}
-                    className={`p-4 border rounded-lg text-center transition-all ${
-                      form.topicFamiliarity === opt.value
-                        ? 'bg-blue-50 border-[#2563eb]'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Structure Preference */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Como você prefere consumir resumos?
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  { value: 'prose', label: 'Prosa corrida' },
-                  { value: 'bullets', label: 'Tópicos e bullet points' },
-                  { value: 'mixed', label: 'Misto' },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, structurePreference: opt.value })}
-                    className={`p-4 border rounded-lg text-center transition-all ${
-                      form.structurePreference === opt.value
-                        ? 'bg-blue-50 border-[#2563eb]'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Reading Goal */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Qual seu principal objetivo ao ler artigos científicos?
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {[
-                  { value: 'overview', label: 'Visão geral rápida' },
-                  { value: 'methodology', label: 'Entender a metodologia' },
-                  { value: 'results', label: 'Ver os resultados' },
-                  { value: 'practical', label: 'Aplicar na prática' },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, readingGoal: opt.value })}
-                    className={`p-4 border rounded-lg text-center transition-all ${
-                      form.readingGoal === opt.value
-                        ? 'bg-blue-50 border-[#2563eb]'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Preferred Length */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Quanto detalhe você prefere nos resumos?
-              </label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {[
-                  { value: 'brief', label: 'Breve', desc: '2-3 parágrafos' },
-                  { value: 'moderate', label: 'Moderado', desc: '4-5 parágrafos' },
-                  { value: 'detailed', label: 'Detalhado', desc: '6+ parágrafos' },
-                ].map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, preferredLength: opt.value })}
-                    className={`p-4 border rounded-lg text-left transition-all ${
-                      form.preferredLength === opt.value
-                        ? 'bg-blue-50 border-[#2563eb]'
-                        : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                  >
-                    <div className="font-medium text-gray-900">{opt.label}</div>
-                    <div className="text-xs text-gray-600 mt-1">{opt.desc}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-
+            ))}
           </div>
 
           {registerMutation.error && (

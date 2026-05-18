@@ -9,7 +9,6 @@ const DIMENSIONS = PROFILE_DIMENSIONS;
 
 interface CvProfileResponse {
   dimensions: Record<string, string>;
-  experienceLevel: string;
   reasoning: Record<string, string>;
   domain?: string;
 }
@@ -68,14 +67,12 @@ export function CvUpload() {
   const registerMutation = useMutation({
     mutationFn: (data: {
       name: string;
-      experienceLevel: string;
       structurePreference: string;
       dimensions: Record<string, string>;
       domain?: string;
       currentProject?: string;
     }) => profileApi.registerFromCv({
       name: data.name,
-      experienceLevel: data.experienceLevel,
       dimensions: data.dimensions,
       structurePreference: data.structurePreference,
       ...(data.domain ? { domain: data.domain } : {}),
@@ -166,7 +163,6 @@ export function CvUpload() {
     if (!name.trim() || !structurePreference) return;
     registerMutation.mutate({
       name: name.trim(),
-      experienceLevel: cvResult?.experienceLevel || 'pleno',
       structurePreference,
       dimensions: selections,
       ...(inferredDomain.trim() ? { domain: inferredDomain.trim() } : {}),

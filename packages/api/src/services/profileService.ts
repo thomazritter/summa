@@ -96,73 +96,38 @@ const mapRowToProfile = (row: ProfileRow): Profile => ({
 // typed dimensions the prompts consume + the personalization context
 // every summarize call needs.
 
-export interface ExperienceConfig {
-  profileId: number;
-  dimensions: ProfileDimensions;
-}
-
-export const EXPERIENCE_CONFIG: Record<string, ExperienceConfig> = {
-  junior: {
-    profileId: 100,
-    dimensions: { expertise: 'beginner', focus: 'concepts', depth: 'moderate', context: 'learning' },
-  },
-  pleno: {
-    profileId: 101,
-    dimensions: { expertise: 'intermediate', focus: 'methodology', depth: 'detailed', context: 'research' },
-  },
-  senior: {
-    profileId: 102,
-    dimensions: { expertise: 'advanced', focus: 'results', depth: 'comprehensive', context: 'research' },
-  },
+/** Fallback dimensions when a participant is missing all four values
+ *  (should not happen post-backfill; kept as a defensive default). */
+const DEFAULT_DIMENSIONS: ProfileDimensions = {
+  expertise: 'intermediate',
+  focus: 'all',
+  depth: 'moderate',
+  context: 'learning',
 };
 
 /**
- * Reduce participant columns to the four prompt-facing dimensions,
- * applying manual overrides on top of CV-inferred or questionnaire-
- * derived defaults.
+ * Read the four prompt-facing dimensions straight from the participant row.
+ * Questionnaire and CV are frontend input paths that write into these same
+ * columns — the backend reads one canonical value per dimension.
  */
 export function computeProfileDimensions(participant: ParticipantRow): ProfileDimensions {
-  const config = EXPERIENCE_CONFIG[participant.experience_level];
-  if (!config) {
-    return { expertise: 'intermediate', focus: 'all', depth: 'moderate', context: 'learning' };
-  }
-
-  const depth = (participant.preferred_length as ProfileDimensions['depth']) || config.dimensions.depth;
-
-  const goalToFocus: Record<string, ProfileDimensions['focus']> = {
-    overview: 'all',
-    methodology: 'methodology',
-    results: 'results',
-    practical: 'applications',
-  };
-  const focus = (participant.reading_goal && goalToFocus[participant.reading_goal])
-    || config.dimensions.focus;
-
   return {
-    expertise: (participant.override_expertise
-      || participant.cv_expertise
-      || config.dimensions.expertise) as ProfileDimensions['expertise'],
-    focus: (participant.override_focus
-      || participant.cv_focus
-      || focus) as ProfileDimensions['focus'],
-    depth: (participant.override_depth
-      || participant.cv_depth
-      || depth) as ProfileDimensions['depth'],
-    context: (participant.override_context
-      || participant.cv_context
-      || config.dimensions.context) as ProfileDimensions['context'],
+    expertise: (participant.expertise || DEFAULT_DIMENSIONS.expertise) as ProfileDimensions['expertise'],
+    focus: (participant.focus || DEFAULT_DIMENSIONS.focus) as ProfileDimensions['focus'],
+    depth: (participant.depth || DEFAULT_DIMENSIONS.depth) as ProfileDimensions['depth'],
+    context: (participant.context || DEFAULT_DIMENSIONS.context) as ProfileDimensions['context'],
   };
 }
 
 /**
- * Per-dimension source labels (`questionnaire` / `cv` / `manual`) so
- * the UI can show where each value came from.
+ * Per-dimension source labels (`questionnaire`/`cv`/`manual`) so the UI can
+ * show where each value came from. `_manual` flags carry the per-dimension
+ * manual-edit signal; `profile_source` carries the initial path.
  */
 export function computeProfileSources(participant: ParticipantRow): Record<string, string> {
-  const dimensionSource = (override: string | null, cv: string | null): string => {
-    if (override) return 'manual';
-    if (cv) return 'cv';
-    return 'questionnaire';
+  const dimensionSource = (manualFlag: boolean): string => {
+    if (manualFlag) return 'manual';
+    return participant.profile_source === 'cv' ? 'cv' : 'questionnaire';
   };
 
   const auxSource = (value: string | null, manualFlag: boolean | null): string => {
@@ -172,10 +137,10 @@ export function computeProfileSources(participant: ParticipantRow): Record<strin
   };
 
   return {
-    expertise: dimensionSource(participant.override_expertise, participant.cv_expertise),
-    focus: dimensionSource(participant.override_focus, participant.cv_focus),
-    depth: dimensionSource(participant.override_depth, participant.cv_depth),
-    context: dimensionSource(participant.override_context, participant.cv_context),
+    expertise: dimensionSource(participant.expertise_manual),
+    focus: dimensionSource(participant.focus_manual),
+    depth: dimensionSource(participant.depth_manual),
+    context: dimensionSource(participant.context_manual),
     structurePreference: auxSource(participant.structure_preference, participant.structure_preference_manual),
     domain: auxSource(participant.domain, participant.domain_manual),
     currentProject: auxSource(participant.current_project, participant.current_project_manual),
@@ -203,10 +168,9 @@ export interface PersonalizationContext {
 
 /**
  * Personalization payload for every summarize call: the four profile
- * dimensions (with manual-override fallback) plus the auxiliary
- * preferences. Returns `preferences: undefined` when none of
- * structure/domain/currentProject is set, so callers can pass it
- * straight through to generatePersonalizedSummary.
+ * dimensions plus auxiliary preferences. Returns `preferences: undefined`
+ * when none of structure/domain/currentProject is set, so callers can pass
+ * it straight through to generatePersonalizedSummary.
  */
 export function buildPersonalizationContext(participant: ParticipantRow): PersonalizationContext {
   const preferences = {

@@ -7,10 +7,11 @@
 
 // ─── Shared Constants ────────────────────────────────────────────────
 //
-// The `profiles` table is seeded with two flavours of generic summaries
-// (with vs. without translation) and three persona templates that back the
-// `experience_level` slots. Everything that filters or branches on these
-// IDs should reference the constants below instead of bare numbers.
+// The `profiles` table is seeded with control summaries (profile id 99 for
+// the current English-keeping variant; 98 was a legacy translated variant
+// kept only for historical rows). New personalized summaries no longer
+// reference a profile id — the actual personalization config travels in
+// `summaries.profile_snapshot`, and `summaries.profile_id` is now nullable.
 
 /** Profile ID used for the generic (control) summaries. */
 export const GENERIC_PROFILE_IDS = {
@@ -22,38 +23,34 @@ export const ALL_GENERIC_PROFILE_IDS: readonly number[] = [98, 99];
 /** @deprecated Use GENERIC_PROFILE_IDS.keepEnglish instead. */
 export const GENERIC_PROFILE_ID = GENERIC_PROFILE_IDS.keepEnglish;
 
-/** Profile IDs for the persona templates that back each experience level. */
-export const PARTICIPANT_PROFILE_IDS = {
-  junior: 100,
-  pleno: 101,
-  senior: 102,
-} as const;
-
 // ─── Row Interfaces ──────────────────────────────────────────────────
 
 export interface ParticipantRow {
   id: number;
   name: string;
-  experience_level: string;
-  years_experience: number;
-  reading_frequency: string;
-  topic_familiarity: string;
+  // Four dimensions: a single value per dimension, with a per-dimension
+  // `_manual` boolean indicating whether the value was last set via manual
+  // UI edit (true) versus the questionnaire or CV path (false). The split
+  // collapses the legacy `override_*` / `cv_*` columns into one canonical
+  // value, while preserving the source badge ("Derivado" vs "Editado
+  // manualmente") on the frontend.
+  expertise: string | null;
+  focus: string | null;
+  depth: string | null;
+  context: string | null;
+  expertise_manual: boolean;
+  focus_manual: boolean;
+  depth_manual: boolean;
+  context_manual: boolean;
+  // Auxiliary preferences (same shape).
   structure_preference: string | null;
-  reading_goal: string | null;
-  preferred_length: string | null;
-  override_expertise: string | null;
-  override_focus: string | null;
-  override_depth: string | null;
-  override_context: string | null;
-  cv_expertise: string | null;
-  cv_focus: string | null;
-  cv_depth: string | null;
-  cv_context: string | null;
   domain: string | null;
   current_project: string | null;
   structure_preference_manual: boolean | null;
   domain_manual: boolean | null;
   current_project_manual: boolean | null;
+  // Whether the participant first arrived via questionnaire or CV upload.
+  // Informational only — no longer used to compute or override dimensions.
   profile_source: string;
   created_at: string;
 }

@@ -1,6 +1,10 @@
 import { queryOne, execute } from '../db/connection.js';
 import { generateCompletion, getActiveModel, LLMError } from './groqClient.js';
-import { buildSummarizationPrompt, buildGenericSummarizationPrompt, getMaxOutputTokens } from './promptBuilder.js';
+import {
+  buildSummarizationPrompt,
+  buildGenericSummarizationPrompt,
+  MAX_SUMMARY_OUTPUT_TOKENS,
+} from './promptBuilder.js';
 import type { ParticipantPreferences } from './promptBuilder.js';
 import { getProfileById } from './profileService.js';
 import { checkFactuality } from './factualityChecker.js';
@@ -39,7 +43,7 @@ export const generateSummary = async (articleId: number, profileId: number, mode
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
 
   // Build prompt and generate
-  const prompt = buildSummarizationPrompt(profile, structuredContent, article.raw_text);
+  const prompt = buildSummarizationPrompt(profile, article.raw_text);
 
   const effectiveModel = modelId || getActiveModel();
   let summaryContent: string;
@@ -47,7 +51,7 @@ export const generateSummary = async (articleId: number, profileId: number, mode
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
-      maxTokens: getMaxOutputTokens(),
+      maxTokens: MAX_SUMMARY_OUTPUT_TOKENS,
       model: effectiveModel,
     });
   } catch (error) {
@@ -150,7 +154,7 @@ export const generateGenericSummary = async (
   }
 
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
-  const prompt = buildGenericSummarizationPrompt(structuredContent, article.raw_text);
+  const prompt = buildGenericSummarizationPrompt(article.raw_text);
 
   const effectiveModel = modelId || getActiveModel();
   let summaryContent: string;
@@ -158,7 +162,7 @@ export const generateGenericSummary = async (
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
-      maxTokens: 8192,
+      maxTokens: MAX_SUMMARY_OUTPUT_TOKENS,
       model: effectiveModel,
     });
   } catch (error) {
@@ -197,17 +201,17 @@ export interface ProfileDimensions {
 }
 
 /**
- * Generate a personalized summary on-demand using participant-specific profile dimensions
- * and preferences (structurePreference, readingGoal).
+ * Generate a personalized summary on-demand using participant-specific
+ * profile dimensions and preferences (structurePreference, domain, ...).
  *
- * Unlike generateSummary which loads a stored profile by ID, this function accepts
- * the profile dimensions directly, allowing per-participant customization.
- *
- * The baseProfileId (100/101/102) is used for the FK constraint on the summaries table.
+ * Accepts the four prompt-facing dimensions directly. The actual config
+ * used to produce the summary travels in `summaries.profile_snapshot`;
+ * `summaries.profile_id` is now nullable and left null for personalized
+ * generations (the legacy 100/101/102 profile slots are still referenced
+ * by historical experiment rows for grouping).
  */
 export const generatePersonalizedSummary = async (
   articleId: number,
-  baseProfileId: number,
   profileDimensions: ProfileDimensions,
   participantPreferences?: ParticipantPreferences,
   modelId?: string,
@@ -221,7 +225,7 @@ export const generatePersonalizedSummary = async (
 
   // Build a Profile-compatible object from the dimensions for the prompt builder
   const profileForPrompt: Profile = {
-    id: baseProfileId,
+    id: 0,
     userId: 0,
     name: 'on-demand',
     expertise: profileDimensions.expertise,
@@ -232,7 +236,7 @@ export const generatePersonalizedSummary = async (
     updatedAt: new Date(),
   };
 
-  const prompt = buildSummarizationPrompt(profileForPrompt, structuredContent, article.raw_text, participantPreferences);
+  const prompt = buildSummarizationPrompt(profileForPrompt, article.raw_text, participantPreferences);
 
   const effectiveModel = modelId || getActiveModel();
   let summaryContent: string;
@@ -240,7 +244,7 @@ export const generatePersonalizedSummary = async (
     summaryContent = await generateCompletion({
       prompt,
       temperature: 0.3,
-      maxTokens: getMaxOutputTokens(),
+      maxTokens: MAX_SUMMARY_OUTPUT_TOKENS,
       model: effectiveModel,
     });
   } catch (error) {
@@ -260,9 +264,9 @@ export const generatePersonalizedSummary = async (
 
   const row = await queryOne<SummaryRow>(
     `INSERT INTO summaries (article_id, profile_id, content, model_id, profile_snapshot)
-     VALUES ($1, $2, $3, $4, $5)
+     VALUES ($1, NULL, $2, $3, $4)
      RETURNING *`,
-    [articleId, baseProfileId, summaryContent, effectiveModel, JSON.stringify(profileSnapshot)],
+    [articleId, summaryContent, effectiveModel, JSON.stringify(profileSnapshot)],
   );
 
   if (!row) {

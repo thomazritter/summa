@@ -132,7 +132,7 @@ async function main() {
         // (which now persists all three FineSurE dimensions + alignment).
         // The synchronous checkFactuality below captures the same numbers
         // for the CSV without depending on the background job to finish.
-        const summary = await generatePersonalizedSummary(article.id, profile.id, profile.dimensions);
+        const summary = await generatePersonalizedSummary(article.id, profile.dimensions);
         const { score, results: details, completeness, conciseness, keyfacts } =
           await checkFactuality(summary.content, article.structure, article.rawText);
 

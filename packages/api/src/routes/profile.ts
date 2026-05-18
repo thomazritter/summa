@@ -2,10 +2,13 @@
  * Product-mode profile endpoints.
  *
  * Owns participant onboarding (questionnaire or CV-based), profile
- * inspection/editing, and CV re-inference. Replaces the
- * /api/experiment/{participants,profile,cv-profile,participants/from-cv,
- * profile/refresh-from-cv} endpoints that the deprecated A/B experiment
- * flow used to expose.
+ * inspection/editing, and CV re-inference. Backend data model is a single
+ * flat profile per participant: four dimensions (`expertise`/`focus`/
+ * `depth`/`context`), each with a `_manual` boolean flag for source
+ * tracking, plus three auxiliary preferences (`structure_preference`,
+ * `domain`, `current_project`) each with their own `_manual` flag.
+ * Questionnaire and CV are frontend input paths that write into the same
+ * columns — no override/cv split at the data layer.
  *
  * Mounted at /api/profile. Auth is enforced at the router level so every
  * handler can read req.accessCode.
@@ -36,26 +39,27 @@ const handleCvMulterError = createMulterErrorHandler(MAX_CV_SIZE);
 
 // ─── Validation Schemas ─────────────────────────────────────────────
 
+const dimensionsSchema = z.object({
+  expertise: z.enum(['beginner', 'intermediate', 'advanced', 'expert']),
+  focus: z.enum(['concepts', 'methodology', 'results', 'applications', 'all']),
+  depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']),
+  context: z.enum(['quick_review', 'learning', 'research', 'teaching']),
+});
+
 const registerParticipantSchema = z.object({
   name: z.string().min(1).max(255),
-  experienceLevel: z.enum(['junior', 'pleno', 'senior']),
-  yearsExperience: z.number().int().min(0).max(50),
-  readingFrequency: z.enum(['never', 'rarely', 'sometimes', 'frequently']),
-  topicFamiliarity: z.enum(['none', 'little', 'moderate', 'high']),
+  expertise: z.enum(['beginner', 'intermediate', 'advanced', 'expert']),
+  focus: z.enum(['concepts', 'methodology', 'results', 'applications', 'all']),
+  depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']),
+  context: z.enum(['quick_review', 'learning', 'research', 'teaching']),
   structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
-  readingGoal: z.enum(['overview', 'methodology', 'results', 'practical']).optional(),
-  preferredLength: z.enum(['brief', 'moderate', 'detailed']).optional(),
+  domain: z.string().max(500).optional(),
+  currentProject: z.string().max(2000).optional(),
 });
 
 const registerFromCvSchema = z.object({
   name: z.string().min(1).max(255),
-  dimensions: z.object({
-    expertise: z.enum(['beginner', 'intermediate', 'advanced', 'expert']),
-    focus: z.enum(['concepts', 'methodology', 'results', 'applications', 'all']),
-    depth: z.enum(['brief', 'moderate', 'detailed', 'comprehensive']),
-    context: z.enum(['quick_review', 'learning', 'research', 'teaching']),
-  }),
-  experienceLevel: z.enum(['junior', 'pleno', 'senior']),
+  dimensions: dimensionsSchema,
   structurePreference: z.enum(['prose', 'bullets', 'mixed']).optional(),
   domain: z.string().max(500).optional(),
   currentProject: z.string().max(2000).optional(),
@@ -78,13 +82,11 @@ const updateProfileSchema = z.object({
 const mapParticipantRow = (row: ParticipantRow): Participant => ({
   id: row.id,
   name: row.name,
-  experienceLevel: row.experience_level as Participant['experienceLevel'],
-  yearsExperience: row.years_experience,
-  readingFrequency: row.reading_frequency as Participant['readingFrequency'],
-  topicFamiliarity: row.topic_familiarity as Participant['topicFamiliarity'],
+  expertise: row.expertise as Participant['expertise'],
+  focus: row.focus as Participant['focus'],
+  depth: row.depth as Participant['depth'],
+  context: row.context as Participant['context'],
   structurePreference: row.structure_preference as Participant['structurePreference'],
-  readingGoal: row.reading_goal as Participant['readingGoal'],
-  preferredLength: row.preferred_length as Participant['preferredLength'],
   domain: row.domain,
   currentProject: row.current_project,
   createdAt: row.created_at,
@@ -100,13 +102,26 @@ profileRoutes.post('/participants', asyncHandler(async (req: Request, res: Respo
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
-  const { name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference, readingGoal, preferredLength } = validation.data;
+  const { name, expertise, focus, depth, context, structurePreference, domain, currentProject } = validation.data;
 
   const row = await queryOne<ParticipantRow>(`
-    INSERT INTO participants (name, experience_level, years_experience, reading_frequency, topic_familiarity, structure_preference, reading_goal, preferred_length)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    INSERT INTO participants (
+      name, expertise, focus, depth, context,
+      structure_preference, domain, current_project,
+      profile_source
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'questionnaire')
     RETURNING *
-  `, [name, experienceLevel, yearsExperience, readingFrequency, topicFamiliarity, structurePreference || null, readingGoal || null, preferredLength || null]);
+  `, [
+    name,
+    expertise,
+    focus,
+    depth,
+    context,
+    structurePreference || null,
+    domain?.trim() || null,
+    currentProject?.trim() || null,
+  ]);
 
   if (!row) return res.status(500).json({ error: 'Falha ao criar registro' });
 
@@ -172,22 +187,18 @@ profileRoutes.post('/participants/from-cv', asyncHandler(async (req: Request, re
     return res.status(400).json({ error: `Dados inválidos: ${messages}` });
   }
 
-  const { name, dimensions, experienceLevel, structurePreference, domain, currentProject } = validation.data;
+  const { name, dimensions, structurePreference, domain, currentProject } = validation.data;
 
   const row = await queryOne<ParticipantRow>(`
     INSERT INTO participants (
-      name, experience_level, years_experience, reading_frequency, topic_familiarity,
-      cv_expertise, cv_focus, cv_depth, cv_context,
-      structure_preference, domain, current_project, profile_source
+      name, expertise, focus, depth, context,
+      structure_preference, domain, current_project,
+      profile_source
     )
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'cv')
     RETURNING *
   `, [
     name,
-    experienceLevel,
-    0,
-    'sometimes',
-    'moderate',
     dimensions.expertise,
     dimensions.focus,
     dimensions.depth,
@@ -195,7 +206,6 @@ profileRoutes.post('/participants/from-cv', asyncHandler(async (req: Request, re
     structurePreference || null,
     domain?.trim() || null,
     currentProject?.trim() || null,
-    'cv',
   ]);
 
   if (!row) return res.status(500).json({ error: 'Falha ao criar registro' });
@@ -227,7 +237,9 @@ profileRoutes.get('/', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
-// PUT /api/profile — apply manual overrides.
+// PUT /api/profile — apply manual overrides. Any dimension or aux field
+// touched by this call gets its `_manual` flag flipped to TRUE so the UI
+// shows "Editado manualmente" on the corresponding row.
 profileRoutes.put('/', asyncHandler(async (req: Request, res: Response) => {
   const participantId = req.accessCode?.participantId;
   if (!participantId) {
@@ -242,27 +254,23 @@ profileRoutes.put('/', asyncHandler(async (req: Request, res: Response) => {
 
   const { overrides } = validation.data;
 
-  // The four main dimensions keep cv_X + override_X side by side; the three
-  // aux fields share a single value column and a boolean *_manual flag that
-  // flips to TRUE the first time the user touches the field, so the UI can
-  // show "Editado manualmente" instead of falling back to "Derivado".
-  const structureManualFlag = overrides.structurePreference !== undefined ? true : null;
-  const domainManualFlag = overrides.domain !== undefined ? true : null;
-  const currentProjectManualFlag = overrides.currentProject !== undefined ? true : null;
-
   await execute(
     `UPDATE participants
-     SET override_expertise = COALESCE($1, override_expertise),
-         override_focus     = COALESCE($2, override_focus),
-         override_depth     = COALESCE($3, override_depth),
-         override_context   = COALESCE($4, override_context),
-         structure_preference = COALESCE($5, structure_preference),
-         domain             = COALESCE($6, domain),
-         current_project    = COALESCE($7, current_project),
-         structure_preference_manual = COALESCE($8, structure_preference_manual),
-         domain_manual               = COALESCE($9, domain_manual),
-         current_project_manual      = COALESCE($10, current_project_manual)
-     WHERE id = $11`,
+     SET expertise        = COALESCE($1, expertise),
+         focus            = COALESCE($2, focus),
+         depth            = COALESCE($3, depth),
+         context          = COALESCE($4, context),
+         expertise_manual = expertise_manual OR ($1 IS NOT NULL),
+         focus_manual     = focus_manual     OR ($2 IS NOT NULL),
+         depth_manual     = depth_manual     OR ($3 IS NOT NULL),
+         context_manual   = context_manual   OR ($4 IS NOT NULL),
+         structure_preference        = COALESCE($5, structure_preference),
+         domain                      = COALESCE($6, domain),
+         current_project             = COALESCE($7, current_project),
+         structure_preference_manual = structure_preference_manual OR ($5 IS NOT NULL),
+         domain_manual               = domain_manual               OR ($6 IS NOT NULL),
+         current_project_manual      = current_project_manual      OR ($7 IS NOT NULL)
+     WHERE id = $8`,
     [
       overrides.expertise || null,
       overrides.focus || null,
@@ -271,9 +279,6 @@ profileRoutes.put('/', asyncHandler(async (req: Request, res: Response) => {
       overrides.structurePreference || null,
       overrides.domain || null,
       overrides.currentProject || null,
-      structureManualFlag,
-      domainManualFlag,
-      currentProjectManualFlag,
       participantId,
     ],
   );
@@ -290,39 +295,9 @@ profileRoutes.put('/', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
-// POST /api/profile/reset — clear all manual overrides.
-profileRoutes.post('/reset', asyncHandler(async (req: Request, res: Response) => {
-  const participantId = req.accessCode?.participantId;
-  if (!participantId) {
-    return res.status(400).json({ error: 'Nenhum participante vinculado a este codigo de acesso' });
-  }
-
-  await execute(
-    `UPDATE participants
-     SET override_expertise = NULL,
-         override_focus     = NULL,
-         override_depth     = NULL,
-         override_context   = NULL,
-         domain             = NULL,
-         current_project    = NULL
-     WHERE id = $1`,
-    [participantId],
-  );
-
-  const participant = await queryOne<ParticipantRow>('SELECT * FROM participants WHERE id = $1', [participantId]);
-  if (!participant) {
-    return res.status(404).json({ error: 'Participante nao encontrado' });
-  }
-
-  res.json({
-    dimensions: serializeProfileForApi(participant),
-    sources: computeProfileSources(participant),
-    profileSource: participant.profile_source || 'questionnaire',
-  });
-}));
-
-// POST /api/profile/refresh-from-cv — re-run CV inference and replace cv_*
-// values. Manual overrides are preserved (POST /reset clears them).
+// POST /api/profile/refresh-from-cv — re-run CV inference and replace
+// dimensions in place. Resets `_manual` flags to false on every dimension
+// it overwrites, since the new values came from the CV, not manual edit.
 profileRoutes.post(
   '/refresh-from-cv',
   cvUpload.single('file'),
@@ -355,24 +330,26 @@ profileRoutes.post(
         });
     }
 
-    const { dimensions, experienceLevel, domain } = outcome.profile;
+    const { dimensions, domain } = outcome.profile;
 
     await execute(
       `UPDATE participants
-       SET cv_expertise = $1,
-           cv_focus     = $2,
-           cv_depth     = $3,
-           cv_context   = $4,
-           experience_level = $5,
-           domain       = COALESCE($6, domain),
-           profile_source = 'cv'
-       WHERE id = $7`,
+       SET expertise        = $1,
+           focus            = $2,
+           depth            = $3,
+           context          = $4,
+           expertise_manual = false,
+           focus_manual     = false,
+           depth_manual     = false,
+           context_manual   = false,
+           domain           = COALESCE($5, domain),
+           profile_source   = 'cv'
+       WHERE id = $6`,
       [
         dimensions.expertise,
         dimensions.focus,
         dimensions.depth,
         dimensions.context,
-        experienceLevel,
         domain,
         participantId,
       ],

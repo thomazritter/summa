@@ -130,23 +130,16 @@ export interface ProfileQuestionOption {
 
 // ─── Experiment Mode Types ──────────────────────────────────────────
 
-export type ExperienceLevel = 'junior' | 'pleno' | 'senior';
-export type ReadingFrequency = 'never' | 'rarely' | 'sometimes' | 'frequently';
-export type TopicFamiliarity = 'none' | 'little' | 'moderate' | 'high';
 export type StructurePreference = 'prose' | 'bullets' | 'mixed';
-export type ReadingGoal = 'overview' | 'methodology' | 'results' | 'practical';
-export type PreferredLength = 'brief' | 'moderate' | 'detailed';
 
 export interface Participant {
   id: number;
   name: string;
-  experienceLevel: ExperienceLevel;
-  yearsExperience: number;
-  readingFrequency: ReadingFrequency;
-  topicFamiliarity: TopicFamiliarity;
+  expertise: ExpertiseLevel;
+  focus: FocusArea;
+  depth: DepthLevel;
+  context: ReadingContext;
   structurePreference: StructurePreference | null;
-  readingGoal: ReadingGoal | null;
-  preferredLength: PreferredLength | null;
   domain: string | null;
   currentProject: string | null;
   createdAt: string;
@@ -184,13 +177,11 @@ export interface Regeneration {
 // API request types for experiment
 export interface RegisterParticipantRequest {
   name: string;
-  experienceLevel: ExperienceLevel;
-  yearsExperience: number;
-  readingFrequency: ReadingFrequency;
-  topicFamiliarity: TopicFamiliarity;
+  expertise: ExpertiseLevel;
+  focus: FocusArea;
+  depth: DepthLevel;
+  context: ReadingContext;
   structurePreference?: StructurePreference;
-  readingGoal?: ReadingGoal;
-  preferredLength?: PreferredLength;
 }
 
 export interface CreateExperimentSessionRequest {

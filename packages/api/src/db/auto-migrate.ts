@@ -30,20 +30,24 @@ export async function runMigrations(): Promise<void> {
     ALTER TABLE summaries DROP COLUMN IF EXISTS bert_score;
 
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS structure_preference TEXT;
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS reading_goal TEXT;
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS preferred_length TEXT;
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS english_comfort TEXT;
-
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_expertise TEXT;
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_focus TEXT;
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_depth TEXT;
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS override_context TEXT;
     ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
 
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_expertise TEXT;
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_focus TEXT;
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_depth TEXT;
-    ALTER TABLE participants ADD COLUMN IF NOT EXISTS cv_context TEXT;
+    -- Single-value direct profile dimensions. The legacy override_*/cv_*
+    -- split was collapsed into one column per dimension, with a _manual
+    -- boolean tracking whether the value was last set via manual UI edit.
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS expertise TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS focus TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS depth TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS context TEXT;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS expertise_manual BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS focus_manual BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS depth_manual BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE participants ADD COLUMN IF NOT EXISTS context_manual BOOLEAN NOT NULL DEFAULT FALSE;
+
+    -- profile_id used to be NOT NULL pointing to the 100/101/102 persona
+    -- slots. New personalized summaries persist their config in
+    -- profile_snapshot instead, so the column is now nullable.
+    ALTER TABLE summaries ALTER COLUMN profile_id DROP NOT NULL;
 
     ALTER TABLE articles ADD COLUMN IF NOT EXISTS uploaded_by INTEGER;
 
@@ -96,27 +100,49 @@ export async function runMigrations(): Promise<void> {
   await query(alterStatements);
   console.log('[auto-migrate] ALTER TABLE migrations applied.');
 
-  // Backfill: legacy CV participants stored inferred values in override_*.
-  // Move them to cv_* and clear the overrides so the UI labels them as
-  // "Inferido do currículo" instead of "Editado manualmente". Idempotent.
+  // Profile data-model cleanup (2026-05-18): collapse legacy
+  // override_*/cv_* into single value columns + per-dimension _manual
+  // flag, and drop questionnaire fields no longer used by the prompt.
+  // The block is wrapped in a DO so we can guard the backfill on the
+  // legacy columns still being present — fresh installs and already-
+  // migrated environments skip the backfill safely.
   await query(`
-    UPDATE participants
-    SET
-      cv_expertise = COALESCE(cv_expertise, override_expertise),
-      cv_focus     = COALESCE(cv_focus,     override_focus),
-      cv_depth     = COALESCE(cv_depth,     override_depth),
-      cv_context   = COALESCE(cv_context,   override_context),
-      override_expertise = NULL,
-      override_focus     = NULL,
-      override_depth     = NULL,
-      override_context   = NULL
-    WHERE profile_source = 'cv'
-      AND (override_expertise IS NOT NULL
-        OR override_focus     IS NOT NULL
-        OR override_depth     IS NOT NULL
-        OR override_context   IS NOT NULL);
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'participants' AND column_name = 'override_expertise'
+      ) THEN
+        UPDATE participants
+        SET expertise        = COALESCE(expertise, override_expertise, cv_expertise),
+            focus            = COALESCE(focus,     override_focus,     cv_focus),
+            depth            = COALESCE(depth,     override_depth,     cv_depth),
+            context          = COALESCE(context,   override_context,   cv_context),
+            expertise_manual = expertise_manual OR override_expertise IS NOT NULL,
+            focus_manual     = focus_manual     OR override_focus     IS NOT NULL,
+            depth_manual     = depth_manual     OR override_depth     IS NOT NULL,
+            context_manual   = context_manual   OR override_context   IS NOT NULL;
+      END IF;
+    END
+    $$;
+
+    ALTER TABLE participants DROP COLUMN IF EXISTS override_expertise;
+    ALTER TABLE participants DROP COLUMN IF EXISTS override_focus;
+    ALTER TABLE participants DROP COLUMN IF EXISTS override_depth;
+    ALTER TABLE participants DROP COLUMN IF EXISTS override_context;
+    ALTER TABLE participants DROP COLUMN IF EXISTS cv_expertise;
+    ALTER TABLE participants DROP COLUMN IF EXISTS cv_focus;
+    ALTER TABLE participants DROP COLUMN IF EXISTS cv_depth;
+    ALTER TABLE participants DROP COLUMN IF EXISTS cv_context;
+    ALTER TABLE participants DROP COLUMN IF EXISTS experience_level;
+    ALTER TABLE participants DROP COLUMN IF EXISTS years_experience;
+    ALTER TABLE participants DROP COLUMN IF EXISTS reading_frequency;
+    ALTER TABLE participants DROP COLUMN IF EXISTS topic_familiarity;
+    ALTER TABLE participants DROP COLUMN IF EXISTS english_comfort;
+    ALTER TABLE participants DROP COLUMN IF EXISTS reading_goal;
+    ALTER TABLE participants DROP COLUMN IF EXISTS preferred_length;
   `);
-  console.log('[auto-migrate] CV-inferred override values backfilled into cv_* columns.');
+  console.log('[auto-migrate] Profile data-model cleanup applied.');
 
   // 2d. Add index for email lookups on access_codes
   await query('CREATE INDEX IF NOT EXISTS idx_access_codes_email ON access_codes(email);');
