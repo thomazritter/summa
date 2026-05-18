@@ -1,18 +1,12 @@
-// User entity
-export interface User {
-  id: number;
-  name: string;
-  email: string;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// Profile entity - extensible design
+// Profile dimensions — the four typed values the prompt builder consumes.
 export type ExpertiseLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert';
 export type FocusArea = 'concepts' | 'methodology' | 'results' | 'applications' | 'all';
 export type DepthLevel = 'brief' | 'moderate' | 'detailed' | 'comprehensive';
 export type ReadingContext = 'quick_review' | 'learning' | 'research' | 'teaching';
 
+/** Profile entity used as the prompt-input contract. The summarization
+ *  pipeline never persists this directly — generation reads dimensions
+ *  from the participant row and snapshots them on the summary. */
 export interface Profile {
   id: number;
   userId: number;
@@ -21,13 +15,13 @@ export interface Profile {
   focus: FocusArea;
   depth: DepthLevel;
   context: ReadingContext;
-  // Extensible preferences stored as JSON
   customPreferences?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Article entity
+// ─── Article ──────────────────────────────────────────────────────────
+
 export interface Article {
   id: number;
   title: string;
@@ -56,11 +50,11 @@ export interface ArticleSection {
   level: number;
 }
 
-// Summary entity
+// ─── Summary ──────────────────────────────────────────────────────────
+
 export interface Summary {
   id: number;
   articleId: number;
-  profileId: number;
   content: string;
   factualityScore: number | null;
   factualityDetails: FactualityResult[] | null;
@@ -69,66 +63,19 @@ export interface Summary {
   generatedAt: Date;
 }
 
-// Feedback entity
-export interface Feedback {
-  id: number;
-  summaryId: number;
-  userId: number;
-  utilityRating: number; // 1-5
-  technicalLevelRating: number; // 1-5 (1=too simple, 5=too complex)
-  depthRating: number; // 1-5 (1=too brief, 5=too detailed)
-  comments: string | null;
-  createdAt: Date;
-}
-
-// Factuality verification types — FineSurE 3-dim pipeline (Song et al. 2024).
+/** FineSurE per-sentence verdict, exposed by the factuality verification
+ *  pipeline (Song et al. 2024). */
 export interface FactualityResult {
   sentence: string;
   label: 'supported' | 'contradicted' | 'neutral';
   confidence: number;
-  // FineSurE 9-category classification (e.g. "no error", "entity error", "predicate error").
+  /** FineSurE 9-category classification (e.g. "no error", "entity error"). */
   category: string;
-  // LLM rationale explaining the category assignment.
+  /** LLM rationale explaining the category assignment. */
   rationale: string;
 }
 
-// API request/response types
-export interface CreateProfileRequest {
-  name: string;
-  expertise: ExpertiseLevel;
-  focus: FocusArea;
-  depth: DepthLevel;
-  context: ReadingContext;
-}
-
-export interface GenerateSummaryRequest {
-  articleId: number;
-  profileId: number;
-}
-
-export interface SubmitFeedbackRequest {
-  summaryId: number;
-  utilityRating: number;
-  technicalLevelRating: number;
-  depthRating: number;
-  comments?: string;
-}
-
-// Profile questionnaire types
-export interface ProfileQuestion {
-  id: string;
-  question: string;
-  options: ProfileQuestionOption[];
-  targetField: keyof CreateProfileRequest;
-}
-
-export interface ProfileQuestionOption {
-  value: string;
-  label: string;
-  description: string;
-}
-
-// ─── Experiment Mode Types ──────────────────────────────────────────
+// ─── Participant ──────────────────────────────────────────────────────
 
 export interface Participant {
   id: number;
@@ -142,36 +89,6 @@ export interface Participant {
   createdAt: string;
 }
 
-export interface ExperimentSession {
-  id: number;
-  participantId: number;
-  articleId: number;
-  profileId: number;
-  genericSummaryId: number;
-  personalizedSummaryId: number;
-  abOrder: { A: 'generic' | 'personalized'; B: 'generic' | 'personalized' };
-  preference: 'A' | 'B' | null;
-  preferenceRating: number | null;
-  preferenceReason: string | null;
-  phase: 'comparison' | 'feedback' | 'regenerated' | 'complete';
-  createdAt: string;
-}
-
-export interface Regeneration {
-  id: number;
-  sessionId: number;
-  feedbackText: string;
-  regeneratedSummaryId: number;
-  improvementRating: 'improved' | 'same' | 'worse' | null;
-  satisfactionRating: number | null;
-  utilityRating: number | null;
-  clarityRating: number | null;
-  adequacyRating: number | null;
-  changeDescription: string | null;
-  createdAt: string;
-}
-
-// API request types for experiment
 export interface RegisterParticipantRequest {
   name: string;
   expertise: ExpertiseLevel;
@@ -180,53 +97,7 @@ export interface RegisterParticipantRequest {
   context: ReadingContext;
 }
 
-export interface CreateExperimentSessionRequest {
-  participantId: number;
-  articleId: number;
-}
-
-export interface RecordPreferenceRequest {
-  preference: 'A' | 'B';
-  reason?: string;
-}
-
-export interface SubmitExperimentFeedbackRequest {
-  feedbackText: string;
-}
-
-export interface RateRegenerationRequest {
-  improvementRating: 'improved' | 'same' | 'worse';
-  utilityRating: number;
-  clarityRating: number;
-  adequacyRating: number;
-  changeDescription?: string;
-}
-
-export interface SummaryRating {
-  id: number;
-  sessionId: number;
-  summaryId: number;
-  abLabel: 'A' | 'B';
-  utilidade: number;
-  clareza: number;
-  adequacaoPerfil: number;
-  factualidadePercebida: number;
-  comment: string | null;
-  createdAt: string;
-}
-
-export interface PostTestResponse {
-  id: number;
-  participantId: number;
-  noticedDifference: string | null;
-  differenceType: string | null;
-  wouldUseDaily: string | null;
-  improvements: string | null;
-  comments: string | null;
-  createdAt: string;
-}
-
-// ─── Profile Editor Types ──────────────────────────────────────────
+// ─── Profile Editor ───────────────────────────────────────────────────
 
 export interface ProfileResponse {
   dimensions: {
@@ -252,12 +123,7 @@ export interface UpdateProfileRequest {
   };
 }
 
-// Generic summary — summary generated without profile parameterization
-export interface GenericSummaryRequest {
-  articleId: number;
-}
-
-// ─── Auth Types ──────────────────────────────────────────────────────
+// ─── Auth ─────────────────────────────────────────────────────────────
 
 export interface AccessCode {
   code: string;

@@ -11,8 +11,7 @@
     "dev:web": "npm run dev -w @summarizer/web",
     "build": "npm run build -w @summarizer/shared && npm run build -w @summarizer/web && npm run build -w @summarizer/api",
     "start": "npm run start -w @summarizer/api",
-    "db:migrate": "npm run db:migrate -w @summarizer/api",
-    "db:seed": "npm run db:seed -w @summarizer/api"
+    "db:migrate": "npm run db:migrate -w @summarizer/api"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

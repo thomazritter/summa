@@ -7,11 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc && cp src/db/schema.sql dist/db/schema.sql",
     "start": "node dist/index.js",
-    "db:migrate": "tsx src/db/migrate.ts",
-    "db:seed": "tsx src/db/seed.ts",
-    "experiment:pregenerate": "tsx src/scripts/pregenerate.ts",
-    "db:migrate:feedback": "tsx src/db/migrate-embedded-feedback.ts",
-    "db:migrate:auth": "tsx src/db/migrate-auth.ts"
+    "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
     "@summarizer/shared": "1.0.0",

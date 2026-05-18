@@ -1,28 +1,11 @@
--- Users table
-CREATE TABLE IF NOT EXISTS users (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW()
-);
+-- Summa canonical schema.
+-- Single source of truth applied verbatim by auto-migrate.ts on startup.
+-- All CREATE statements use IF NOT EXISTS so re-applying is idempotent.
 
--- Profiles table
-CREATE TABLE IF NOT EXISTS profiles (
-  id SERIAL PRIMARY KEY,
-  user_id INTEGER NOT NULL,
-  name TEXT NOT NULL,
-  expertise TEXT NOT NULL CHECK (expertise IN ('beginner', 'intermediate', 'advanced', 'expert')),
-  focus TEXT NOT NULL CHECK (focus IN ('concepts', 'methodology', 'results', 'applications', 'all')),
-  depth TEXT NOT NULL CHECK (depth IN ('brief', 'moderate', 'detailed', 'comprehensive')),
-  context TEXT NOT NULL CHECK (context IN ('quick_review', 'learning', 'research', 'teaching')),
-  custom_preferences TEXT, -- JSON for extensibility
-  created_at TIMESTAMP DEFAULT NOW(),
-  updated_at TIMESTAMP DEFAULT NOW(),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- Articles table
+-- ─── Articles ─────────────────────────────────────────────────────────
+-- Uploaded scientific articles. `uploaded_by` stores the id of the
+-- participant who uploaded the file (no FK constraint; participants may be
+-- deleted while their articles remain accessible to the uploader's session).
 CREATE TABLE IF NOT EXISTS articles (
   id SERIAL PRIMARY KEY,
   title TEXT NOT NULL,
@@ -31,143 +14,100 @@ CREATE TABLE IF NOT EXISTS articles (
   doi TEXT,
   url TEXT,
   raw_text TEXT NOT NULL,
-  structured_content TEXT NOT NULL, -- JSON
+  structured_content TEXT NOT NULL,
   uploaded_by INTEGER,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Summaries table
--- `profile_id` references the legacy persona slots in `profiles` (98/99/100/
--- 101/102) and is preserved nullable for backward compatibility with the
--- historical N=9 experiment rows. New personalized summaries leave this
--- column NULL — the actual generation config travels in `profile_snapshot`.
-CREATE TABLE IF NOT EXISTS summaries (
-  id SERIAL PRIMARY KEY,
-  article_id INTEGER NOT NULL,
-  profile_id INTEGER,
-  content TEXT NOT NULL,
-  factuality_score REAL,
-  factuality_details TEXT, -- JSON
-  -- Per-summary snapshot of profile dimensions + auxiliary preferences that
-  -- were active at generation time. Lets the system reproduce what produced
-  -- this row even after the user edits their profile later.
-  profile_snapshot JSONB,
-  -- Lifecycle of the async factuality job: 'pending' | 'complete' | 'failed' | 'skipped'.
-  factuality_status TEXT DEFAULT 'pending',
-  generated_at TIMESTAMP DEFAULT NOW(),
-  FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
-  FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE
-);
-
--- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
-CREATE INDEX IF NOT EXISTS idx_summaries_article_id ON summaries(article_id);
-CREATE INDEX IF NOT EXISTS idx_summaries_profile_id ON summaries(profile_id);
-
--- Trigger function to update updated_at timestamps
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Drop triggers first to make re-runs idempotent, then recreate
-DROP TRIGGER IF EXISTS users_updated_at ON users;
-CREATE TRIGGER users_updated_at
-  BEFORE UPDATE ON users
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
-DROP TRIGGER IF EXISTS profiles_updated_at ON profiles;
-CREATE TRIGGER profiles_updated_at
-  BEFORE UPDATE ON profiles
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
--- ─── Experiment Mode Tables ──────────────────────────────────────────
-
--- Participants table — single flat profile per participant.
--- Each dimension/aux preference has a value column and a `_manual` boolean
--- indicating whether the value was last set via manual UI edit (true) or via
--- the questionnaire/CV path (false). Questionnaire and CV are frontend input
--- paths that write into the same columns.
+-- ─── Participants ─────────────────────────────────────────────────────
+-- Single flat profile per participant. Each profile dimension has a value
+-- column plus a `_manual` boolean flag marking whether the value was last
+-- set via manual UI edit (true) or via the questionnaire/CV path (false).
+-- Questionnaire and CV are frontend input paths that write the same columns.
+-- `profile_source` records the initial input path for the UI badge.
 CREATE TABLE IF NOT EXISTS participants (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
+  expertise TEXT,
+  focus TEXT,
+  depth TEXT,
+  context TEXT,
+  expertise_manual BOOLEAN NOT NULL DEFAULT FALSE,
+  focus_manual BOOLEAN NOT NULL DEFAULT FALSE,
+  depth_manual BOOLEAN NOT NULL DEFAULT FALSE,
+  context_manual BOOLEAN NOT NULL DEFAULT FALSE,
+  domain TEXT,
+  current_project TEXT,
+  domain_manual BOOLEAN DEFAULT FALSE,
+  current_project_manual BOOLEAN DEFAULT FALSE,
+  profile_source TEXT DEFAULT 'questionnaire',
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Unique constraint preventing duplicate generic summaries per article.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_generic_variant ON summaries(article_id, profile_id) WHERE profile_id IN (98, 99);
+-- ─── Access Codes ─────────────────────────────────────────────────────
+-- Magic-link tokens: rows with `expires_at` are single-use links, rejected
+-- after `consumed_at` is set. Permanent codes (the manager seed) leave both
+-- timestamps NULL and remain reusable.
+CREATE TABLE IF NOT EXISTS access_codes (
+  id SERIAL PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL,
+  role TEXT NOT NULL CHECK (role IN ('participant', 'manager')) DEFAULT 'participant',
+  participant_id INTEGER REFERENCES participants(id) ON DELETE SET NULL,
+  used_at TIMESTAMP,
+  expires_at TIMESTAMP,
+  consumed_at TIMESTAMP,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_access_codes_code ON access_codes(code);
+CREATE INDEX IF NOT EXISTS idx_access_codes_email ON access_codes(email);
 
--- ─── Embedded Feedback Tables ──────────────────────────────────────
+-- ─── Summaries ────────────────────────────────────────────────────────
+-- Every summary carries a `profile_snapshot` JSONB with the dimensions and
+-- auxiliary preferences that were active at generation time. The snapshot
+-- makes the row reproducible even after the participant edits their
+-- profile later, so each rating, regeneration, or factuality recompute
+-- ties back to the exact configuration that produced the text.
+--
+-- FineSurE 3-dim scores (Song et al. 2024) are persisted alongside:
+--   - factuality_score   → Eq. 1
+--   - completeness_score → Eq. 2a (NULL when no abstract is identifiable)
+--   - conciseness_score  → Eq. 2b (NULL when no abstract is identifiable)
+--   - factuality_keyfacts → per-keyfact alignment for the UI panel
+--
+-- `factuality_status` tracks the lifecycle of the asynchronous job:
+-- 'pending' | 'complete' | 'failed' | 'skipped'.
+CREATE TABLE IF NOT EXISTS summaries (
+  id SERIAL PRIMARY KEY,
+  article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  model_id TEXT,
+  profile_snapshot JSONB NOT NULL,
+  parent_summary_id INTEGER REFERENCES summaries(id) ON DELETE SET NULL,
+  factuality_score REAL,
+  factuality_details TEXT,
+  completeness_score REAL,
+  conciseness_score REAL,
+  factuality_keyfacts JSONB,
+  factuality_status TEXT DEFAULT 'pending',
+  generated_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_summaries_article_id ON summaries(article_id);
 
--- Likert ratings per summary, collected from the product summary view.
+-- ─── Summary Ratings ──────────────────────────────────────────────────
+-- Likert ratings collected from the product summary view. The unique index
+-- enforces one rating per (participant, summary) pair.
 CREATE TABLE IF NOT EXISTS summary_ratings (
   id SERIAL PRIMARY KEY,
-  summary_id INTEGER NOT NULL,
-  participant_id INTEGER,
+  summary_id INTEGER NOT NULL REFERENCES summaries(id) ON DELETE CASCADE,
+  participant_id INTEGER REFERENCES participants(id) ON DELETE CASCADE,
   source TEXT DEFAULT 'product',
   utilidade INTEGER NOT NULL CHECK (utilidade BETWEEN 1 AND 5),
   clareza INTEGER NOT NULL CHECK (clareza BETWEEN 1 AND 5),
   adequacao_perfil INTEGER NOT NULL CHECK (adequacao_perfil BETWEEN 1 AND 5),
   factualidade_percebida INTEGER NOT NULL CHECK (factualidade_percebida BETWEEN 1 AND 5),
   comment TEXT,
-  created_at TIMESTAMP DEFAULT NOW(),
-  FOREIGN KEY (summary_id) REFERENCES summaries(id) ON DELETE CASCADE,
-  FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE CASCADE
+  created_at TIMESTAMP DEFAULT NOW()
 );
--- idx_summary_ratings_participant (WHERE source = 'product') is created in
--- auto-migrate.ts AFTER the source column is added via ALTER TABLE, to remain
--- compatible with pre-existing databases where the column did not yet exist.
-
--- ─── Access Codes (Auth) ─────────────────────────────────────────────
-
-CREATE TABLE IF NOT EXISTS access_codes (
-  id SERIAL PRIMARY KEY,
-  code TEXT NOT NULL UNIQUE,
-  email TEXT NOT NULL,
-  role TEXT NOT NULL CHECK (role IN ('participant', 'manager')) DEFAULT 'participant',
-  participant_id INTEGER,
-  used_at TIMESTAMP,
-  expires_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT NOW(),
-  FOREIGN KEY (participant_id) REFERENCES participants(id) ON DELETE SET NULL
-);
-CREATE INDEX IF NOT EXISTS idx_access_codes_code ON access_codes(code);
-CREATE INDEX IF NOT EXISTS idx_access_codes_email ON access_codes(email);
-
--- ─── Profile dimensions ─────────────────────────────────────────
--- Each dimension is a single value column plus a `_manual` boolean flag
--- that marks whether the value was last set via manual edit. The flag is
--- the only source-tracking signal at the backend layer; the questionnaire
--- and CV flows both write the value with manual=false.
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS expertise TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS focus TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS depth TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS context TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS expertise_manual BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS focus_manual BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS depth_manual BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS context_manual BOOLEAN NOT NULL DEFAULT FALSE;
-
--- Auxiliary profile preferences.
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project TEXT;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS domain_manual BOOLEAN DEFAULT FALSE;
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS current_project_manual BOOLEAN DEFAULT FALSE;
-
--- Initial input path (questionnaire | cv). Informational only — the
--- backend treats both paths identically for dimension storage.
-ALTER TABLE participants ADD COLUMN IF NOT EXISTS profile_source TEXT DEFAULT 'questionnaire';
-
--- ─── Model Tracking ───────────────────────────────────────────────
-
-ALTER TABLE summaries ADD COLUMN IF NOT EXISTS model_id TEXT;
-
--- ─── Guided Regeneration Lineage ──────────────────────────────────
-
-ALTER TABLE summaries ADD COLUMN IF NOT EXISTS parent_summary_id INTEGER REFERENCES summaries(id) ON DELETE SET NULL;
-
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_product_rating ON summary_ratings(participant_id, summary_id) WHERE source = 'product';
+CREATE INDEX IF NOT EXISTS idx_summary_ratings_participant ON summary_ratings(participant_id) WHERE source = 'product';

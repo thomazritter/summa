@@ -1,16 +1,10 @@
 import { queryOne, execute } from '../db/connection.js';
 import { generateCompletion, getActiveModel, LLMError } from './groqClient.js';
-import {
-  buildSummarizationPrompt,
-  buildGenericSummarizationPrompt,
-  MAX_SUMMARY_OUTPUT_TOKENS,
-} from './promptBuilder.js';
+import { buildSummarizationPrompt, MAX_SUMMARY_OUTPUT_TOKENS } from './promptBuilder.js';
 import type { ParticipantPreferences } from './promptBuilder.js';
-import { getProfileById } from './profileService.js';
 import { checkFactuality } from './factualityChecker.js';
 import { safeJsonParse } from '../utils/validation.js';
-import { GENERIC_PROFILE_IDS, GENERIC_PROFILE_ID } from '../types/rows.js';
-import type { ArticleRow, SummaryRow, ParticipantRow } from '../types/rows.js';
+import type { ArticleRow, SummaryRow } from '../types/rows.js';
 import type { Summary, ArticleStructure, Profile } from '@summarizer/shared';
 
 export class SummarizationError extends Error {
@@ -27,72 +21,24 @@ export class NotFoundError extends Error {
   }
 }
 
-export const generateSummary = async (articleId: number, profileId: number, modelId?: string): Promise<Summary> => {
-  // Get article
-  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
-  if (!article) {
-    throw new NotFoundError('Article not found');
-  }
-
-  // Get profile
-  const profile = await getProfileById(profileId);
-  if (!profile) {
-    throw new NotFoundError('Profile not found');
-  }
-
-  const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
-
-  // Build prompt and generate
-  const prompt = buildSummarizationPrompt(profile, article.raw_text);
-
-  const effectiveModel = modelId || getActiveModel();
-  let summaryContent: string;
-  try {
-    summaryContent = await generateCompletion({
-      prompt,
-      temperature: 0.3,
-      maxTokens: MAX_SUMMARY_OUTPUT_TOKENS,
-      model: effectiveModel,
-    });
-  } catch (error) {
-    if (error instanceof LLMError) {
-      throw new SummarizationError(`Failed to generate summary: ${error.message}`);
-    }
-    throw error;
-  }
-
-  // Save summary
-  const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content, model_id)
-     VALUES ($1, $2, $3, $4)
-     RETURNING *`,
-    [articleId, profileId, summaryContent, effectiveModel],
-  );
-
-  if (!row) {
-    throw new SummarizationError('Failed to save summary');
-  }
-  return mapRowToSummary(row);
-};
-
 export const getSummaryById = async (id: number): Promise<Summary | null> => {
   const row = await queryOne<SummaryRow>('SELECT * FROM summaries WHERE id = $1', [id]);
-  if (!row) {
-    return null;
-  }
+  if (!row) return null;
   return mapRowToSummary(row);
 };
 
 /**
- * Run FineSurE 3-dim factuality verification in the background without blocking
- * the response. On success persists all three scores (faithfulness, completeness,
- * conciseness), the per-sentence verdicts, and the full per-keyfact alignment.
+ * Run FineSurE 3-dim factuality verification in the background without
+ * blocking the response. On success persists all three scores
+ * (faithfulness, completeness, conciseness), the per-sentence verdicts,
+ * and the full per-keyfact alignment. Completeness and conciseness are
+ * NULL when no abstract is identifiable (no keyfacts to align against).
  */
 const checkFactualityInBackground = (
   summaryId: number,
   summaryContent: string,
   structuredContent: ArticleStructure,
-  rawText: string
+  rawText: string,
 ): void => {
   // Fire-and-forget: do not await
   (async () => {
@@ -140,58 +86,9 @@ const checkFactualityInBackground = (
 };
 
 /**
- * Generate a generic summary (no profile parameterization).
- * Used as the control condition in the experiment.
- */
-export const generateGenericSummary = async (
-  articleId: number,
-  profileId: number = GENERIC_PROFILE_ID,
-  modelId?: string,
-): Promise<Summary> => {
-  const article = await queryOne<ArticleRow>('SELECT * FROM articles WHERE id = $1', [articleId]);
-  if (!article) {
-    throw new NotFoundError('Article not found');
-  }
-
-  const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
-  const prompt = buildGenericSummarizationPrompt(article.raw_text);
-
-  const effectiveModel = modelId || getActiveModel();
-  let summaryContent: string;
-  try {
-    summaryContent = await generateCompletion({
-      prompt,
-      temperature: 0.3,
-      maxTokens: MAX_SUMMARY_OUTPUT_TOKENS,
-      model: effectiveModel,
-    });
-  } catch (error) {
-    if (error instanceof LLMError) {
-      throw new SummarizationError(`Failed to generate generic summary: ${error.message}`);
-    }
-    throw error;
-  }
-
-  const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content, model_id)
-     VALUES ($1, $2, $3, $4)
-     RETURNING *`,
-    [articleId, profileId, summaryContent, effectiveModel],
-  );
-
-  if (!row) {
-    throw new SummarizationError('Failed to save generic summary');
-  }
-
-  // Run factuality check in background (non-blocking)
-  checkFactualityInBackground(row.id, summaryContent, structuredContent, article.raw_text);
-
-  return mapRowToSummary(row);
-};
-
-/**
- * Profile dimensions used for on-demand personalized generation.
- * Maps directly to the Profile type dimensions without requiring a stored profile entity.
+ * Profile dimensions used for on-demand personalized generation. Maps
+ * directly to the four prompt-facing Profile dimensions without requiring
+ * a stored profile entity.
  */
 export interface ProfileDimensions {
   expertise: Profile['expertise'];
@@ -202,13 +99,11 @@ export interface ProfileDimensions {
 
 /**
  * Generate a personalized summary on-demand using participant-specific
- * profile dimensions and preferences (domain, currentProject).
+ * profile dimensions and optional preferences (domain, currentProject).
  *
- * Accepts the four prompt-facing dimensions directly. The actual config
- * used to produce the summary travels in `summaries.profile_snapshot`;
- * `summaries.profile_id` is now nullable and left null for personalized
- * generations (the legacy 100/101/102 profile slots are still referenced
- * by historical experiment rows for grouping).
+ * The full generation config travels in `summaries.profile_snapshot`, so
+ * the row remains reproducible even after the participant edits their
+ * profile later.
  */
 export const generatePersonalizedSummary = async (
   articleId: number,
@@ -223,7 +118,7 @@ export const generatePersonalizedSummary = async (
 
   const structuredContent = safeJsonParse<ArticleStructure>(article.structured_content) || { sections: [] };
 
-  // Build a Profile-compatible object from the dimensions for the prompt builder
+  // Build a Profile-compatible object from the dimensions for the prompt builder.
   const profileForPrompt: Profile = {
     id: 0,
     userId: 0,
@@ -254,17 +149,14 @@ export const generatePersonalizedSummary = async (
     throw error;
   }
 
-  // Build the snapshot that will travel with this row forever, so we can
-  // reproduce what produced this summary even after the user edits their
-  // profile or preferences later.
   const profileSnapshot = {
     dimensions: profileDimensions,
     preferences: participantPreferences ?? null,
   };
 
   const row = await queryOne<SummaryRow>(
-    `INSERT INTO summaries (article_id, profile_id, content, model_id, profile_snapshot)
-     VALUES ($1, NULL, $2, $3, $4)
+    `INSERT INTO summaries (article_id, content, model_id, profile_snapshot)
+     VALUES ($1, $2, $3, $4)
      RETURNING *`,
     [articleId, summaryContent, effectiveModel, JSON.stringify(profileSnapshot)],
   );
@@ -273,22 +165,18 @@ export const generatePersonalizedSummary = async (
     throw new SummarizationError('Failed to save personalized summary');
   }
 
-  // Run factuality check in background (non-blocking)
   checkFactualityInBackground(row.id, summaryContent, structuredContent, article.raw_text);
 
   return mapRowToSummary(row);
 };
 
-const mapRowToSummary = (row: SummaryRow): Summary => {
-  return {
-    id: row.id,
-    articleId: row.article_id,
-    profileId: row.profile_id,
-    content: row.content,
-    factualityScore: row.factuality_score,
-    factualityDetails: safeJsonParse(row.factuality_details) || null,
-    modelId: row.model_id,
-    parentSummaryId: row.parent_summary_id ?? null,
-    generatedAt: new Date(row.generated_at),
-  };
-};
+const mapRowToSummary = (row: SummaryRow): Summary => ({
+  id: row.id,
+  articleId: row.article_id,
+  content: row.content,
+  factualityScore: row.factuality_score,
+  factualityDetails: safeJsonParse(row.factuality_details) || null,
+  modelId: row.model_id,
+  parentSummaryId: row.parent_summary_id ?? null,
+  generatedAt: new Date(row.generated_at),
+});

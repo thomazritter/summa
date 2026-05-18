@@ -1,39 +1,15 @@
 /**
- * Shared database row interfaces used across route handlers and services.
- *
- * These map directly to database column names (snake_case) and are used
- * as type parameters for queryOne/queryAll calls.
+ * Shared database row interfaces. These map directly to column names
+ * (snake_case) and are used as type parameters for queryOne/queryAll calls.
  */
-
-// ─── Shared Constants ────────────────────────────────────────────────
-//
-// The `profiles` table is seeded with control summaries (profile id 99 for
-// the current English-keeping variant; 98 was a legacy translated variant
-// kept only for historical rows). New personalized summaries no longer
-// reference a profile id — the actual personalization config travels in
-// `summaries.profile_snapshot`, and `summaries.profile_id` is now nullable.
-
-/** Profile ID used for the generic (control) summaries. */
-export const GENERIC_PROFILE_IDS = {
-  keepEnglish: 99,
-} as const;
-/** All generic profile IDs as an array. Profile 98 (legacy translated variant)
- *  is kept in historical rows but no new summaries are generated under it. */
-export const ALL_GENERIC_PROFILE_IDS: readonly number[] = [98, 99];
-/** @deprecated Use GENERIC_PROFILE_IDS.keepEnglish instead. */
-export const GENERIC_PROFILE_ID = GENERIC_PROFILE_IDS.keepEnglish;
-
-// ─── Row Interfaces ──────────────────────────────────────────────────
 
 export interface ParticipantRow {
   id: number;
   name: string;
-  // Four dimensions: a single value per dimension, with a per-dimension
-  // `_manual` boolean indicating whether the value was last set via manual
-  // UI edit (true) versus the questionnaire or CV path (false). The split
-  // collapses the legacy `override_*` / `cv_*` columns into one canonical
-  // value, while preserving the source badge ("Derivado" vs "Editado
-  // manualmente") on the frontend.
+  // Four dimensions plus a per-dimension `_manual` flag marking whether the
+  // value was last set via manual UI edit (true) or via questionnaire/CV.
+  // Questionnaire and CV are frontend input paths that write the same columns;
+  // the flag preserves the source badge ("Derivado" vs "Editado manualmente").
   expertise: string | null;
   focus: string | null;
   depth: string | null;
@@ -42,13 +18,12 @@ export interface ParticipantRow {
   focus_manual: boolean;
   depth_manual: boolean;
   context_manual: boolean;
-  // Auxiliary preferences (same shape).
   domain: string | null;
   current_project: string | null;
   domain_manual: boolean | null;
   current_project_manual: boolean | null;
-  // Whether the participant first arrived via questionnaire or CV upload.
-  // Informational only — no longer used to compute or override dimensions.
+  // Initial input path (questionnaire | cv). Informational only — both paths
+  // write the same value columns.
   profile_source: string;
   created_at: string;
 }
@@ -69,18 +44,17 @@ export interface ArticleRow {
 export interface SummaryRow {
   id: number;
   article_id: number;
-  profile_id: number;
   content: string;
+  model_id: string | null;
+  /** JSONB — dimensions + auxiliary preferences active at generation time. */
+  profile_snapshot: string;
+  parent_summary_id: number | null;
   factuality_score: number | null;
   factuality_details: string | null;
   completeness_score: number | null;
   conciseness_score: number | null;
   /** Serialized JSONB: KeyfactAlignment[] from KeyfactAlignmentResult. */
   factuality_keyfacts: string | null;
-  model_id: string | null;
-  parent_summary_id: number | null;
-  profile_snapshot: string | null;
   factuality_status: 'pending' | 'complete' | 'failed' | 'skipped' | null;
   generated_at: string;
 }
-

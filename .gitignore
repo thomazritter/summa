@@ -40,3 +40,4 @@ packages/api/uploads/
 
 # Data exports
 data/
+/packages/api/src/scripts_archive/
