@@ -36,6 +36,7 @@ export function SummaryView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [factInfoOpen, setFactInfoOpen] = useState(false);
+  const [highlightsOn, setHighlightsOn] = useState(true);
 
   const summaryId = Number(id);
   const { data: articles, isLoading } = useQuery({
@@ -250,9 +251,34 @@ export function SummaryView() {
             </div>
           )}
 
+          {displaySummary.factualityDetails && displaySummary.factualityDetails.length > 0 && (
+            <div className="mb-3 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setHighlightsOn((v) => !v)}
+                aria-pressed={highlightsOn}
+                className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-200 rounded-full hover:border-gray-300 hover:bg-gray-50 transition-colors text-gray-600"
+              >
+                <span
+                  className={`inline-block w-7 h-4 rounded-full relative transition-colors ${
+                    highlightsOn ? 'bg-[#2563eb]' : 'bg-gray-300'
+                  }`}
+                  aria-hidden="true"
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-white transition-transform ${
+                      highlightsOn ? 'translate-x-3' : ''
+                    }`}
+                  />
+                </span>
+                Destaques de factualidade
+              </button>
+            </div>
+          )}
+
           <FactualityHighlightedMarkdown
             content={displaySummary.content}
-            factualityDetails={displaySummary.factualityDetails}
+            factualityDetails={highlightsOn ? displaySummary.factualityDetails : null}
           />
 
           {displaySummary.keyfactAlignment && displaySummary.keyfactAlignment.length > 0 && (() => {
