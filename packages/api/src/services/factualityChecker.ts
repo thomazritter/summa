@@ -88,6 +88,24 @@ export const splitIntoSentences = (text: string): string[] => {
     .filter((s) => s.length > 0);
 };
 
+// A "section heading" is a sentence that carries no factual claim — typically
+// a bold/markdown label like "**Resultados Principais:**" or "Metodologia:"
+// that ends in a colon. These should be auto-classified as `no error` and
+// excluded from the LLM fact-checking call (sending them as factuality
+// inputs both wastes tokens and tends to produce spurious `neutral` labels
+// because the LLM has nothing in the transcript to anchor against).
+const HEADING_REGEX = /^\s*\*+[^*\n]{1,80}?\*+:?\s*$|^[\p{Lu}\p{Ll}\s\p{P}]{1,80}:\s*$/u;
+export const isSectionHeading = (sentence: string): boolean => HEADING_REGEX.test(sentence);
+
+const NORM_KEY_LEN = 60;
+const normalizeForMatch = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/[*_`#~]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, NORM_KEY_LEN);
+
 // ─── FineSurE pipeline pieces ───────────────────────────────────────
 
 export interface FaithfulnessResult {
@@ -187,22 +205,63 @@ export const checkFactuality = async (
     return { score: null, results: [], completeness: null, conciseness: null, keyfacts: [], keyfactAlignment: [] };
   }
 
-  // Task 1 — Fact Checking against the raw article text.
-  const faith = await checkFaithfulness(sentences, rawText);
+  // Section headings (`**Resultados Principais:**`, `Metodologia:`, ...)
+  // are structural markers — not assertions the LLM "thought through"
+  // against the article — so they are left out of fact-checking entirely:
+  // they are not sent to the FineSurE prompt, do not appear in
+  // `factuality_details`, and do not enter the score denominator. The
+  // frontend renders them as plain markdown headings (no underline)
+  // because no matching entry exists in the per-sentence index.
+  const contentSentences = sentences.filter((s) => !isSectionHeading(s));
 
-  const results: FactualityResult[] = sentences.map((sentence, i) => {
-    const category = faith.predTypes[i] ?? 'other error';
+  const faith = contentSentences.length > 0
+    ? await checkFaithfulness(contentSentences, rawText)
+    : { predLabels: [], predTypes: [], reasons: [], sentences: [] };
+
+  // Reconcile the LLM's response with the content sentences we sent. When
+  // the LLM emits more (hallucinated) or fewer (truncated) entries than
+  // expected, we match by echoed `sentence` text first and fall back to
+  // positional order for any sentence the LLM omitted. This isolates the
+  // verbatim FineSurE prompt from the Llama-side count drift previously
+  // observed (35 %+ of summaries had a mismatch between `factuality_score`
+  // and the per-sentence labels stored in `factuality_details`).
+  const remaining = faith.predTypes.map((category, i) => ({
+    category,
+    reason: faith.reasons[i] ?? '',
+    sentence: faith.sentences[i] ?? '',
+    used: false,
+  }));
+  const results: FactualityResult[] = contentSentences.map((sentence) => {
+    const key = normalizeForMatch(sentence);
+    let match = remaining.find((r) => !r.used && normalizeForMatch(r.sentence) === key);
+    if (!match) {
+      match = remaining.find((r) => !r.used);
+    }
+    if (match) {
+      match.used = true;
+      return {
+        sentence,
+        label: mapCategoryToLabel(match.category),
+        confidence: 1.0,
+        category: match.category,
+        rationale: match.reason,
+      };
+    }
     return {
       sentence,
-      label: mapCategoryToLabel(category),
+      label: 'neutral',
       confidence: 1.0,
-      category,
-      rationale: faith.reasons[i] ?? '',
+      category: 'other error',
+      rationale: '',
     };
   });
-  const faithfulnessScore = faith.predLabels.length > 0
-    ? computeFaithfulnessScore(faith.predLabels)
-    : null;
+
+  // Score is the fraction of CONTENT sentences classified as `no error`.
+  // Building it from `results` (which only contains content sentences and
+  // is the same array shipped to the frontend) keeps the aggregate
+  // percentage perfectly aligned with the per-sentence underlines.
+  const labels = results.map((r) => (r.category.toLowerCase() === 'no error' ? 0 : 1));
+  const faithfulnessScore = labels.length > 0 ? computeFaithfulnessScore(labels) : null;
 
   // Tasks 2a + 2b — Keyfact Extraction (from abstract) + Alignment.
   const abstract = articleStructure.abstract?.trim() ?? '';

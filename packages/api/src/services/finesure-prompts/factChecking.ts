@@ -13,18 +13,14 @@
  *   arXiv:2407.00908v3. §3.2 (Task 1) + Appendix B Figure 3.
  *
  * Fidelity:
- *   Prompt text reproduced VERBATIM from utils.py, with ONE deviation: the
- *   summary sentences are prepended with a 1-based index ("1. ...", "2. ...")
- *   so the LLM has an explicit positional anchor and stops emitting more (or
- *   fewer) classifications than the input sentence count. The verbatim port
- *   joined sentences with a bare newline, which led to a ~36 % rate of
- *   sentence-count mismatch on Llama 3.3 70B and a 35 %-of-summaries
- *   inconsistency between the per-sentence labels stored in
- *   `factuality_details` and the aggregate `factuality_score`. Numbering
- *   the input is documented as the fourth methodological adaptation of the
- *   verbatim FineSurE port (alongside backbone, cross-lingual, and
- *   scientific-domain extensions registered in TCC §4.5). Parser is ported
- *   verbatim with the same three-tier fallback strategy.
+ *   Prompt text reproduced VERBATIM from utils.py. Parser ported with the same
+ *   three-tier fallback strategy. Do not edit prompt text without paper review.
+ *   The caller (checkFactuality) is responsible for filtering out heading-only
+ *   sentences before invoking this prompt and for reconciling the LLM's output
+ *   array against the input sentence list by content (a positional mismatch
+ *   between LLM-emitted and input sentence counts is the documented Llama-side
+ *   failure mode — handled outside the prompt to keep the FineSurE wording
+ *   unchanged).
  */
 
 export const ERROR_TYPES = [
@@ -52,14 +48,11 @@ export interface FactCheckParseResult {
 }
 
 /**
- * Port of get_fact_checking_prompt(input, sentences) from utils.py L32-73,
- * with the sentence list numbered (1-based) so the LLM emits exactly one
- * classification per input sentence — see the file header for the rationale
- * behind this single deviation from the verbatim FineSurE prompt.
+ * Verbatim port of get_fact_checking_prompt(input, sentences) from utils.py L32-73.
  */
 export function buildFactCheckingPrompt(input: string, sentences: string[]): string {
   const numSentences = String(sentences.length);
-  const joinedSentences = sentences.map((s, i) => `${i + 1}. ${s}`).join('\n');
+  const joinedSentences = sentences.join('\n');
 
   return `
 You will receive a transcript followed by a corresponding summary. Your task is to assess the factuality of each summary sentence across nine categories:
@@ -84,7 +77,7 @@ Provide your answer in JSON format. The answer should be a list of dictionaries 
 Transcript:
 ${input}
 
-Summary with ${numSentences} sentences (numbered 1 through ${numSentences} below — return exactly ${numSentences} classification entries in the same order; do NOT include the leading number in the "sentence" field of your output):
+Summary with ${numSentences} sentences:
 ${joinedSentences}
 `;
 }
