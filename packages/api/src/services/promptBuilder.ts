@@ -54,14 +54,54 @@ const DEPTH_INSTRUCTIONS: Record<Profile['depth'], string> = {
 // `**Header:**` prefix acts as the antecedent for downstream pronouns
 // ("A abordagem...", "Esse sistema..."). Stripping the prefix later breaks
 // coreference; keeping it pollutes the FineSurE prompt with structural
-// markers. Plain section breaks (newline + bullet list, or a short
-// label-then-newline pattern without bold) avoid both failure modes.
+// markers. Section labels live on their own line (so they parse as a
+// standalone heading that the factuality checker skips entirely), and
+// bullets are emitted as plain "- " list items — never with a bold
+// in-sentence prefix.
 const STRUCTURE_INSTRUCTIONS: Record<NonNullable<ParticipantPreferences['structurePreference']>, string> = {
-  prose: 'Formato: escreva em parágrafos corridos e fluidos. Não use bullet points, listas ou cabeçalhos em negrito.',
-  bullets:
-    'Formato: organize as informações em listas com bullet points (linhas iniciadas por "- "). Use listas para pontos principais, resultados e conclusões. Minimize parágrafos longos. NÃO use cabeçalhos em negrito do tipo "**Resultados:**" no meio do texto — se precisar de uma seção, use uma linha curta sem negrito seguida da lista.',
-  mixed:
-    'Formato: combine parágrafos explicativos com listas de bullets (linhas iniciadas por "- ") para dados, resultados e contribuições. Use parágrafos para contexto e listas para pontos objetivos. NÃO use marcadores em negrito do tipo "**Tópico:** conteúdo" no meio de uma frase — eles confundem a verificação de factualidade. Para introduzir uma seção, use uma linha em negrito curta seguida do conteúdo numa nova linha, ou inicie diretamente o parágrafo/lista sem rótulo em negrito.',
+  prose:
+    'Formato: parágrafos corridos. NÃO use bullet points, listas ou cabeçalhos em negrito.',
+
+  bullets: `Formato: organize a maior parte do resumo em listas com bullets ("- " no início de cada linha). Use uma lista para cada bloco temático (visão geral, metodologia, resultados, conclusões). Cabeçalhos de seção, quando usados, ficam SOZINHOS em uma linha, em negrito, separados do conteúdo pela quebra de linha. NUNCA escreva "**Tópico:** conteúdo" na mesma linha.
+
+Exemplo do formato esperado:
+
+**Visão Geral**
+
+- O sistema X foi proposto para resolver Y.
+- Atinge desempenho competitivo com Z.
+
+**Metodologia**
+
+- Baseia-se na abordagem A.
+- Os autores combinam B e C.
+
+**Resultados**
+
+- Ganho de 3% em métrica D.
+- Latência de 4 ms.`,
+
+  mixed: `Formato: alterne entre parágrafos curtos (1-3 frases) para contexto e listas com bullets ("- " no início de cada linha) para enumerar resultados, contribuições, etapas de metodologia ou métricas. O resumo final DEVE conter ao menos uma lista de bullets além dos parágrafos. Cabeçalhos de seção, quando usados, ficam SOZINHOS em uma linha em negrito, separados do conteúdo pela quebra de linha. NUNCA escreva "**Tópico:** conteúdo" na mesma linha.
+
+Exemplo do formato esperado:
+
+O sistema X foi proposto pelos autores para resolver o problema Y, comum em domínios de tipo Z.
+
+**Metodologia**
+
+A abordagem combina três componentes principais:
+
+- Componente A para a etapa inicial.
+- Componente B para refinar os resultados.
+- Componente C para a saída final.
+
+**Resultados**
+
+Em experimentos com o conjunto W, o sistema obteve as seguintes melhorias:
+
+- 3% em interações diárias.
+- 7% em visualizações totais.
+- Latência de 4 ms para índices de 1 bilhão de entradas.`,
 };
 
 const buildDirectives = (profile: Profile, participantPreferences?: ParticipantPreferences): string => {
