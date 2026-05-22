@@ -13,12 +13,29 @@
  */
 
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync } from 'fs';
+import { execSync } from 'child_process';
 import path from 'path';
 import type { Profile, ArticleStructure } from '@summarizer/shared';
 import { extractRawText, structureRawText } from '../services/pdfProcessor.js';
 import { checkFactuality } from '../services/factualityChecker.js';
 import { generateCompletion, AVAILABLE_MODELS } from '../services/groqClient.js';
 import { generateForVariant, type VariantId, type LlmCall } from './promptVariants.js';
+
+const safeGitRev = (): string => {
+  try {
+    return execSync('git rev-parse --short HEAD', { cwd: '/Users/thomazjusto/Documents/TCC/project/summarizer' }).toString().trim();
+  } catch {
+    return 'unknown';
+  }
+};
+const safeGitDirty = (): string => {
+  try {
+    const out = execSync('git status --porcelain', { cwd: '/Users/thomazjusto/Documents/TCC/project/summarizer' }).toString().trim();
+    return out.length > 0 ? 'dirty' : 'clean';
+  } catch {
+    return 'unknown';
+  }
+};
 
 // ─── Config ────────────────────────────────────────────────────────
 const PAPERS_DIR = '/Users/thomazjusto/Documents/TCC/papers_pdf';
@@ -118,13 +135,31 @@ async function main() {
   };
 
   const totalRuns = MODELS.length * PROFILES.length * ARTICLES.length;
+  const gitRev = safeGitRev();
+  const gitDirty = safeGitDirty();
+  const finesureModel = process.env.FINESURE_MODEL || 'llama-3.3-70b-versatile';
   log(`\n🚀 BENCHMARK MODELS — run ${runId}`);
-  log(`Output: ${outputDir}`);
-  log(`Prompt variant fixed: ${VARIANT}`);
-  log(`Articles: ${ARTICLES.map((a) => a.id).join(', ')}`);
-  log(`Profiles: ${PROFILES.map((p) => p.name).join(', ')}`);
-  log(`Models:   ${MODELS.map((m) => m.id).join(', ')}`);
-  log(`Total runs: ${totalRuns}  (${MODELS.length} × ${PROFILES.length} × ${ARTICLES.length})`);
+  log(`Output:               ${outputDir}`);
+  log(`Prompt variant fixed: ${VARIANT}  (override via BENCH_VARIANT)`);
+  log(`FineSurE model:       ${finesureModel}  (override via FINESURE_MODEL)`);
+  log(`Git commit:           ${gitRev} (${gitDirty})`);
+  log(`Articles:             ${ARTICLES.map((a) => a.id).join(', ')}`);
+  log(`Profiles:             ${PROFILES.map((p) => p.name).join(', ')}`);
+  log(`Models:               ${MODELS.map((m) => m.id).join(', ')}`);
+  log(`Total runs:           ${totalRuns}  (${MODELS.length} × ${PROFILES.length} × ${ARTICLES.length})`);
+
+  const metadataPath = path.join(outputDir, 'run.meta.json');
+  writeFileSync(metadataPath, JSON.stringify({
+    runId,
+    variant: VARIANT,
+    finesureModel,
+    gitRev,
+    gitDirty,
+    articles: ARTICLES.map((a) => a.id),
+    profiles: PROFILES.map((p) => p.name),
+    models: MODELS.map((m) => m.id),
+    totalRuns,
+  }, null, 2));
 
   // ─── Pré-carregar artigos ──────────────────────────────────────────
   log(sep('PRÉ-CARGA: extrair + estruturar artigos (1 vez por artigo)'));

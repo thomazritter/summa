@@ -203,23 +203,17 @@ export const checkFactuality = async (
     return { score: null, results: [], completeness: null, conciseness: null, keyfacts: [], keyfactAlignment: [] };
   }
 
-  // Standalone section headings (`**Resultados Principais:**`,
-  // `Metodologia:`, ...) carry no factual claim — they are left out of
-  // fact-checking entirely: not sent to the LLM, not present in
-  // `factuality_details`, not in the score denominator. The frontend
-  // renders them as plain markdown headings (no underline) because no
-  // matching entry exists in the per-sentence highlight index.
+  // FineSurE oficial (DISL-Lab/FineSurE-ACL24) não filtra section headings —
+  // o pipeline lê `sentences` diretamente do input JSON e alimenta o prompt sem
+  // inspecionar o conteúdo. Para manter os escores fielmente comparáveis ao
+  // paper, Summa também passa todas as frases (incluindo headings) para os dois
+  // prompts e usa o mesmo denominador (`sentences.length`) em Eq. 1 e Eq. 2b.
   //
-  // Inline-header sentences (`**Topic:** content...`) are sent to the LLM
-  // intact — stripping the marker would remove the antecedent the rest
-  // of the sentence relies on (e.g. "A abordagem reduziu..."), pushing
-  // the LLM toward spurious coreference errors. The structure-preference
-  // prompt at generation time discourages the `**Header:**` pattern in
-  // favor of plain markdown bullets so this case is rare.
-  const contentSentences = sentences.filter((s) => !isSectionHeading(s));
-
-  const faith = contentSentences.length > 0
-    ? await checkFaithfulness(contentSentences, rawText)
+  // A função `isSectionHeading` é mantida exportada para a UI (renderização
+  // sem sublinhado quando a frase é um cabeçalho), mas não é mais aplicada
+  // no caminho de scoring.
+  const faith = sentences.length > 0
+    ? await checkFaithfulness(sentences, rawText)
     : { predLabels: [], predTypes: [], reasons: [], sentences: [] };
 
   // Reconcile the LLM's response with the content sentences we sent. When
@@ -235,7 +229,7 @@ export const checkFactuality = async (
     sentence: faith.sentences[i] ?? '',
     used: false,
   }));
-  const results: FactualityResult[] = contentSentences.map((origSentence) => {
+  const results: FactualityResult[] = sentences.map((origSentence) => {
     const key = normalizeForMatch(origSentence);
     let match = remaining.find((r) => !r.used && normalizeForMatch(r.sentence) === key);
     if (!match) {
@@ -260,10 +254,10 @@ export const checkFactuality = async (
     };
   });
 
-  // Score is the fraction of CONTENT sentences classified as `no error`.
-  // Building it from `results` (which only contains content sentences and
-  // is the same array shipped to the frontend) keeps the aggregate
-  // percentage perfectly aligned with the per-sentence underlines.
+  // Score is the fraction of ALL sentences classified as `no error`, in line
+  // with Eq. 1 do FineSurE (denominador = total de frases do resumo). O mesmo
+  // conjunto `sentences` alimenta o denominador de conciseness em Eq. 2b
+  // mais abaixo, mantendo as duas métricas calculadas sobre |S| idêntico.
   const labels = results.map((r) => (r.category.toLowerCase() === 'no error' ? 0 : 1));
   const faithfulnessScore = labels.length > 0 ? computeFaithfulnessScore(labels) : null;
 
