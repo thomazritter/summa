@@ -35,6 +35,8 @@ export interface Article {
 }
 
 export interface ArticleStructure {
+  title?: string;
+  authors?: string;
   abstract?: string;
   introduction?: string;
   methodology?: string;

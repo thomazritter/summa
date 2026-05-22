@@ -49,13 +49,19 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
   // Resolve uploaded_by from access code if present
   const uploadedBy = req.accessCode?.participantId ?? null;
 
+  // Prefer the LLM-extracted title/authors (from structureRawText) over the
+  // PDF metadata heuristics, since scientific PDFs frequently carry empty or
+  // generator-default Title/Author fields.
+  const resolvedTitle = structuredContent.title || metadata.title || 'Untitled Article';
+  const resolvedAuthors = structuredContent.authors || metadata.authors || null;
+
   const inserted = await queryOne<ArticleRow>(
     `INSERT INTO articles (title, authors, raw_text, structured_content, uploaded_by)
      VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
     [
-      metadata.title || 'Untitled Article',
-      metadata.authors || null,
+      resolvedTitle,
+      resolvedAuthors,
       rawText,
       JSON.stringify(structuredContent),
       uploadedBy,

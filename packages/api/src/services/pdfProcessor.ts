@@ -77,9 +77,11 @@ export const processPDF = async (buffer: Buffer): Promise<PDFProcessingResult> =
 };
 
 /**
- * Use the LLM to identify and extract the abstract from raw text. The abstract
- * is the only section the downstream pipeline (FineSurE keyfact extraction)
- * consumes, so the structurer extracts only that.
+ * Use the LLM to identify and extract the abstract, title and authors from raw
+ * text. The abstract is the only section the downstream pipeline (FineSurE
+ * keyfact extraction) consumes; title and authors fill the article record so
+ * the UI can show them without depending on the brittle PDF metadata or
+ * heuristic regex.
  *
  * Input is passed in full — truncating biases the abstract identification
  * (especially for editorial formats that place the abstract between authors
@@ -89,14 +91,18 @@ export const processPDF = async (buffer: Buffer): Promise<PDFProcessingResult> =
  */
 const structureWithLLM = async (rawText: string): Promise<ArticleStructure | null> => {
   try {
-    const prompt = `Analise este texto de artigo científico e identifique o resumo/abstract do artigo.
+    const prompt = `Analise este texto de artigo científico e identifique o título, os autores e o resumo/abstract.
 Retorne APENAS um JSON válido (sem markdown, sem \`\`\`, sem texto antes ou depois):
 {
+  "title": "título completo do artigo, copiado integralmente do texto, ou null",
+  "authors": "lista de autores separados por vírgula, na ordem em que aparecem, ou null",
   "abstract": "texto completo do abstract ou null"
 }
 
 IMPORTANTE: COPIE o texto original do abstract integralmente. NÃO resuma nem altere o conteúdo.
-Use null (sem aspas) caso o abstract não seja encontrado no texto.
+Para o título, use o texto exato como aparece no artigo (sem reformatar).
+Para os autores, capture os nomes que aparecem na linha de autoria, normalmente logo abaixo do título.
+Use null (sem aspas) para qualquer campo que não seja encontrado no texto.
 
 ABSTRACT SEM RÓTULO EXPLÍCITO: alguns artigos (notadamente os do formato
 Nature Communications) não trazem o cabeçalho "Abstract:" antes do resumo
@@ -131,13 +137,20 @@ ${rawText}`;
     const jsonStr = cleaned.slice(startIdx, endIdx + 1);
     const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
 
-    const value = parsed.abstract;
-    if (typeof value !== 'string' || value.trim().length === 0) {
+    const abstractValue = parsed.abstract;
+    if (typeof abstractValue !== 'string' || abstractValue.trim().length === 0) {
       console.warn('[PDF] LLM structuring returned no abstract');
       return null;
     }
 
-    return { abstract: value, sections: [] };
+    const titleValue = typeof parsed.title === 'string' && parsed.title.trim().length > 0
+      ? parsed.title.trim()
+      : undefined;
+    const authorsValue = typeof parsed.authors === 'string' && parsed.authors.trim().length > 0
+      ? parsed.authors.trim()
+      : undefined;
+
+    return { title: titleValue, authors: authorsValue, abstract: abstractValue, sections: [] };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.warn('[PDF] LLM structuring failed, will use regex fallback:', message);
