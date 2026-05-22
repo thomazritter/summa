@@ -50,7 +50,7 @@ const EXPERTISE_TEXT: Record<Profile['expertise'], string> = {
 
 const FOCUS_TEXT: Record<Profile['focus'], string> = {
   concepts: 'Foco principal: conceitos e ideias centrais. Explique o problema que o artigo aborda e as ideias propostas.',
-  methodology: 'Foco principal: metodologia. Descreva em detalhe como o estudo foi conduzido — participantes, procedimentos, ferramentas, métricas, escala.',
+  methodology: 'Foco principal: metodologia. Descreva em detalhe como o estudo foi conduzido: participantes, procedimentos, ferramentas, métricas, escala.',
   results: 'Foco principal: resultados. Apresente os achados com números específicos, porcentagens e comparações.',
   applications: 'Foco principal: aplicações práticas. Destaque as implicações concretas dos resultados e como podem ser aplicadas.',
   all: 'Cubra de forma equilibrada: problema/conceitos, metodologia, resultados quantitativos e implicações práticas.',
@@ -58,10 +58,10 @@ const FOCUS_TEXT: Record<Profile['focus'], string> = {
 
 // Numeric depth targets per retkowski2024lengthcontrol
 const DEPTH_TEXT: Record<Profile['depth'], string> = {
-  brief: 'Extensão: breve — 1 a 2 parágrafos curtos, aproximadamente 100 palavras. Apenas os pontos essenciais.',
-  moderate: 'Extensão: moderada — 3 a 4 parágrafos, aproximadamente 250 palavras. Pontos principais com alguns detalhes de suporte.',
-  detailed: 'Extensão: detalhada — 5 a 7 parágrafos, aproximadamente 500 palavras. Inclua explicações complementares, contexto e detalhes relevantes.',
-  comprehensive: 'Extensão: abrangente — 7 a 10 parágrafos, aproximadamente 900 palavras. Cubra todos os aspectos relevantes com profundidade.',
+  brief: 'Extensão: breve, 1 a 2 parágrafos curtos, aproximadamente 100 palavras. Apenas os pontos essenciais.',
+  moderate: 'Extensão: moderada, 3 a 4 parágrafos, aproximadamente 250 palavras. Pontos principais com alguns detalhes de suporte.',
+  detailed: 'Extensão: detalhada, 5 a 7 parágrafos, aproximadamente 500 palavras. Inclua explicações complementares, contexto e detalhes relevantes.',
+  comprehensive: 'Extensão: abrangente, 7 a 10 parágrafos, aproximadamente 900 palavras. Cubra todos os aspectos relevantes com profundidade.',
 };
 
 const buildContentBlock = (rawText: string): string => rawText;
@@ -148,7 +148,7 @@ DESCRIÇÃO DO LEITOR:`;
 
   const summaryPrompt = `Você é um assistente especializado em resumir artigos científicos de forma personalizada. Gere o resumo inteiramente em português.
 
-DESCRIÇÃO DO LEITOR-ALVO (gerada na etapa anterior — use como referência ao decidir o tom, foco e profundidade):
+DESCRIÇÃO DO LEITOR-ALVO (gerada na etapa anterior, use como referência ao decidir o tom, foco e profundidade):
 ${readerDescription}
 
 DIRETIVAS DERIVADAS DO PERFIL:
@@ -173,7 +173,7 @@ ${buildProfileBlock(profile)}
 INSTRUÇÕES DE FIDELIDADE (siga obrigatoriamente):
 1. Antes de redigir, identifique mentalmente as principais alegações do artigo no idioma original (inglês), incluindo metodologia, resultados quantitativos e conclusões.
 2. Para cada alegação que pretende incluir no resumo em português, confirme que ela está apoiada de forma direta por trechos específicos do artigo.
-3. Caso uma alegação não esteja explicitamente suportada pelo texto, omita-a — não introduza afirmações além do que o conteúdo sustenta.
+3. Caso uma alegação não esteja explicitamente suportada pelo texto, omita-a. Não introduza afirmações além do que o conteúdo sustenta.
 4. Mantenha o estilo e a profundidade pedidos pelas diretivas do perfil acima.
 
 ---
