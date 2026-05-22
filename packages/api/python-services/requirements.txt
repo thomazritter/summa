@@ -1,3 +1,0 @@
-# PDF Service
-pymupdf==1.24.5
-flask==3.0.3
