@@ -83,33 +83,6 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
   });
 }));
 
-// Download article raw text as file. Ownership-scoped.
-articleRoutes.get('/:id/download', asyncHandler(async (req: Request, res: Response) => {
-  const id = parseId(req.params.id);
-  if (id === null) {
-    return res.status(400).json({ error: 'Invalid article ID' });
-  }
-
-  const participantId = req.accessCode?.participantId;
-  if (!participantId) {
-    return res.status(404).json({ error: 'Article not found' });
-  }
-
-  const article = await queryOne<{ title: string; raw_text: string }>(
-    'SELECT title, raw_text FROM articles WHERE id = $1 AND uploaded_by = $2',
-    [id, participantId]
-  );
-
-  if (!article) {
-    return res.status(404).json({ error: 'Article not found' });
-  }
-
-  const safeTitle = article.title.replace(/[^a-zA-Z0-9_\-. ]/g, '_');
-  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-  res.setHeader('Content-Disposition', `attachment; filename="${safeTitle}.txt"`);
-  res.send(article.raw_text);
-}));
-
 // Get article by ID. Ownership-scoped.
 articleRoutes.get('/:id', asyncHandler(async (req: Request, res: Response) => {
   const id = parseId(req.params.id);
