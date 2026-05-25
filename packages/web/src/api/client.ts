@@ -29,7 +29,6 @@ export interface ArticleUploadResponse {
   validation: {
     warnings: string[];
     errors?: string[];
-    sectionsFound: string[];
   };
 }
 

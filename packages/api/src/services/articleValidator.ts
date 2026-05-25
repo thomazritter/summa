@@ -7,12 +7,7 @@ export interface ValidationResult {
   warnings: string[]; // non-blocking warnings
 }
 
-const SECTION_KEYS = ['abstract', 'introduction', 'methodology', 'results', 'discussion', 'conclusion'] as const;
-type SectionKey = typeof SECTION_KEYS[number];
-
 const MIN_TEXT_LENGTH = 1500;
-const MIN_SECTION_LENGTH = 50;
-const SHORT_SECTION_THRESHOLD = 200;
 
 /**
  * Phase 1: Pre-structuring validation (cheap, fast, blocking).
@@ -126,7 +121,10 @@ ${rawText.slice(0, 5000)}`;
 
 /**
  * Phase 2: Post-structuring validation (informational, non-blocking).
- * Run AFTER structuring to check section quality.
+ * The structurer (LLM call + regex fallback) only fills `abstract`, so the
+ * only meaningful signal to surface here is whether that one field was
+ * recovered. Without it the factuality layer can still score faithfulness,
+ * but completeness and conciseness become unavailable for the summary.
  */
 export function validatePostStructuring(
   _rawText: string,
@@ -134,27 +132,11 @@ export function validatePostStructuring(
 ): ValidationResult {
   const warnings: string[] = [];
 
-  // Section-level warnings have been intentionally suppressed: the LLM
-  // structurer's section detection is imprecise enough that "missing"
-  // warnings often fire on articles where the section is actually present
-  // but was misclassified, misleading the user. The structurer's output
-  // still feeds factuality anchoring and metric selection, but is no
-  // longer surfaced as guidance in the UI.
-  const found: SectionKey[] = [];
-  for (const section of SECTION_KEYS) {
-    const content = structuredContent[section];
-    if (content && content.length > MIN_SECTION_LENGTH) {
-      found.push(section);
-    }
-  }
-
-  // Only warn in the truly degenerate case where structuring extracted
-  // nothing usable — that's a real signal that the summary may be weak.
-  if (found.length === 0) {
+  if (!structuredContent.abstract || structuredContent.abstract.trim().length === 0) {
     warnings.push(
-      'Nenhuma seção pôde ser identificada com confiança no artigo enviado. ' +
-      'A geração do resumo permanece habilitada, mas a verificação de factualidade ' +
-      'pode ficar menos precisa.'
+      'Não foi possível identificar o abstract do artigo. ' +
+      'A geração do resumo continua, mas as métricas de cobertura e concisão ' +
+      'ficarão indisponíveis para este resumo.'
     );
   }
 

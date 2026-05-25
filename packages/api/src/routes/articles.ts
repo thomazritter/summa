@@ -75,16 +75,10 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
   // Phase 2: Post-structuring validation (non-blocking warnings)
   const postValidation = validatePostStructuring(rawText, structuredContent);
 
-  const sectionKeys = ['abstract', 'introduction', 'methodology', 'results', 'discussion', 'conclusion'] as const;
-  const sectionsFound = sectionKeys.filter(
-    s => structuredContent[s] && structuredContent[s]!.length > 50
-  );
-
   res.status(201).json({
     article: mapRowToArticle(inserted),
     validation: {
       warnings: postValidation.warnings,
-      sectionsFound,
     },
   });
 }));
