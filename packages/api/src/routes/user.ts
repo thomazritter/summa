@@ -31,6 +31,7 @@ interface UserSummaryRow {
   article_id: number;
   content: string;
   factuality_score: number | null;
+  factuality_status: 'pending' | 'complete' | 'failed' | null;
   model_id: string | null;
   generated_at: string;
   profile_snapshot: string | null;
@@ -115,7 +116,8 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
       conciseness_score: number | null;
       factuality_keyfacts: string | null;
     }>(
-      `SELECT s.id, s.article_id, s.content, s.factuality_score, s.factuality_details,
+      `SELECT s.id, s.article_id, s.content, s.factuality_score, s.factuality_status,
+              s.factuality_details,
               s.completeness_score, s.conciseness_score, s.factuality_keyfacts,
               s.model_id, s.generated_at, s.parent_summary_id,
               s.profile_snapshot
@@ -153,6 +155,7 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
           id: s.id,
           content: s.content,
           factualityScore: s.factuality_score,
+          factualityStatus: s.factuality_status ?? 'pending',
           factualityDetails: factualityDetails as Array<{
             sentence: string;
             label: 'supported' | 'neutral' | 'contradicted';

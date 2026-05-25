@@ -4,6 +4,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
 import { userApi } from '../api/client';
 
+// Hard cap on how long we keep polling a summary whose factuality_status is
+// still 'pending'. The background FineSurE job typically completes in
+// 20-60 seconds; 5 minutes is a safety margin for rare slow runs without
+// risking eternal polling when a job gets stuck or orphaned.
+const POLL_MAX_AGE_MS = 5 * 60 * 1000;
+
 interface UserArticle {
   id: number;
   title: string;
@@ -15,6 +21,7 @@ interface UserArticle {
     modelId: string | null;
     modelLabel: string | null;
     factualityScore: number | null;
+    factualityStatus: 'pending' | 'complete' | 'failed';
     profile: {
       expertise: string;
       focus: string;
@@ -78,15 +85,21 @@ export function Dashboard() {
     // Factuality scores (and other metrics surfaced indirectly) are filled
     // in by background jobs after the summary row is saved. Without
     // periodic refetch they would stay "null" on screen until the user
-    // manually reloaded. Poll while any summary still lacks a factuality
-    // score; stop polling otherwise.
+    // manually reloaded. Poll only while there is a summary whose status is
+    // still 'pending' and whose row is less than POLL_MAX_AGE_MS old; older
+    // pending rows are treated as stuck/orphaned and stop polling.
     refetchInterval: (query) => {
       const data = query.state.data as UserArticle[] | undefined;
       if (!data) return false;
-      const hasPending = data.some((article) =>
-        article.summaries.some((s) => s.factualityScore === null),
+      const now = Date.now();
+      const hasActivePending = data.some((article) =>
+        article.summaries.some(
+          (s) =>
+            s.factualityStatus === 'pending' &&
+            now - new Date(s.generatedAt).getTime() < POLL_MAX_AGE_MS,
+        ),
       );
-      return hasPending ? 8000 : false;
+      return hasActivePending ? 8000 : false;
     },
     refetchOnWindowFocus: true,
   });

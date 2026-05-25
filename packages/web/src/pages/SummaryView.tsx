@@ -6,6 +6,11 @@ import { FactualityHighlightedMarkdown } from '../components/FactualityHighlight
 import type { FactualitySentence } from '../components/FactualityHighlightedMarkdown';
 import { SummaryRatingPanel } from '../components/SummaryRatingPanel';
 
+// Hard cap on how long we keep polling a summary whose factuality_status is
+// still 'pending'. Matches the same constant in Dashboard.tsx — keep them in
+// sync if either changes.
+const POLL_MAX_AGE_MS = 5 * 60 * 1000;
+
 interface KeyfactAlignment {
   fact: string;
   covered: boolean;
@@ -42,16 +47,21 @@ export function SummaryView() {
   const { data: articles, isLoading } = useQuery({
     queryKey: ['user-articles'],
     queryFn: () => userApi.getArticles(),
-    // Poll the list endpoint while this summary's factuality score is still
-    // null (background FineSurE job not finished) so the "Verificando..."
-    // badge resolves on its own.
+    // Poll the list endpoint while the background FineSurE job is still
+    // 'pending' so the "Verificando..." badge resolves on its own. Stop as
+    // soon as the row reaches a terminal status (complete or failed), or
+    // after POLL_MAX_AGE_MS to avoid eternal polling on stuck/orphan rows.
     refetchInterval: (query) => {
       const data = query.state.data as Awaited<ReturnType<typeof userApi.getArticles>> | undefined;
       if (!data) return false;
       const current = data
         .flatMap((article) => article.summaries)
         .find((s) => s.id === summaryId);
-      return current && current.factualityScore === null ? 5000 : false;
+      if (!current) return false;
+      if (current.factualityStatus !== 'pending') return false;
+      const ageMs = Date.now() - new Date(current.generatedAt).getTime();
+      if (ageMs > POLL_MAX_AGE_MS) return false;
+      return 5000;
     },
     refetchOnWindowFocus: true,
   });

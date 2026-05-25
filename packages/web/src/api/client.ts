@@ -185,6 +185,7 @@ export const userApi = {
         modelId: string | null;
         modelLabel: string | null;
         factualityScore: number | null;
+        factualityStatus: 'pending' | 'complete' | 'failed';
         factualityDetails: Array<{
           sentence: string;
           label: 'supported' | 'neutral' | 'contradicted';
