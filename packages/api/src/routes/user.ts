@@ -19,21 +19,28 @@ export const userRoutes = Router();
 
 // ─── Row interfaces for query results ──────────────────────────────
 
-interface UserArticleRow {
-  id: number;
-  title: string;
-  authors: string | null;
-  created_at: string;
-}
-
-interface UserSummaryRow {
-  id: number;
+/**
+ * Flat row from the article × summary join used by GET /user/articles.
+ * Article columns are prefixed `article_` to avoid colliding with summary
+ * columns of the same name (id, content, ...). The grouping step turns
+ * the flat list back into nested articles.
+ */
+interface JoinedArticleSummaryRow {
   article_id: number;
-  content: string;
+  article_title: string;
+  article_authors: string | null;
+  article_created_at: string;
+  summary_id: number;
+  summary_content: string;
   factuality_score: number | null;
   factuality_status: 'pending' | 'complete' | 'failed' | null;
+  factuality_details: string | null;
+  completeness_score: number | null;
+  conciseness_score: number | null;
+  factuality_keyfacts: string | null;
   model_id: string | null;
-  generated_at: string;
+  summary_generated_at: string;
+  parent_summary_id: number | null;
   profile_snapshot: string | null;
 }
 
@@ -57,17 +64,21 @@ interface ArticleSummary {
   id: number;
   content: string;
   factualityScore: number | null;
+  factualityStatus: 'pending' | 'complete' | 'failed';
   factualityDetails: FactualitySentence[] | null;
   completenessScore: number | null;
   concisenessScore: number | null;
   keyfactAlignment: KeyfactAlignment[] | null;
   modelId: string | null;
   modelLabel: string | null;
+  parentSummaryId: number | null;
   profile: {
     expertise: string;
     focus: string;
     depth: string;
     context: string;
+    domain: string | null;
+    currentProject: string | null;
   } | null;
   generatedAt: string;
 }
@@ -94,100 +105,97 @@ userRoutes.get('/articles', asyncHandler(async (req: Request, res: Response) => 
     return res.json([]);
   }
 
-  // Articles uploaded by this user that have at least one summary.
-  // Articles uploaded but never summarized (user abandoned the flow between
-  // upload and generate) are intentionally excluded so the dashboard does
-  // not surface empty rows.
-  const articleRows = await queryAll<UserArticleRow>(
-    `SELECT DISTINCT a.id, a.title, a.authors, a.created_at
+  // One round-trip: pull all summaries the participant owns joined with
+  // their parent article. INNER JOIN drops articles without any summary
+  // (user uploaded then abandoned the flow). ORDER guarantees articles
+  // surface most-recent first and summaries within each article are also
+  // most-recent first — the grouping step below preserves that order
+  // because Map iterates in insertion order.
+  const rows = await queryAll<JoinedArticleSummaryRow>(
+    `SELECT a.id           AS article_id,
+            a.title        AS article_title,
+            a.authors      AS article_authors,
+            a.created_at   AS article_created_at,
+            s.id           AS summary_id,
+            s.content      AS summary_content,
+            s.factuality_score,
+            s.factuality_status,
+            s.factuality_details,
+            s.completeness_score,
+            s.conciseness_score,
+            s.factuality_keyfacts,
+            s.model_id,
+            s.generated_at AS summary_generated_at,
+            s.parent_summary_id,
+            s.profile_snapshot
      FROM articles a
      INNER JOIN summaries s ON s.article_id = a.id
      WHERE a.uploaded_by = $1
-     ORDER BY a.created_at DESC`,
+     ORDER BY a.created_at DESC, s.generated_at DESC`,
     [participantId],
   );
 
-  // For each article, fetch its personalized summaries
-  const articles: UserArticle[] = [];
-  for (const article of articleRows) {
-    const summaryRows = await queryAll<UserSummaryRow & {
-      factuality_details: string | null;
-      completeness_score: number | null;
-      conciseness_score: number | null;
-      factuality_keyfacts: string | null;
-    }>(
-      `SELECT s.id, s.article_id, s.content, s.factuality_score, s.factuality_status,
-              s.factuality_details,
-              s.completeness_score, s.conciseness_score, s.factuality_keyfacts,
-              s.model_id, s.generated_at, s.parent_summary_id,
-              s.profile_snapshot
-       FROM summaries s
-       WHERE s.article_id = $1
-         AND s.article_id IN (SELECT id FROM articles WHERE uploaded_by = $2)
-       ORDER BY s.generated_at DESC`,
-      [article.id, participantId],
-    );
+  const articleMap = new Map<number, UserArticle>();
+  for (const row of rows) {
+    let article = articleMap.get(row.article_id);
+    if (!article) {
+      article = {
+        id: row.article_id,
+        title: row.article_title,
+        authors: row.article_authors,
+        createdAt: row.article_created_at,
+        summaries: [],
+      };
+      articleMap.set(row.article_id, article);
+    }
 
-    articles.push({
-      id: article.id,
-      title: article.title,
-      authors: article.authors,
-      createdAt: article.created_at,
-      summaries: summaryRows.map((s: UserSummaryRow & {
-        factuality_details: string | null;
-        completeness_score: number | null;
-        conciseness_score: number | null;
-        factuality_keyfacts: string | null;
-        parent_summary_id?: number | null;
-      }) => {
-        const modelInfo = AVAILABLE_MODELS.find((m) => m.id === s.model_id);
-        const snapshot = s.profile_snapshot
-          ? safeJsonParse<{
-              dimensions: Record<string, string>;
-              preferences: Record<string, string> | null;
-            }>(s.profile_snapshot)
-          : null;
-        const dims = snapshot?.dimensions ?? null;
-        const prefs = snapshot?.preferences ?? null;
-        const factualityDetails = s.factuality_details ? safeJsonParse(s.factuality_details) : null;
-        const keyfactAlignment = s.factuality_keyfacts ? safeJsonParse(s.factuality_keyfacts) : null;
-        return {
-          id: s.id,
-          content: s.content,
-          factualityScore: s.factuality_score,
-          factualityStatus: s.factuality_status ?? 'pending',
-          factualityDetails: factualityDetails as Array<{
-            sentence: string;
-            label: 'supported' | 'neutral' | 'contradicted';
-            confidence: number;
-            category: string;
-            rationale: string;
-          }> | null,
-          completenessScore: s.completeness_score,
-          concisenessScore: s.conciseness_score,
-          keyfactAlignment: keyfactAlignment as Array<{
-            fact: string;
-            covered: boolean;
-            lineNumbers: number[];
-          }> | null,
-          modelId: s.model_id,
-          modelLabel: modelInfo?.name || s.model_id || 'Desconhecido',
-          parentSummaryId: s.parent_summary_id ?? null,
-          profile: dims ? {
-            expertise: dims.expertise,
-            focus: dims.focus,
-            depth: dims.depth,
-            context: dims.context,
-            domain: prefs?.domain ?? null,
-            currentProject: prefs?.currentProject ?? null,
-          } : null,
-          generatedAt: s.generated_at,
-        };
-      }),
+    const modelInfo = AVAILABLE_MODELS.find((m) => m.id === row.model_id);
+    const snapshot = row.profile_snapshot
+      ? safeJsonParse<{
+          dimensions: Record<string, string>;
+          preferences: Record<string, string> | null;
+        }>(row.profile_snapshot)
+      : null;
+    const dims = snapshot?.dimensions ?? null;
+    const prefs = snapshot?.preferences ?? null;
+    const factualityDetails = row.factuality_details ? safeJsonParse(row.factuality_details) : null;
+    const keyfactAlignment = row.factuality_keyfacts ? safeJsonParse(row.factuality_keyfacts) : null;
+
+    article.summaries.push({
+      id: row.summary_id,
+      content: row.summary_content,
+      factualityScore: row.factuality_score,
+      factualityStatus: row.factuality_status ?? 'pending',
+      factualityDetails: factualityDetails as Array<{
+        sentence: string;
+        label: 'supported' | 'neutral' | 'contradicted';
+        confidence: number;
+        category: string;
+        rationale: string;
+      }> | null,
+      completenessScore: row.completeness_score,
+      concisenessScore: row.conciseness_score,
+      keyfactAlignment: keyfactAlignment as Array<{
+        fact: string;
+        covered: boolean;
+        lineNumbers: number[];
+      }> | null,
+      modelId: row.model_id,
+      modelLabel: modelInfo?.name || row.model_id || 'Desconhecido',
+      parentSummaryId: row.parent_summary_id ?? null,
+      profile: dims ? {
+        expertise: dims.expertise,
+        focus: dims.focus,
+        depth: dims.depth,
+        context: dims.context,
+        domain: prefs?.domain ?? null,
+        currentProject: prefs?.currentProject ?? null,
+      } : null,
+      generatedAt: row.summary_generated_at,
     });
   }
 
-  res.json(articles);
+  res.json(Array.from(articleMap.values()));
 }));
 
 // ─── POST /api/user/summarize ──────────────────────────────────────
