@@ -38,8 +38,14 @@ export function generateCode(): string {
  * code to a permanent session token. Subsequent /auth/login calls with
  * the same code are rejected so an intercepted link cannot be used twice.
  *
- * Permanent codes (no expires_at — e.g. SUMMA-ADMIN) bypass the
- * single-use rule and stay reusable for emergency access.
+ * Consuming a magic link also deletes every other access code that shares
+ * the same email. Requesting a fresh magic link is treated as the
+ * canonical revocation primitive — any session that was previously open
+ * on another device is terminated as soon as the new link is consumed.
+ *
+ * Permanent codes (no expires_at — e.g. SUMMA-ADMIN) bypass both the
+ * single-use rule and the session-revoke step, staying reusable for
+ * emergency access.
  */
 export async function validateMagicLink(code: string): Promise<AccessCodeRow | null> {
   const access = await queryOne<AccessCodeRow>(
@@ -59,7 +65,14 @@ export async function validateMagicLink(code: string): Promise<AccessCodeRow | n
       return null; // Expired before being consumed.
     }
 
-    // First valid exchange: mark consumed + promote to permanent session token.
+    // Revoke any other access codes sharing this email so a newly issued
+    // link supersedes whatever permanent or pending codes existed before.
+    await execute(
+      'DELETE FROM access_codes WHERE email = $1 AND id <> $2',
+      [access.email, access.id],
+    );
+
+    // Promote the current row to a permanent session token.
     await execute(
       'UPDATE access_codes SET expires_at = NULL, used_at = CURRENT_TIMESTAMP, consumed_at = CURRENT_TIMESTAMP WHERE id = $1',
       [access.id],
@@ -84,6 +97,12 @@ export async function validateMagicLink(code: string): Promise<AccessCodeRow | n
  * transaction lock keyed on hash(email), then runs the count and the insert
  * inside the same transaction so the invariant is enforced.
  *
+ * Every successful call issues a fresh 15-minute magic link, including for
+ * emails that already correspond to a registered participant. The new row
+ * inherits the existing participant_id (if any) so the link, once consumed,
+ * lands the user on the same participant record — and validateMagicLink
+ * revokes any other access codes for the same email at consumption time.
+ *
  * Returns `null` when the quota is already exhausted (caller should respond
  * with the email-enumeration-safe success message anyway).
  */
@@ -98,15 +117,14 @@ export async function createMagicLinkUnderQuota(
     // Per-email lock prevents concurrent count/insert races.
     await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [email]);
 
-    // Reuse a permanent code if the email is already a registered participant.
-    const existing = await client.query<AccessCodeRow>(
-      'SELECT * FROM access_codes WHERE email = $1 ORDER BY created_at DESC LIMIT 1',
+    // Look up an existing participant_id so the new magic link is bound to
+    // the same participant on consumption. Returns null for first-time
+    // emails — the registration flow will set participant_id later.
+    const existingLink = await client.query<{ participant_id: number | null }>(
+      'SELECT participant_id FROM access_codes WHERE email = $1 AND participant_id IS NOT NULL ORDER BY created_at DESC LIMIT 1',
       [email],
     );
-    if (existing.rows[0]?.participant_id != null) {
-      await client.query('COMMIT');
-      return { code: existing.rows[0].code };
-    }
+    const participantId = existingLink.rows[0]?.participant_id ?? null;
 
     const since = new Date(Date.now() - windowMs).toISOString();
     const countResult = await client.query<{ count: string }>(
@@ -122,8 +140,8 @@ export async function createMagicLinkUnderQuota(
     const code = generateCode();
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
     await client.query(
-      'INSERT INTO access_codes (code, email, role, expires_at) VALUES ($1, $2, $3, $4)',
-      [code, email, 'participant', expiresAt],
+      'INSERT INTO access_codes (code, email, role, participant_id, expires_at) VALUES ($1, $2, $3, $4, $5)',
+      [code, email, 'participant', participantId, expiresAt],
     );
     await client.query('COMMIT');
     return { code };
