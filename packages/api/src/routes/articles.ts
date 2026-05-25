@@ -27,7 +27,7 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
   const preValidation = validatePreStructuring(rawText);
   if (!preValidation.valid) {
     return res.status(422).json({
-      error: 'Article validation failed',
+      error: 'Falha na validação do artigo',
       validation: { errors: preValidation.errors },
     });
   }
@@ -38,7 +38,7 @@ articleRoutes.post('/upload', upload.single('file'), handleMulterError, asyncHan
   const scopeValidation = await validateArticleScope(rawText);
   if (!scopeValidation.valid) {
     return res.status(422).json({
-      error: 'Article validation failed',
+      error: 'Falha na validação do artigo',
       validation: { errors: scopeValidation.errors },
     });
   }

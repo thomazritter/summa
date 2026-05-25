@@ -267,8 +267,8 @@ export function ArticleUpload() {
 
             {/* Upload error from previous attempt */}
             {uploadMutation.error && phase === 'upload' && (
-              <div className="mt-4 bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg" role="alert">
-                Erro ao processar o artigo: {(uploadMutation.error as Error).message}
+              <div className="mt-4 bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg whitespace-pre-line" role="alert">
+                {(uploadMutation.error as Error).message}
               </div>
             )}
 
@@ -307,8 +307,8 @@ export function ArticleUpload() {
             {/* Error during loading */}
             {uploadMutation.error && (
               <div className="mt-4">
-                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg mb-4" role="alert">
-                  Não foi possível processar o artigo. Tente novamente.
+                <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg mb-4 whitespace-pre-line" role="alert">
+                  {(uploadMutation.error as Error).message}
                 </div>
                 <button
                   type="button"

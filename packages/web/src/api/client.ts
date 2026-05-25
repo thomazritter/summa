@@ -48,8 +48,12 @@ export const articleApi = {
       body: formData,
     });
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
-      throw new Error(error.error || 'Upload failed');
+      const body = await response.json().catch(() => ({ error: 'Falha no envio do artigo.' })) as {
+        error?: string;
+        validation?: { errors?: string[] };
+      };
+      const detailed = body.validation?.errors?.join('\n');
+      throw new Error(detailed || body.error || 'Falha no envio do artigo.');
     }
     return response.json();
   },
